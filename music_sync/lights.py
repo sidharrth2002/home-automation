@@ -43,7 +43,18 @@ class Bulb:
         self.healthy = True
         self.pending: dict | None = None
         self.last_sent = 0.0
+        self.last_params: dict | None = None
         self.saved: dict | None = None
+
+
+def _similar(a: dict, b: dict | None) -> bool:
+    """Close enough that sending would waste one of the bulb's few updates per second."""
+    if b is None or ("temp" in a) != ("temp" in b):
+        return False
+    if "temp" in a:
+        return a == b
+    return (abs(a["r"] - b["r"]) + abs(a["g"] - b["g"]) + abs(a["b"] - b["b"]) < 12
+            and abs(a["dimming"] - b["dimming"]) < 3)
 
 
 class _Sink(asyncio.DatagramProtocol):
@@ -105,11 +116,26 @@ class Lights:
 
     # -- output ------------------------------------------------------------
     def show(self, beat: Beat):
-        """Non-blocking: replace each bulb's pending frame with the newest one."""
+        """Same colour on every bulb (used by the classic engine)."""
         frame = {"state": True, "r": beat.rgb[0], "g": beat.rgb[1], "b": beat.rgb[2],
                  "dimming": max(10, round(beat.brightness * 100 / 255))}
-        for bulb in self.bulbs.values():
-            bulb.pending = frame
+        self.render([frame] * len(self.bulbs))
+
+    @property
+    def ordered(self) -> list[Bulb]:
+        """Stable bulb order (by MAC), so show roles don't shuffle between runs."""
+        return [self.bulbs[m] for m in sorted(self.bulbs)]
+
+    def render(self, frames: list[dict]):
+        """Non-blocking: set each bulb's next setPilot params, skipping no-op changes.
+
+        Unchanged bulbs are still re-sent once a second, since UDP gives no delivery guarantee.
+        """
+        now = time.monotonic()
+        for bulb, params in zip(self.ordered, frames):
+            if _similar(params, bulb.last_params) and now - bulb.last_sent < 1.0:
+                continue
+            bulb.pending = params
         self._wake.set()
 
     async def _sender(self):
@@ -136,6 +162,7 @@ class Lights:
         msg = json.dumps({"method": "setPilot", "params": params}).encode()
         try:
             self._transport.sendto(msg, (bulb.ip, WIZ_PORT))
+            bulb.last_params = params
         except OSError as e:
             log.warning("send to %s failed: %s", bulb.ip, e)
             bulb.healthy = False

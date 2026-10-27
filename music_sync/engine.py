@@ -42,9 +42,8 @@ class BeatEngine:
         self.last_interval_ms = 150.0
         self._alt = True
 
-    def process(self, pcm: bytes, sample_rate: int, now_ms: float):
-        """Return a Beat for this chunk, or None. Also returns the chunk RMS."""
-        samples = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
+    def process(self, samples: np.ndarray, sample_rate: int, now_ms: float):
+        """Return a Beat for this chunk of float mono samples, or None. Also returns the chunk RMS."""
         if samples.size == 0:
             return None, 0.0
         rms = float(np.sqrt(np.mean(samples**2)))

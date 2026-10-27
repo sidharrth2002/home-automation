@@ -1,8 +1,8 @@
 """Bridges Home Assistant UI controls to the music-sync pipeline.
 
-Creates three helpers in HA (a toggle, a mode dropdown, a sensitivity slider), then watches them over
-the websocket API. Turning the toggle on starts audio capture + bulb output; turning it off (or 30s of
-silence) stops it and restores the bulbs.
+Creates helpers in HA (a toggle, a mode dropdown, sensitivity and latency sliders) and a tempo sensor,
+then watches the helpers over the websocket API. Turning the toggle on starts audio capture + bulb
+output; turning it off (or 30s of silence) stops it and restores the bulbs.
 """
 import asyncio
 import json
@@ -10,20 +10,30 @@ import logging
 import os
 import signal
 import time
+import urllib.request
 from pathlib import Path
 
+import numpy as np
 import websockets
 
 from . import capture
+from .analysis import HOP, Analyzer
 from .engine import BeatEngine
 from .lights import Lights
+from .show import Show
 
 log = logging.getLogger("music_sync")
 
 HA_URL = os.environ.get("HA_URL", "ws://localhost:8123/api/websocket")
+HA_HTTP = os.environ.get("HA_HTTP", "http://localhost:8123")
 SWITCH = "input_boolean.music_sync"
 MODE = "input_select.music_sync_mode"
 SENSITIVITY = "input_number.music_sync_sensitivity"
+LATENCY = "input_number.music_sync_latency"
+TEMPO_SENSOR = "sensor.music_sync_tempo"
+WATCHED = (SWITCH, MODE, SENSITIVITY, LATENCY)
+MODES = ("auto", "calm", "party", "classic")
+SILENCE_RMS = 0.005
 SILENCE_STOP_S = 30
 
 
@@ -76,9 +86,13 @@ class HA:
 
 class Controller:
     def __init__(self):
-        self.engine = BeatEngine()
+        self.mode = "auto"
+        self.sensitivity = 1.35
+        self.latency_ms = 60.0
         self.session: asyncio.Task | None = None
         self.ha: HA | None = None
+        self.token = ""
+        self._bg: set[asyncio.Task] = set()
 
     async def ensure_helpers(self):
         states = {s["entity_id"]: s for s in await self.ha.call(type="get_states")}
@@ -86,22 +100,33 @@ class Controller:
             await self.ha.call(type="input_boolean/create", name="Music Sync", icon="mdi:music")
         if MODE not in states:
             await self.ha.call(type="input_select/create", name="Music Sync Mode", icon="mdi:tune",
-                               options=["auto", "calm", "party"], initial="auto")
+                               options=list(MODES), initial="auto")
+        elif states[MODE]["attributes"].get("options") != list(MODES):
+            await self.ha.call(type="input_select/update", input_select_id=MODE.split(".")[1],
+                               name="Music Sync Mode", icon="mdi:tune", options=list(MODES))
         if SENSITIVITY not in states:
             await self.ha.call(type="input_number/create", name="Music Sync Sensitivity", icon="mdi:sine-wave",
                                min=1.0, max=2.5, step=0.05, mode="slider", initial=1.35)
+        if LATENCY not in states:
+            await self.ha.call(type="input_number/create", name="Music Sync Latency", icon="mdi:timer-sync",
+                               min=-200, max=300, step=10, mode="slider", unit_of_measurement="ms", initial=60)
         states = {s["entity_id"]: s for s in await self.ha.call(type="get_states")}
-        for eid in (SWITCH, MODE, SENSITIVITY):
+        for eid in WATCHED:
             self.apply(eid, states[eid]["state"])
+        self.publish_status()
 
     def apply(self, entity_id, state):
-        if entity_id == MODE and state in ("auto", "calm", "party"):
-            self.engine.mode = state
-        elif entity_id == SENSITIVITY:
+        if entity_id == MODE and state in MODES:
+            self.mode = state
+        elif entity_id in (SENSITIVITY, LATENCY):
             try:
-                self.engine.sensitivity = float(state)
+                value = float(state)
             except ValueError:
-                pass
+                return
+            if entity_id == SENSITIVITY:
+                self.sensitivity = value
+            else:
+                self.latency_ms = value
         elif entity_id == SWITCH:
             running = self.session is not None and not self.session.done()
             if state == "on" and not running:
@@ -113,21 +138,35 @@ class Controller:
         lights = Lights()
         try:
             await lights.start()
-            self.engine.reset()
-            last_sound = time.monotonic()
-            log.info("music sync started")
-            async for pcm in capture.chunks():
+            analyzer, show = Analyzer(), Show(len(lights.bulbs))
+            classic, classic_buf = BeatEngine(), []
+            last_sound = last_status = time.monotonic()
+            log.info("music sync started with %d bulbs", len(lights.bulbs))
+            async for samples in capture.hops(HOP):
                 now = time.monotonic()
-                beat, rms = self.engine.process(pcm, capture.SAMPLE_RATE, now * 1000)
-                if rms >= 0.01:
+                show.mode, show.latency_ms = self.mode, self.latency_ms
+                analyzer.sensitivity = self.sensitivity
+                analyzer.hue_tau = show.profile["hue_tau"]
+                frame = analyzer.process(samples, now)
+                if frame.rms >= SILENCE_RMS:
                     last_sound = now
-                if beat:
-                    lights.show(beat)
                 elif now - last_sound > SILENCE_STOP_S:
                     log.info("no audio for %ds, stopping", SILENCE_STOP_S)
                     break
-            else:
-                pass
+                if self.mode == "classic":
+                    # The original wiz_spotify algorithm, fed ~140 ms windows like it was designed for.
+                    classic_buf.append(samples)
+                    if len(classic_buf) >= 6:
+                        classic.sensitivity = self.sensitivity
+                        beat, _ = classic.process(np.concatenate(classic_buf), capture.SAMPLE_RATE, now * 1000)
+                        classic_buf.clear()
+                        if beat:
+                            lights.show(beat)
+                else:
+                    lights.render(show.update(frame, analyzer.tempo, now))
+                if now - last_status > 2:
+                    last_status = now
+                    self.publish_status(analyzer.tempo)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -135,13 +174,35 @@ class Controller:
         finally:
             await asyncio.shield(lights.stop())
             log.info("music sync stopped, lights restored")
+            self.publish_status()
             if self.ha:
                 try:
                     await self.ha.service("input_boolean", "turn_off", SWITCH)
                 except Exception:
                     pass
 
+    def publish_status(self, tempo=None):
+        """Mirror the detected tempo into HA as a sensor (REST, since the websocket API can't set states)."""
+        locked = bool(tempo and tempo.locked)
+        body = {"state": round(tempo.bpm) if locked else "unknown",
+                "attributes": {"friendly_name": "Music Sync Tempo", "unit_of_measurement": "BPM",
+                               "icon": "mdi:metronome", "locked": locked,
+                               "confidence": round(tempo.confidence, 2) if tempo else 0.0}}
+        task = asyncio.create_task(asyncio.to_thread(self._post_state, TEMPO_SENSOR, body))
+        self._bg.add(task)
+        task.add_done_callback(self._bg.discard)
+
+    def _post_state(self, entity_id, body):
+        req = urllib.request.Request(f"{HA_HTTP}/api/states/{entity_id}", data=json.dumps(body).encode(),
+                                     method="POST", headers={"Authorization": f"Bearer {self.token}",
+                                                             "Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(req, timeout=3).close()
+        except OSError as e:
+            log.debug("could not publish %s: %s", entity_id, e)
+
     async def run(self, token):
+        self.token = token
         backoff = 1
         while True:
             try:
@@ -161,7 +222,7 @@ class Controller:
     async def _pump(self):
         async for data in self.ha.events():
             eid = data["entity_id"]
-            if eid in (SWITCH, MODE, SENSITIVITY) and data.get("new_state"):
+            if eid in WATCHED and data.get("new_state"):
                 self.apply(eid, data["new_state"]["state"])
 
 

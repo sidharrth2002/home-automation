@@ -1,23 +1,30 @@
 import asyncio
 from pathlib import Path
 
+import numpy as np
+
 AUDIOTEE = Path(__file__).resolve().parent.parent / "bin" / "audiotee"
 SAMPLE_RATE = 44100
-CHUNK_MS = 150
+CHUNK_S = 0.02
 
 
-async def chunks():
-    """Yield raw 16-bit mono PCM chunks of whatever macOS is playing."""
+async def hops(hop):
+    """Yield float32 mono arrays of exactly `hop` samples of whatever macOS is playing."""
     proc = await asyncio.create_subprocess_exec(
-        str(AUDIOTEE), "--sample-rate", str(SAMPLE_RATE), "--chunk-duration", str(CHUNK_MS / 1000),
+        str(AUDIOTEE), "--sample-rate", str(SAMPLE_RATE), "--chunk-duration", str(CHUNK_S),
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
     )
-    size = SAMPLE_RATE * CHUNK_MS // 1000 * 2
+    buf = np.zeros(0, np.float32)
+    leftover = b""
     try:
-        while True:
-            yield await proc.stdout.readexactly(size)
-    except asyncio.IncompleteReadError:
-        return
+        while data := await proc.stdout.read(16384):
+            data = leftover + data
+            cut = len(data) - len(data) % 2
+            leftover = data[cut:]
+            buf = np.concatenate([buf, np.frombuffer(data[:cut], "<i2").astype(np.float32) / 32768])
+            while len(buf) >= hop:
+                yield buf[:hop]
+                buf = buf[hop:]
     finally:
         if proc.returncode is None:
             proc.terminate()

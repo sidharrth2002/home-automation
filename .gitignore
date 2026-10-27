@@ -4,3 +4,4 @@ homeassistant/config/
 .music_sync_saved_state.json
 .DS_Store
 __pycache__/
+music_sync.log

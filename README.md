@@ -15,7 +15,22 @@ docker compose up -d
 Enable "Allow local communication" in the WiZ app first.
 
 ## Music sync
-`.venv/bin/python -m music_sync` connects to Home Assistant and creates three controls (Music Sync toggle,
-mode dropdown, sensitivity slider) that appear on the default dashboard. Toggle it on while music plays;
-the bulbs are restored when you toggle off, after 30s of silence, or on the next run after a crash.
+`.venv/bin/python -m music_sync` connects to Home Assistant and creates its controls, which appear on the
+default dashboard:
+
+| Entity | What it does |
+| --- | --- |
+| `input_boolean.music_sync` | On/off. Bulbs are restored when it goes off, after 30s of silence, or on the next run after a crash. |
+| `input_select.music_sync_mode` | `auto`, `calm`, `party` (chase + strobe on drops), `classic` (the original wiz_spotify algorithm). |
+| `input_number.music_sync_sensitivity` | Onset threshold. Raise if lights trigger on noise, lower if they miss beats. |
+| `input_number.music_sync_latency` | Fires beats this many ms early to cancel bulb lag. Go negative for Bluetooth speakers. |
+| `sensor.music_sync_tempo` | Detected BPM (and whether the beat grid is locked). |
+
+How it works (`music_sync/analysis.py`, `music_sync/show.py`): 23 ms STFT hops; spectral-flux onsets in
+bass/mid/high bands with adaptive thresholds; autocorrelation tempo + comb-filter beat phase + kick PLL, so
+locked beats are *predicted* and sent early; hue from a chroma vector on the circle of fifths (it follows
+the key); per-band AGC; breakdown→drop detection. Bulbs alternate roles (beat vs. snare/hat sparkle) and
+get different hues; updates are rate-limited per bulb and skip no-op changes.
+
+`.venv/bin/python -m tests.test_analysis` checks the pipeline against a synthetic 128 BPM track.
 First run triggers a macOS system-audio permission prompt for your terminal.
