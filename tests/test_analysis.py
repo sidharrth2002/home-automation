@@ -93,5 +93,27 @@ def main():
     print("OK")
 
 
+def test_tv():
+    """TV mode must stay dim, warm white and slow: no RGB colour, no flashes, no visible steps."""
+    audio, _ = synth()
+    a, show = Analyzer(), Show(2)
+    show.mode = "tv"
+    dims, temps, prev, max_step = [], [], None, 0
+    for i in range(len(audio) // HOP):
+        now = (i + 1) * HOP / SR
+        out = show.update(a.process(audio[i * HOP:(i + 1) * HOP], now), a.tempo, now)
+        assert all("r" not in p for p in out), "TV mode must never send RGB colour"
+        if now > 5:  # after the fade-in
+            d = out[0]["dimming"]
+            dims.append(d)
+            temps.append(out[0]["temp"])
+            max_step = max(max_step, abs(d - prev)) if prev is not None else 0
+            prev = d
+    print(f"TV: dimming {min(dims)}..{max(dims)}%, {min(temps)}..{max(temps)}K, max step {max_step}% per hop")
+    assert min(dims) >= 10 and max(dims) <= 23 and max_step <= 1
+    print("TV OK")
+
+
 if __name__ == "__main__":
     main()
+    test_tv()

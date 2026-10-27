@@ -19,7 +19,15 @@ PROFILES = {
     "party": dict(floor=0.02, floor_gain=0.12, depth=1.0, decay=0.3, spread=0.5, hue_tau=1.0, sat=1.0,
                   beat_step=0.03, bar_step=0.08, accent=0.5, flash=True, chase=True, drop_jump=0.5),
 }
+PROFILES["tv"] = dict(PROFILES["calm"], hue_tau=5.0)
 FLASH_S = 0.12
+
+# TV mode is bias lighting, not a show: warm white, dim, and it only ever drifts.
+TV_BASE_DIM = 15  # percent
+TV_SWELL_DIM = 8  # loud scenes add at most this much
+TV_TEMP_K = (2200, 2700)  # warmer when the soundtrack is bass-heavy (explosions, score swells)
+TV_FADE_IN_S = 4.0
+TV_AGC_HALF_LIFE_S = 60.0  # slow, so a quiet scene stays dim instead of being re-normalised up
 
 
 def _decay(dt, tau):
@@ -40,6 +48,10 @@ class Show:
         self.pending = []  # (fire_time, kind, strength) for negative-latency delays
         self.last_t = None
         self.last_kick = 0.0
+        self.tv_since = None
+        self.tv_peak = 1e-4
+        self.tv_level = 0.0
+        self.tv_bass = 0.0
 
     @property
     def profile(self):
@@ -49,6 +61,10 @@ class Show:
         p = self.profile
         dt = 0.0 if self.last_t is None else now - self.last_t
         self.last_t = now
+        if self.mode == "tv":
+            self.pending.clear()
+            return self._render_tv(f, dt, now)
+        self.tv_since = None
         lead = self.latency_ms / 1000
         delay = max(0.0, -lead)
 
@@ -110,6 +126,23 @@ class Show:
         if p["flash"]:
             self.flash_until = now + FLASH_S
         self.env = [1.0] * self.n
+
+    def _render_tv(self, f: Frame, dt, now):
+        if self.tv_since is None:
+            self.tv_since = now
+        self.tv_peak = max(f.rms, self.tv_peak * 0.5 ** (dt / TV_AGC_HALF_LIFE_S))
+        level = min(1.0, f.rms / self.tv_peak)
+        # Rise over ~3s, settle over ~8s: a scene getting loud is felt, a single bang isn't.
+        tau = 3.0 if level > self.tv_level else 8.0
+        self.tv_level += (1 - math.exp(-dt / tau)) * (level - self.tv_level)
+        self.tv_bass += (1 - math.exp(-dt / 4.0)) * (f.bands["bass"] - self.tv_bass)
+
+        target = TV_BASE_DIM + TV_SWELL_DIM * self.tv_level
+        fade = min(1.0, (now - self.tv_since) / TV_FADE_IN_S)
+        dimming = round(100 + (target - 100) * fade)  # ease down from full instead of snapping dark
+        warm, cool = TV_TEMP_K
+        temp = round((cool - (cool - warm) * min(1.0, self.tv_bass)) / 50) * 50
+        return [{"state": True, "temp": temp, "dimming": max(10, dimming)}] * self.n
 
     def _render(self, f: Frame, now):
         p = self.profile

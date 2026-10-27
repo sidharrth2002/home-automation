@@ -1,3 +1,4 @@
 pywizlight
 websockets
 numpy
+sounddevice

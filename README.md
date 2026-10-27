@@ -21,7 +21,7 @@ default dashboard:
 | Entity | What it does |
 | --- | --- |
 | `input_boolean.music_sync` | On/off. Bulbs are restored when it goes off, after 30s of silence, or on the next run after a crash. |
-| `input_select.music_sync_mode` | `auto`, `calm`, `party` (chase + strobe on drops), `classic` (the original wiz_spotify algorithm). |
+| `input_select.music_sync_mode` | `auto`, `calm`, `party` (chase + strobe on drops), `tv` (see below), `classic` (the original wiz_spotify algorithm). |
 | `input_number.music_sync_sensitivity` | Onset threshold. Raise if lights trigger on noise, lower if they miss beats. |
 | `input_number.music_sync_latency` | Fires beats this many ms early to cancel bulb lag. Go negative for Bluetooth speakers. |
 | `sensor.music_sync_tempo` | Detected BPM (and whether the beat grid is locked). |
@@ -32,5 +32,17 @@ locked beats are *predicted* and sent early; hue from a chroma vector on the cir
 the key); per-band AGC; breakdown→drop detection. Bulbs alternate roles (beat vs. snare/hat sparkle) and
 get different hues; updates are rate-limited per bulb and skip no-op changes.
 
+### TV mode
+`tv` is bias lighting rather than a show: warm white (2200–2700K, warmer on bass-heavy scenes), 15% brightness,
+swelling by at most 8 points over ~3s in loud scenes and settling over ~8s. No RGB colour, beats or flashes.
+It listens to the room through the Mac's microphone, so it follows whatever the TV plays from any app
+(Netflix, the TV's Spotify, YouTube…). Audio stays in memory; nothing is recorded. It never times out on
+silence, since quiet scenes are normal.
+
+The TCL TV is paired through HA's Android TV Remote integration (`media_player.smart_tv_pro`). The
+`TV bias lighting` automation (`homeassistant/automations/tv_bias_lighting.json`, installed via HA's
+`/api/config/automation/config/tv_bias_lighting`) switches to `tv` mode when the TV turns on, if music sync
+isn't already running, and turns it off (restoring the bulbs) when the TV turns off.
+
 `.venv/bin/python -m tests.test_analysis` checks the pipeline against a synthetic 128 BPM track.
-First run triggers a macOS system-audio permission prompt for your terminal.
+First run triggers macOS system-audio (and, for TV mode, microphone) permission prompts.

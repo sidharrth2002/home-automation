@@ -32,7 +32,7 @@ SENSITIVITY = "input_number.music_sync_sensitivity"
 LATENCY = "input_number.music_sync_latency"
 TEMPO_SENSOR = "sensor.music_sync_tempo"
 WATCHED = (SWITCH, MODE, SENSITIVITY, LATENCY)
-MODES = ("auto", "calm", "party", "classic")
+MODES = ("auto", "calm", "party", "tv", "classic")
 SILENCE_RMS = 0.005
 SILENCE_STOP_S = 30
 
@@ -140,33 +140,35 @@ class Controller:
             await lights.start()
             analyzer, show = Analyzer(), Show(len(lights.bulbs))
             classic, classic_buf = BeatEngine(), []
-            last_sound = last_status = time.monotonic()
+            last_status = time.monotonic()
             log.info("music sync started with %d bulbs", len(lights.bulbs))
-            async for samples in capture.hops(HOP):
-                now = time.monotonic()
-                show.mode, show.latency_ms = self.mode, self.latency_ms
-                analyzer.sensitivity = self.sensitivity
-                analyzer.hue_tau = show.profile["hue_tau"]
-                frame = analyzer.process(samples, now)
-                if frame.rms >= SILENCE_RMS:
-                    last_sound = now
-                elif now - last_sound > SILENCE_STOP_S:
-                    log.info("no audio for %ds, stopping", SILENCE_STOP_S)
-                    break
-                if self.mode == "classic":
-                    # The original wiz_spotify algorithm, fed ~140 ms windows like it was designed for.
-                    classic_buf.append(samples)
-                    if len(classic_buf) >= 6:
-                        classic.sensitivity = self.sensitivity
-                        beat, _ = classic.process(np.concatenate(classic_buf), capture.SAMPLE_RATE, now * 1000)
-                        classic_buf.clear()
-                        if beat:
-                            lights.show(beat)
-                else:
-                    lights.render(show.update(frame, analyzer.tempo, now))
-                if now - last_status > 2:
-                    last_status = now
-                    self.publish_status(analyzer.tempo)
+            done = False
+            while not done:
+                # TV mode listens to the room (whatever the TV plays, from any app); the rest tap the Mac.
+                use_mic = self.mode == "tv"
+                source = capture.mic_hops(HOP) if use_mic else capture.hops(HOP)
+                log.info("listening to %s", "the microphone" if use_mic else "system audio")
+                last_sound = time.monotonic()
+                try:
+                    async for samples in source:
+                        if (self.mode == "tv") != use_mic:
+                            break  # switched between TV and Mac audio; reopen the right source
+                        now = time.monotonic()
+                        if self._step(samples, now, analyzer, show, classic, classic_buf, lights) >= SILENCE_RMS:
+                            last_sound = now
+                        elif not use_mic and now - last_sound > SILENCE_STOP_S:
+                            # TV scenes go quiet all the time, so only Mac-audio sessions time out.
+                            log.info("no audio for %ds, stopping", SILENCE_STOP_S)
+                            done = True
+                        if now - last_status > 2:
+                            last_status = now
+                            self.publish_status(analyzer.tempo)
+                        if done:
+                            break
+                    else:
+                        done = True  # the capture source ended
+                finally:
+                    await source.aclose()
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -180,6 +182,25 @@ class Controller:
                     await self.ha.service("input_boolean", "turn_off", SWITCH)
                 except Exception:
                     pass
+
+    def _step(self, samples, now, analyzer, show, classic, classic_buf, lights):
+        """Analyse one hop and drive the bulbs. Returns the hop's RMS."""
+        show.mode, show.latency_ms = self.mode, self.latency_ms
+        analyzer.sensitivity = self.sensitivity
+        analyzer.hue_tau = show.profile["hue_tau"]
+        frame = analyzer.process(samples, now)
+        if self.mode == "classic":
+            # The original wiz_spotify algorithm, fed ~140 ms windows like it was designed for.
+            classic_buf.append(samples)
+            if len(classic_buf) >= 6:
+                classic.sensitivity = self.sensitivity
+                beat, _ = classic.process(np.concatenate(classic_buf), capture.SAMPLE_RATE, now * 1000)
+                classic_buf.clear()
+                if beat:
+                    lights.show(beat)
+        else:
+            lights.render(show.update(frame, analyzer.tempo, now))
+        return frame.rms
 
     def publish_status(self, tempo=None):
         """Mirror the detected tempo into HA as a sensor (REST, since the websocket API can't set states)."""

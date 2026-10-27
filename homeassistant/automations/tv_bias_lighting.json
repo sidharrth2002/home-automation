@@ -1,0 +1,25 @@
+{
+  "id": "tv_bias_lighting",
+  "alias": "TV bias lighting",
+  "description": "Subtle warm lighting that follows whatever the TV plays (any app), via music_sync's TV mode. Restores the lights when the TV turns off. Leaves a Mac music session alone.",
+  "mode": "restart",
+  "triggers": [
+    {"trigger": "state", "entity_id": "media_player.smart_tv_pro", "to": "on", "id": "tv_on"},
+    {"trigger": "state", "entity_id": "media_player.smart_tv_pro", "to": "off", "id": "tv_off"}
+  ],
+  "actions": [
+    {"choose": [
+      {"conditions": [
+          {"condition": "trigger", "id": "tv_on"},
+          {"condition": "state", "entity_id": "input_boolean.music_sync", "state": "off"}],
+       "sequence": [
+          {"action": "input_select.select_option", "target": {"entity_id": "input_select.music_sync_mode"}, "data": {"option": "tv"}},
+          {"action": "input_boolean.turn_on", "target": {"entity_id": "input_boolean.music_sync"}}]},
+      {"conditions": [
+          {"condition": "trigger", "id": "tv_off"},
+          {"condition": "state", "entity_id": "input_select.music_sync_mode", "state": "tv"}],
+       "sequence": [
+          {"action": "input_boolean.turn_off", "target": {"entity_id": "input_boolean.music_sync"}}]}
+    ]}
+  ]
+}

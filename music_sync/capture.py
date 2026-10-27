@@ -29,3 +29,26 @@ async def hops(hop):
         if proc.returncode is None:
             proc.terminate()
             await proc.wait()
+
+
+async def mic_hops(hop):
+    """Yield float32 mono arrays of `hop` samples from the default microphone (e.g. to hear the TV).
+
+    Audio only ever lives in this process's memory; nothing is recorded or sent anywhere.
+    """
+    import sounddevice as sd
+
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=64)
+
+    def put(block):
+        if queue.full():  # never let a stall build latency; drop the oldest block
+            queue.get_nowait()
+        queue.put_nowait(block)
+
+    def callback(indata, frames, time_info, status):
+        loop.call_soon_threadsafe(put, indata[:, 0].copy())
+
+    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32", blocksize=hop, callback=callback):
+        while True:
+            yield await queue.get()
