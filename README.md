@@ -13,3 +13,9 @@ cp .env.example .env   # fill in TOKEN
 docker compose up -d
 ```
 Enable "Allow local communication" in the WiZ app first.
+
+## Music sync
+`.venv/bin/python -m music_sync` connects to Home Assistant and creates three controls (Music Sync toggle,
+mode dropdown, sensitivity slider) that appear on the default dashboard. Toggle it on while music plays;
+the bulbs are restored when you toggle off, after 30s of silence, or on the next run after a crash.
+First run triggers a macOS system-audio permission prompt for your terminal.
