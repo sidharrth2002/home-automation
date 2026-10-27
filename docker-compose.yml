@@ -1,0 +1,11 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Kuala_Lumpur
+    volumes:
+      - ./homeassistant/config:/config
+    ports:
+      - "8123:8123"

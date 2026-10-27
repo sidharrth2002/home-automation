@@ -1,0 +1,6 @@
+.venv/
+.env
+homeassistant/config/
+.music_sync_saved_state.json
+.DS_Store
+__pycache__/
