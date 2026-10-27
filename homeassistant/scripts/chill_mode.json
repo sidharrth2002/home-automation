@@ -1,0 +1,23 @@
+{
+  "alias": "Chill",
+  "icon": "mdi:weather-night",
+  "description": "Gentle music sync",
+  "mode": "single",
+  "sequence": [
+    {
+      "action": "input_select.select_option",
+      "target": {
+        "entity_id": "input_select.music_sync_mode"
+      },
+      "data": {
+        "option": "calm"
+      }
+    },
+    {
+      "action": "input_boolean.turn_on",
+      "target": {
+        "entity_id": "input_boolean.music_sync"
+      }
+    }
+  ]
+}

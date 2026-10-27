@@ -14,6 +14,17 @@ docker compose up -d
 ```
 Enable "Allow local communication" in the WiZ app first.
 
+## Dashboard, scripts and automations
+Home Assistant config that matters is kept here as JSON and pushed with
+`.venv/bin/python -m homeassistant.apply`:
+
+- `homeassistant/dashboards/home.json` — the **Home** dashboard (`/home-hub`): a sections view with scene
+  buttons, light tiles (brightness + colour temperature), music-sync controls and the TV.
+- `homeassistant/scripts/` — Party, Chill, Movie and All off.
+- `homeassistant/automations/` — TV bias lighting.
+
+Edit the JSON and re-run apply rather than editing in the UI, so the repo stays the source of truth.
+
 ## Music sync
 `.venv/bin/python -m music_sync` connects to Home Assistant and creates its controls, which appear on the
 default dashboard:
@@ -40,8 +51,7 @@ It listens to the room through the Mac's microphone, so it follows whatever the 
 silence, since quiet scenes are normal.
 
 The TCL TV is paired through HA's Android TV Remote integration (`media_player.smart_tv_pro`). The
-`TV bias lighting` automation (`homeassistant/automations/tv_bias_lighting.json`, installed via HA's
-`/api/config/automation/config/tv_bias_lighting`) switches to `tv` mode when the TV turns on, if music sync
+`TV bias lighting` automation (`homeassistant/automations/tv_bias_lighting.json`, pushed by `homeassistant.apply`) switches to `tv` mode when the TV turns on, if music sync
 isn't already running, and turns it off (restoring the bulbs) when the TV turns off.
 
 `.venv/bin/python -m tests.test_analysis` checks the pipeline against a synthetic 128 BPM track.

@@ -1,0 +1,270 @@
+{
+  "views": [
+    {
+      "title": "Home",
+      "path": "home",
+      "type": "sections",
+      "max_columns": 3,
+      "icon": "mdi:home-variant",
+      "badges": [
+        {
+          "type": "entity",
+          "entity": "input_boolean.music_sync",
+          "name": "Sync",
+          "show_name": true,
+          "show_state": true
+        },
+        {
+          "type": "entity",
+          "entity": "sensor.music_sync_tempo",
+          "name": "Tempo",
+          "show_name": true
+        },
+        {
+          "type": "entity",
+          "entity": "input_select.music_sync_mode",
+          "name": "Mode",
+          "show_name": true
+        },
+        {
+          "type": "entity",
+          "entity": "media_player.smart_tv_pro",
+          "name": "TV",
+          "show_name": true
+        }
+      ],
+      "sections": [
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Scenes",
+              "icon": "mdi:palette"
+            },
+            {
+              "type": "tile",
+              "entity": "script.party_mode",
+              "name": "Party",
+              "icon": "mdi:party-popper",
+              "vertical": true,
+              "hide_state": true,
+              "tap_action": {
+                "action": "perform-action",
+                "perform_action": "script.party_mode"
+              },
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "script.chill_mode",
+              "name": "Chill",
+              "icon": "mdi:weather-night",
+              "vertical": true,
+              "hide_state": true,
+              "tap_action": {
+                "action": "perform-action",
+                "perform_action": "script.chill_mode"
+              },
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "script.movie_mode",
+              "name": "Movie",
+              "icon": "mdi:movie-open",
+              "vertical": true,
+              "hide_state": true,
+              "tap_action": {
+                "action": "perform-action",
+                "perform_action": "script.movie_mode"
+              },
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "script.all_off",
+              "name": "All off",
+              "icon": "mdi:power",
+              "vertical": true,
+              "hide_state": true,
+              "tap_action": {
+                "action": "perform-action",
+                "perform_action": "script.all_off"
+              },
+              "grid_options": {
+                "columns": 3,
+                "rows": 2
+              }
+            },
+            {
+              "type": "heading",
+              "heading": "Lights",
+              "icon": "mdi:lightbulb-group"
+            },
+            {
+              "type": "tile",
+              "entity": "light.wiz_rgbw_tunable_624d4e",
+              "name": "Light 1",
+              "grid_options": {
+                "columns": 12
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "light-brightness"
+                },
+                {
+                  "type": "light-color-temp"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "light.wiz_rgbw_tunable_4b472c",
+              "name": "Light 2",
+              "grid_options": {
+                "columns": 12
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "light-brightness"
+                },
+                {
+                  "type": "light-color-temp"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Music sync",
+              "icon": "mdi:music-circle"
+            },
+            {
+              "type": "tile",
+              "entity": "input_boolean.music_sync",
+              "name": "Music sync",
+              "icon": "mdi:music",
+              "grid_options": {
+                "columns": 12
+              },
+              "tap_action": {
+                "action": "toggle"
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "input_select.music_sync_mode",
+              "name": "Mode",
+              "grid_options": {
+                "columns": 12
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "input_number.music_sync_sensitivity",
+              "name": "Sensitivity",
+              "grid_options": {
+                "columns": 6
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "input_number.music_sync_latency",
+              "name": "Latency",
+              "grid_options": {
+                "columns": 6
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.music_sync_tempo",
+              "name": "Detected tempo",
+              "icon": "mdi:metronome",
+              "grid_options": {
+                "columns": 12
+              }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "TV",
+              "icon": "mdi:television"
+            },
+            {
+              "type": "media-control",
+              "entity": "media_player.smart_tv_pro",
+              "name": "Living room TV"
+            },
+            {
+              "type": "tile",
+              "entity": "media_player.smart_tv_pro",
+              "name": "Volume",
+              "icon": "mdi:volume-high",
+              "grid_options": {
+                "columns": 12
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "media-player-volume-slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "automation.tv_bias_lighting",
+              "name": "Dim lights with TV",
+              "icon": "mdi:television-ambient-light",
+              "grid_options": {
+                "columns": 12
+              },
+              "tap_action": {
+                "action": "toggle"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

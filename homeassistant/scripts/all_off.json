@@ -1,0 +1,25 @@
+{
+  "alias": "All off",
+  "icon": "mdi:power",
+  "description": "Stop sync and turn every light off",
+  "mode": "single",
+  "sequence": [
+    {
+      "action": "input_boolean.turn_off",
+      "target": {
+        "entity_id": "input_boolean.music_sync"
+      }
+    },
+    {
+      "delay": {
+        "seconds": 2
+      }
+    },
+    {
+      "action": "light.turn_off",
+      "target": {
+        "entity_id": "all"
+      }
+    }
+  ]
+}

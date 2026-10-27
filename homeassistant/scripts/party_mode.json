@@ -1,0 +1,23 @@
+{
+  "alias": "Party",
+  "icon": "mdi:party-popper",
+  "description": "Full-on beat sync to the Mac's audio",
+  "mode": "single",
+  "sequence": [
+    {
+      "action": "input_select.select_option",
+      "target": {
+        "entity_id": "input_select.music_sync_mode"
+      },
+      "data": {
+        "option": "party"
+      }
+    },
+    {
+      "action": "input_boolean.turn_on",
+      "target": {
+        "entity_id": "input_boolean.music_sync"
+      }
+    }
+  ]
+}
