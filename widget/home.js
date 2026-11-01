@@ -7,7 +7,10 @@
 const FEEDS = "__FEED_URLS__"; // replaced by the installer: the feed's address on the home network
 const HUB = "__HUB_URL__"; // tapping the widget opens the Hub
 const STALE_MIN = 3; // the Mac normally refreshes the feed every 20s
-const REFRESH_MIN = 5;
+// iOS treats this as a request, not a promise: it redraws widgets on its own budget (often 15+ minutes), so a song
+// change can take that long to show. Ask more often while music is playing, less when nothing is.
+const REFRESH_PLAYING_MIN = 2;
+const REFRESH_IDLE_MIN = 10;
 
 const APPS = {
   "com.netflix.ninja": "Netflix", "com.google.android.youtube.tv": "YouTube", "com.spotify.tv.android": "Spotify",
@@ -45,6 +48,7 @@ const hex = (rgb) => "#" + rgb.map((v) => Math.max(0, Math.min(255, Math.round(v
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const ago = (ms) => { const m = Math.round(ms / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 const white = (a) => new Color("#ffffff", a);
+const clock = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); // when iOS last redrew this
 
 function summary(d) {
   const reachable = d.lights.filter((l) => l.reachable);
@@ -191,7 +195,7 @@ async function medium(w, res) {
   top.centerAlignContent();
   text(top, "Home", 12, { weight: "semibold", alpha: 0.75 });
   top.addSpacer();
-  text(top, `${s.on} of ${s.total} lights on`, 10.5, { alpha: 0.55 });
+  text(top, `${s.on} of ${s.total} on · ${clock()}`, 10.5, { alpha: 0.55 });
   w.addSpacer(6);
   const mid = w.addStack();
   mid.centerAlignContent();
@@ -210,7 +214,7 @@ async function large(w, res) {
   top.centerAlignContent();
   text(top, "Home", 15, { weight: "bold", alpha: 0.85 });
   top.addSpacer();
-  text(top, s.presence || " ", 12, { alpha: 0.6 });
+  text(top, [s.presence, clock()].filter(Boolean).join(" · "), 12, { alpha: 0.6 });
   w.addSpacer(10);
   orbRow(w, d, 70, 22);
   w.addSpacer(14);
@@ -287,7 +291,8 @@ if (!res) {
   else await medium(w, res);
 }
 w.url = HUB;
-w.refreshAfterDate = new Date(Date.now() + REFRESH_MIN * 60000);
+const playing = !!(res && res.data.music && res.data.music.playing);
+w.refreshAfterDate = new Date(Date.now() + (playing ? REFRESH_PLAYING_MIN : REFRESH_IDLE_MIN) * 60000);
 if (config.runsInWidget) Script.setWidget(w);
 else await w.presentMedium();
 Script.complete();
