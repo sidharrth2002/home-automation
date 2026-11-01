@@ -1,0 +1,43 @@
+#!/bin/sh
+# Pre-commit guard: this repo is public, so refuse anything personal before it can be committed.
+# Installed as .git/hooks/pre-commit (ln -sf ../../bin/check-commit .git/hooks/pre-commit).
+#
+# Blocks: logs, data/, exports, credentials and HA's live config by path; and, in added lines, pound amounts,
+# HL fund codes (SEDOLs) from the local investments cache and the current portfolio total.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+bad=0
+
+paths=$(git diff --cached --name-only --diff-filter=AM | grep -E '(\.log$|^data/|\.csv$|(^|/)\.env$|^homeassistant/config/|cookie|HALTED|\.music_sync_saved_state)' || true)
+if [ -n "$paths" ]; then
+  echo "check-commit: these files must not be committed (public repo):"; echo "$paths" | sed 's/^/  /'; bad=1
+fi
+
+added=$(git diff --cached -U0 --diff-filter=AM -- . ':!bin/check-commit' | grep '^+' | grep -v '^+++' || true)
+
+if echo "$added" | grep -qE '£ ?[0-9]{1,3}(,[0-9]{3})+|£ ?[0-9]{4,}'; then
+  echo "check-commit: added lines contain pound amounts:"; echo "$added" | grep -nE '£ ?[0-9]{1,3}(,[0-9]{3})+|£ ?[0-9]{4,}' | head -5 | sed 's/^/  /'; bad=1
+fi
+
+# Personal identifiers known locally (never committed themselves): fund codes held, and the portfolio total.
+secrets=$(.venv/bin/python - 2>/dev/null <<'EOF'
+import json, pathlib
+d = pathlib.Path("data/investments")
+out = set()
+if (d / "ft_ids.json").exists():
+    out |= set(json.loads((d / "ft_ids.json").read_text()))
+if (d / "history.json").exists():
+    for v in json.loads((d / "history.json").read_text()).values():
+        out |= {f"{v:.2f}", f"{v:,.2f}", f"{int(v)}", f"{int(v):,}"}
+print("\n".join(sorted(x for x in out if len(x) >= 5)))
+EOF
+)
+if [ -n "$secrets" ]; then
+  pats=$(mktemp); trap 'rm -f "$pats"' EXIT
+  printf '%s\n' "$secrets" > "$pats"
+  hits=$(echo "$added" | grep -F -f "$pats" || true)
+  if [ -n "$hits" ]; then
+    echo "check-commit: added lines contain your fund codes or portfolio values:"; echo "$hits" | head -5 | sed 's/^/  /'; bad=1
+  fi
+fi
+
+[ $bad -eq 0 ] || { echo "Commit blocked. Unstage the above (git restore --staged <file>) and try again."; exit 1; }
