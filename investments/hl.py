@@ -75,6 +75,15 @@ class Credentials:
             raise ValueError("date of birth looks wrong")
         return cls(username, born.strftime("%d%m%y"), password, secure_number)
 
+    @classmethod
+    def from_stored(cls, username, dob, password, secure_number):
+        """Re-validate what setup saved. The date is stored as HL's DDMMYY, which `checked` rightly refuses as
+        typed input; the century doesn't matter for HL, so expand it just to run the same checks."""
+        if re.fullmatch(r"\d{6}", dob or ""):
+            yy = int(dob[4:])
+            dob = f"{dob[:2]}/{dob[2:4]}/{(1900 if yy > datetime.now().year % 100 else 2000) + yy}"
+        return cls.checked(username, dob, password, secure_number)
+
 
 @dataclass
 class Holding:

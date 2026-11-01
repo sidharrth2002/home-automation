@@ -59,6 +59,11 @@ def run():
                 ("sid", "1999", "pw", "123456"), ("sid", "01/02/1999", "", "123456")):
         expect(ValueError, lambda: hl.Credentials.checked(*bad))
     assert CREDS.dob == "010299"
+    # what setup stores must load back unchanged (this once failed: stored DDMMYY was re-parsed as typed input)
+    for typed in ("17/10/2002", "01/02/1999", "31/12/1985"):
+        stored = hl.Credentials.checked("sid", typed, "pw", "123456")
+        assert hl.Credentials.from_stored("sid", stored.dob, "pw", "123456") == stored, typed
+    expect(ValueError, lambda: hl.Credentials.from_stored("sid", "993102", "pw", "123456"))
 
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)

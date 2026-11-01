@@ -54,7 +54,7 @@ def credentials():
     missing = [f for f, v in values.items() if not v]
     if missing:
         raise SystemExit(f"missing from Keychain: {', '.join(missing)} — run: python -m investments setup")
-    return Credentials.checked(**values)
+    return Credentials.from_stored(**values)
 
 
 def setup():
