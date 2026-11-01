@@ -1,0 +1,5 @@
+#!/bin/sh
+# Prints the auth header for Home Assistant's MCP server, reading the token from this repo's .env,
+# so Claude Code's config never holds the token itself (used as the MCP server's headersHelper).
+TOKEN=$(sed -n 's/^TOKEN=//p' "$(dirname "$0")/../.env" | tr -d "\"'")
+printf '{"Authorization": "Bearer %s"}\n' "$TOKEN"

@@ -25,6 +25,17 @@ dashboard (`/hub-live`); it also works full-screen at `/local/hub/index.html`, e
 It reuses the HA frontend's login, so there's no separate sign-in.
 `.venv/bin/python frontend/screenshot.py /tmp/hub` renders desktop and phone screenshots for review.
 
+## Talk to it (Claude)
+Home Assistant's MCP server (`/api/mcp`, Assist API) lets Claude control the home. `homeassistant/voice.json`
+decides what it can see and the names it understands (applied by `homeassistant.apply`). Add it to Claude
+Code once; `bin/ha-mcp-headers` reads the token from `.env` so it never lands in Claude's config:
+
+```sh
+claude mcp add-json -s user home-assistant '{"type":"http","url":"http://localhost:8123/api/mcp","headersHelper":"'"$PWD"'/bin/ha-mcp-headers"}'
+```
+
+Then, in any Claude Code session: "turn the TV lamps blue", "party mode", "what's on my calendar tomorrow?".
+
 ## Dashboard, scripts and automations
 Home Assistant config that matters is kept here as JSON and pushed with
 `.venv/bin/python -m homeassistant.apply`:

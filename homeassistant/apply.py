@@ -86,6 +86,18 @@ def ensure_icloud_calendar(token):
     print("calendar: iCloud connected")
 
 
+async def apply_voice(ha):
+    """Names, aliases and exposure for Assist and the MCP server (what Claude can control)."""
+    spec = json.loads((ROOT / "voice.json").read_text())
+    registry = {e["entity_id"] for e in await ha.call(type="config/entity_registry/list")}
+    for eid, update in spec["names"].items():
+        if eid in registry:
+            await ha.call(type="config/entity_registry/update", entity_id=eid, **update)
+    ids = [e for e in [*spec["names"], *spec["expose"]] if e in registry]
+    await ha.call(type="homeassistant/expose_entity", assistants=["conversation"], entity_ids=ids, should_expose=True)
+    print(f"voice: {len(ids)} entities exposed")
+
+
 async def main():
     load_env()
     token = os.environ["TOKEN"]
@@ -108,6 +120,8 @@ async def main():
         for f in sorted((ROOT / f"{kind}s").glob("*.json")):
             rest(token, f"/api/config/{kind}/config/{f.stem}", json.loads(f.read_text()))
             print(f"{kind}: {f.stem}")
+
+    await apply_voice(ha)
 
     existing = {d["url_path"] for d in await ha.call(type="lovelace/dashboards/list")}
     if DASHBOARD not in existing:

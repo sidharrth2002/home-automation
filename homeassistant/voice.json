@@ -1,0 +1,24 @@
+{
+  "_comment": "What Assist / Claude (via HA's MCP server) can see and control, and the names it understands. Applied by homeassistant.apply.",
+  "names": {
+    "light.wiz_rgbw_tunable_624d4e": {"name": "TV lamp 1", "aliases": ["TV light 1", "left TV lamp"]},
+    "light.wiz_rgbw_tunable_4b472c": {"name": "TV lamp 2", "aliases": ["TV light 2", "right TV lamp"]},
+    "light.desk_lamp": {"aliases": ["desk light"]},
+    "media_player.smart_tv_pro": {"aliases": ["TV", "television"]},
+    "remote.smart_tv_pro": {"aliases": ["TV remote"]},
+    "input_boolean.music_sync": {"aliases": ["music lights", "dancing lights", "light show"]},
+    "input_select.music_sync_mode": {"aliases": ["light show mode"]},
+    "input_boolean.desk_lamp_adaptive": {"aliases": ["adaptive desk lamp", "follow the sky"]},
+    "script.party_mode": {"aliases": ["party mode", "party lights"]},
+    "script.chill_mode": {"aliases": ["chill mode"]},
+    "script.movie_mode": {"aliases": ["movie mode", "movie lights"]},
+    "script.all_off": {"aliases": ["everything off", "lights out"]},
+    "script.music_command": {"aliases": ["play pause", "skip track"]}
+  },
+  "expose": [
+    "input_select.music_sync_colours", "input_number.desk_lamp_max_brightness", "sensor.outdoor_daylight",
+    "weather.forecast_home", "calendar.calendar", "calendar.home", "calendar.work", "automation.tv_bias_lighting",
+    "sensor.desk_lamp_target_colour", "sensor.desk_lamp_target_brightness", "timer.desk_lamp_manual",
+    "media_player.sid_london_room_tv"
+  ]
+}
