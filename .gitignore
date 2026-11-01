@@ -12,3 +12,4 @@ netflix.log
 presence.log
 .home.pid
 home.log
+*.log
