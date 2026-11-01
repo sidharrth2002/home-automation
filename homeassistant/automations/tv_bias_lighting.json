@@ -8,13 +8,15 @@
       "trigger": "state",
       "entity_id": "media_player.smart_tv_pro",
       "to": "on",
-      "id": "tv_on"
+      "id": "tv_on",
+      "from": "off"
     },
     {
       "trigger": "state",
       "entity_id": "media_player.smart_tv_pro",
       "to": "off",
-      "id": "tv_off"
+      "id": "tv_off",
+      "from": "on"
     }
   ],
   "actions": [

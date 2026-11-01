@@ -4,8 +4,10 @@ scripts, automations and the dashboard (in that order, so automations never refe
 Run: .venv/bin/python -m homeassistant.apply
 """
 import asyncio
+import hashlib
 import json
 import os
+import shutil
 import urllib.request
 from pathlib import Path
 
@@ -13,7 +15,32 @@ from music_sync.service import HA, HA_HTTP, load_env
 
 ROOT = Path(__file__).resolve().parent
 DASHBOARD = "home-hub"
+HUB = "hub"  # folder under /local/
+HUB_DASH = "hub-live"  # sidebar URL (HA requires a hyphen)
+HUB_SRC = ROOT.parent / "frontend" / "hub"
+WWW = ROOT / "config" / "www"  # served by HA at /local/
 TEMPLATE_FIELDS = ("state", "unit_of_measurement", "device_class", "state_class")
+
+
+def deploy_hub():
+    """Copy the custom frontend into HA's www folder, stamping a content hash for cache-busting."""
+    files = sorted(p for p in HUB_SRC.rglob("*") if p.is_file())
+    version = hashlib.sha256(b"".join(p.read_bytes() for p in files)).hexdigest()[:10]
+    fresh_www = not WWW.exists()
+    dest = WWW / HUB
+    if dest.exists():
+        shutil.rmtree(dest)
+    for src in files:
+        out = dest / src.relative_to(HUB_SRC)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if src.suffix in (".html", ".js", ".css"):
+            out.write_text(src.read_text().replace("__VERSION__", version))
+        else:
+            shutil.copy2(src, out)
+    print(f"hub: deployed {len(files)} files (v{version})")
+    if fresh_www:
+        print("hub: created config/www — restart Home Assistant once so it starts serving /local/")
+    return version
 
 
 def rest(token, path, body=None, method="POST"):
@@ -70,6 +97,15 @@ async def main():
     await ha.call(type="lovelace/config/save", url_path=DASHBOARD,
                   config=json.loads((ROOT / "dashboards" / "home.json").read_text()))
     print(f"dashboard: {HA_HTTP}/{DASHBOARD}/home")
+
+    version = deploy_hub()
+    if HUB_DASH not in existing:
+        await ha.call(type="lovelace/dashboards/create", url_path=HUB_DASH, title="Hub",
+                      icon="mdi:creation", show_in_sidebar=True, require_admin=False, mode="storage")
+    # A "Webpage" dashboard: HA renders the page full-bleed in its own frame, same origin as the login.
+    await ha.call(type="lovelace/config/save", url_path=HUB_DASH,
+                  config={"strategy": {"type": "iframe", "url": f"/local/{HUB}/index.html?v={version}"}})
+    print(f"hub: {HA_HTTP}/{HUB_DASH}  (or full-screen: {HA_HTTP}/local/{HUB}/index.html)")
     pump.cancel()
     await ha.ws.close()
 
