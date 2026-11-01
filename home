@@ -1,18 +1,18 @@
 #!/bin/bash
-# One switch for the whole home: Home Assistant (Docker) + the Mac-side services (music sync, investments, presence).
+# One switch for the whole home: Home Assistant (Docker) + the Mac-side services (music sync, investments, presence, the phone widget's feed).
 #
 #   ./home up        start everything
 #   ./home down      stop everything (bulbs are restored first)
 #   ./home restart
 #   ./home reload    restart just the Mac-side services (e.g. after adding credentials); HA keeps running
 #   ./home status
-#   ./home logs [music_sync|netflix|presence|investments|home]
+#   ./home logs [music_sync|presence|investments|widget|home]
 set -euo pipefail
 cd "$(dirname "$0")"
 
 PIDFILE=.home.pid
 PY=.venv/bin/python
-SERVICES='python -m (music_sync|netflix|presence|investments|stack)( |$)'
+SERVICES='python -m (music_sync|netflix|presence|investments|widget|stack)( |$)'
 
 supervisor_pid() {
   [[ -f $PIDFILE ]] && kill -0 "$(cat $PIDFILE)" 2>/dev/null && cat $PIDFILE

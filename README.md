@@ -36,6 +36,8 @@ and the background picks up colour from the lights and the album art.
 - **Investments.** Holdings from Hargreaves Lansdown, which has no API, so it logs in like the website does
   (written so it can't lock the account, more on that below), plus the interest on my cash at Trading 212
   through its official API. Values are blurred on the dashboard until I tap to show them.
+- **iPhone widget.** A Scriptable widget in the same neon style: the three bulbs as glowing orbs, what's
+  playing with its album art, the TV, home/away and the weather, in small, medium, large and lock screen sizes.
 - **Talking to it.** Claude can control everything through Home Assistant's MCP server, so "turn the TV lamps
   blue" or "lights out" just works.
 - **Away mode.** If my phone hasn't been on the Wi-Fi for a while and the Mac is idle, everything turns off.
@@ -62,6 +64,7 @@ flowchart LR
     bulbs(("WiZ bulbs"))
     tv["TCL TV"]
     hub["Hub"]
+    phone["iPhone widget"]
     claude["Claude"]
     icloud["iCloud"]
     hl["Hargreaves<br/>Lansdown"]
@@ -78,6 +81,7 @@ flowchart LR
     ha <--> tv
     icloud -- CalDAV --> ha
     hub <-- websocket --> ha
+    ha -. JSON feed .-> phone
     claude -- MCP --> ha
 ```
 
@@ -230,6 +234,33 @@ git-ignored. It refreshes every 30 minutes during the day. `tests/test_t212.py` 
 </details>
 
 <details>
+<summary><b>iPhone widget</b></summary>
+<br>
+
+`widget/home.js` is a [Scriptable](https://scriptable.app) widget (free app), so there's nothing to build or sign.
+It doesn't talk to Home Assistant and there's no token on the phone. Instead the `widget` service (started by
+`./home up`) writes a small JSON feed every 20 seconds to a file under Home Assistant's `/local/` folder whose
+name is a random secret. The feed has the three lights (on, brightness, colour), what's playing, the TV, home/away
+and the weather, and nothing else: no finances and no calendar. `tests/test_widget.py` checks that nothing outside
+that list can get into it.
+
+```sh
+.venv/bin/python -m widget install --copy   # fills in the private address and copies the script to the clipboard
+```
+
+Then paste it into a new script in Scriptable on the phone (the clipboard carries across with Universal
+Clipboard), and add a Scriptable widget to the home or lock screen. Tapping it opens the Hub. Away from home
+Wi-Fi it shows the last data it saw, marked with how old it is. The installed script contains the secret address,
+so it's written to `data/widget/` (git-ignored) and the copy in the repo only has placeholders. If the address
+ever leaks, delete `data/widget/key` and run the install again.
+
+`node tests/widget_smoke.js` runs the script against a strict stand-in for Scriptable's API in every size and a
+set of awkward cases (offline, nothing playing, stale data), which catches typos but isn't the same as looking at
+it on a phone.
+
+</details>
+
+<details>
 <summary><b>Claude</b></summary>
 <br>
 
@@ -294,6 +325,7 @@ home                ./home up | down | status | logs
 music_sync/         audio capture, analysis, light show, now playing
 investments/        Hargreaves Lansdown client
 netflix/            export parser (not currently run; it fed a card I removed)
+widget/             the iPhone widget script and the feed behind it
 presence/           phone on Wi-Fi -> home/away
 stack/              the supervisor behind ./home
 homeassistant/      HA config + apply.py
@@ -303,4 +335,4 @@ tests/
 ```
 
 Tests: `python -m tests.test_analysis` (a synthetic 128 BPM track: tempo, beat timing, drops, TV mode,
-palettes), `tests.test_investments` and `tests.test_t212`.
+palettes), `tests.test_investments`, `tests.test_t212` and `tests.test_widget`, plus `node tests/widget_smoke.js`.
