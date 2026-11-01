@@ -1,6 +1,6 @@
 {
   "name": "Desk lamp target brightness",
-  "state": "{% set h = now().hour + now().minute / 60 %}\n{% set elev = state_attr('sun.sun', 'elevation') | float(0) %}\n{% set wind = 1 if h < 5 else ([0, [1, (h - 21) / 1.5] | min] | max if elev < -4 else 0) %}\n{% set d = states('sensor.outdoor_daylight') | float(0) / 100 %}\n{{ ((90 - 60 * d) * (1 - wind) + 40 * wind) | round(0) | int }}",
+  "state": "{% set h = now().hour + now().minute / 60 %}\n{% set elev = state_attr('sun.sun', 'elevation') | float(0) %}\n{% set wind = 1 if h < 5 else ([0, [1, (h - 21) / 1.5] | min] | max if elev < -4 else 0) %}\n{% set top = states('input_number.desk_lamp_max_brightness') | float(55) %}\n{% set d = states('sensor.outdoor_daylight') | float(0) / 100 %}\n{% set level = (top * (1 - 0.65 * d)) * (1 - wind) + top * 0.45 * wind %}\n{% if is_state('media_player.smart_tv_pro', 'on') %}{% set level = [level, top * 0.35] | min %}{% endif %}\n{{ [10, level] | max | round(0) | int }}",
   "unit_of_measurement": "%",
   "state_class": "measurement"
 }

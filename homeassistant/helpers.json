@@ -14,5 +14,18 @@
       "duration": "02:00:00",
       "restore": true
     }
+  },
+  {
+    "entity_id": "input_number.desk_lamp_max_brightness",
+    "create": {
+      "name": "Desk lamp max brightness",
+      "icon": "mdi:brightness-percent",
+      "min": 15,
+      "max": 100,
+      "step": 5,
+      "mode": "slider",
+      "unit_of_measurement": "%",
+      "initial": 55
+    }
   }
 ]

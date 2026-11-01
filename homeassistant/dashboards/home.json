@@ -193,6 +193,21 @@
             },
             {
               "type": "tile",
+              "entity": "input_number.desk_lamp_max_brightness",
+              "name": "Max brightness",
+              "grid_options": {
+                "columns": 12
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "numeric-input",
+                  "style": "slider"
+                }
+              ]
+            },
+            {
+              "type": "tile",
               "entity": "sensor.outdoor_daylight",
               "name": "Light outside",
               "icon": "mdi:weather-sunny",

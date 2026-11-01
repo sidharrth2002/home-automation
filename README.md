@@ -33,8 +33,10 @@ Assistant (`homeassistant/templates/`, `homeassistant/automations/desk_lamp_*.js
   cloud cover from `weather.forecast_home` (up to -70%) and rain/fog/snow (a further -20%).
 - `sensor.desk_lamp_target_colour`: 4000–5200K in daylight, cooler under overcast skies to match diffuse
   light; ramps to 2700K through sunset, then to 2200K for the 21:00–22:30 wind-down until 05:00.
-- `sensor.desk_lamp_target_brightness`: brighter when it's gloomy (90% in the dark, ~47% on a sunny
-  midday), winding down to 40% at night.
+- `sensor.desk_lamp_target_brightness`: the lamps are the room's only light, so everything is scaled to
+  `input_number.desk_lamp_max_brightness` (default 55%): full ceiling in the dark, about a third less on an
+  overcast day and ~45% of it on a sunny midday, down to 45% of it for the night wind-down, and capped at
+  35% of it whenever the TV is on.
 - The automation only adjusts the lamp while it's on (never switches it), and a manual change that's
   clearly off-target starts `timer.desk_lamp_manual`, pausing it for 2 hours. `input_boolean.desk_lamp_adaptive`
   turns the whole thing off.
