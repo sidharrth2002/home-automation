@@ -130,7 +130,7 @@ def publish(accounts):
     day_change = round(sum(day_changes), 2) if day_changes else (round(total - previous[-1], 2) if previous else None)
     stock = sum(h["value"] or 0 for h in holdings)
 
-    post(total, {**BASE_ATTRS, "status": "ok", "updated": datetime.now().isoformat(timespec="seconds"),
+    post(total, {**BASE_ATTRS, "status": "ok", "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
                  "cash": round(sum(a["cash"] or 0 for a in accounts), 2),
                  "invested_cost": round(cost, 2), "gain": round(gain, 2),
                  "gain_pct": round(gain / cost * 100, 2) if cost else None, "day_change": day_change,
@@ -181,7 +181,7 @@ def refresh_t212():
     interest = t212mod.summarise(client.interest(), summary["cash"])
     save_json(t212mod.LAST_FILE, {"cash": summary["cash"], "total": summary["total"], **interest, "daily": None})
     post(summary["cash"], {"friendly_name": "Trading 212", "icon": "mdi:piggy-bank", "unit_of_measurement": "GBP",
-                           "status": "ok", "updated": datetime.now().isoformat(timespec="seconds"),
+                           "status": "ok", "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
                            "currency": summary["currency"], "summary": summary, "interest": interest},
          entity=T212_SENSOR)
     log.info("published Trading 212 (%d interest payments)", interest["count"])  # no amounts in logs

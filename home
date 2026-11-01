@@ -1,5 +1,5 @@
 #!/bin/bash
-# One switch for the whole home: Home Assistant (Docker) + the Mac-side services (music sync, Netflix, presence).
+# One switch for the whole home: Home Assistant (Docker) + the Mac-side services (music sync, investments, presence).
 #
 #   ./home up        start everything
 #   ./home down      stop everything (bulbs are restored first)

@@ -26,8 +26,8 @@ const HOLD = "timer.desk_lamp_manual";
 const MAXB = "input_number.desk_lamp_max_brightness";
 const TV = "media_player.smart_tv_pro";
 const TV_AUTO = "automation.tv_bias_lighting";
-const NF_CONT = "sensor.netflix_continue_watching";
-const NF_WEEK = "sensor.netflix_episodes_this_week";
+const TV_REMOTE = "remote.smart_tv_pro";
+const HEALTH = "sensor.system_health";
 const INVEST = "sensor.investments";
 const T212 = "sensor.trading212";
 
@@ -73,6 +73,13 @@ const I = {
   pin: svg(`<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>`),
   repeat: svg(`<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>`),
   notes: svg(`<path d="M5 4h14v16H5z"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/>`),
+  up: svg(`<path d="M6 15l6-6 6 6"/>`), down: svg(`<path d="M6 9l6 6 6-6"/>`),
+  left: svg(`<path d="M15 6l-6 6 6 6"/>`), right: svg(`<path d="M9 6l6 6-6 6"/>`),
+  back: svg(`<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>`),
+  plus: svg(`<path d="M12 5v14M5 12h14"/>`), minus: svg(`<path d="M5 12h14"/>`),
+  mute: svg(`<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l5 6M21 9l-5 6"/>`),
+  speaker: svg(`<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>`),
+  pulse: svg(`<path d="M3 12h4l2-6 4 12 2-6h6"/>`),
   piggy: svg(`<path d="M19 11c0-3.3-3.1-6-7-6S5 7.7 5 11c0 1.6.7 3 1.9 4.1V18h3v-1.2c.7.1 1.4.2 2.1.2s1.4-.1 2.1-.2V18h3v-2.9c.6-.5 1.1-1 1.5-1.6H21v-3h-2z"/><circle cx="15.5" cy="10.5" r=".6" fill="currentColor"/><path d="M9 7.5c.8-.9 2-1.2 3.2-1"/>`),
   chart: svg(`<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/>`),
   eye: svg(`<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`),
@@ -270,6 +277,8 @@ const evStart = (e) => new Date(e.start.dateTime ?? `${e.start.date}T00:00:00`);
 const evEnd = (e) => new Date(e.end.dateTime ?? `${e.end.date}T00:00:00`);
 const hm = (d) => d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
+let calFetchedAt = null; // when the calendars last loaded cleanly, for the health card
+let calFailed = false;
 async function loadCalendars() {
   const ids = calIds();
   const from = new Date(); from.setHours(0, 0, 0, 0);
@@ -277,15 +286,21 @@ async function loadCalendars() {
   try {
     const auth = conn.options.auth;
     if (auth.expired) await auth.refreshAccessToken();
+    let failed = false;
     const lists = await Promise.all(ids.map(async (id) => {
       const r = await fetch(`/api/calendars/${id}?start=${from.toISOString()}&end=${to.toISOString()}`,
         { headers: { Authorization: `Bearer ${auth.accessToken}` } });
+      if (!r.ok) failed = true;
       return r.ok ? (await r.json()).map((e) => ({ ...e, cal: id })) : [];
     }));
     calEvents = lists.flat().sort((a, b) => evStart(a) - evStart(b));
+    calFailed = failed;
+    if (!failed) calFetchedAt = Date.now();
   } catch {
     calEvents = calEvents ?? [];
+    calFailed = true;
   }
+  lastSig["#health"] = null;
   lastSig["#calendar"] = null;
   renderAll();
 }
@@ -617,32 +632,125 @@ section("#desk", () => [SUN, WEATHER, OUTDOOR, T_K, T_B, ADAPT, HOLD, MAXB, DESK
       <span class="value">${maxb}%</span></div>`;
 });
 
-// TV
+// TV: a remote control plus what's on. Keys go through remote.send_command, apps through play_media.
+const TV_APPS = [["Netflix", "com.netflix.ninja"], ["YouTube", "com.google.android.youtube.tv"], ["Spotify", "com.spotify.tv.android"],
+  ["Prime Video", "com.amazon.amazonvideo.livingroom"], ["Disney+", "com.disney.disneyplus"], ["iPlayer", "uk.co.bbc.iplayer"],
+  ["Apple TV", "com.apple.atve.androidtv.appletv"]];
+const tvKey = (key) => call("remote", "send_command", { entity_id: TV_REMOTE, command: key });
 section("#tv", () => [TV, TV_AUTO, SYNC, MODE], () => {
   const on = is(TV, "on");
+  const live = S[TV] && S[TV].state !== "unavailable";
   const app = at(TV, "app_id");
   const [name, brand] = APPS[app] ?? [app ? app.split(".").pop() : "On", "150,150,190"];
   const glowing = is(SYNC, "on") && is(MODE, "tv");
+  const vol = at(TV, "volume_level");
+  const muted = at(TV, "is_volume_muted");
+  const dis = on ? "" : "disabled";
+  const key = (k, icon, label, cls = "", hold = false) =>
+    `<button class="rk ${cls}" data-act="tv-key" data-v="${k}" ${hold ? "data-hold" : ""} aria-label="${label}" ${dis}>${icon}</button>`;
   return `
-    <div class="card-head"><div class="card-title">${I.tv} TV</div><span class="kicker">${S[TV] ? (on ? "On" : "Off") : "Unavailable"}</span></div>
+    <div class="card-head"><div class="card-title">${I.tv} TV</div>
+      <span class="kicker">${S[TV] ? (on ? "On" : live ? "Off" : "Unavailable") : "Unavailable"}</span>
+      <button class="rk power ${on ? "on" : ""}" data-act="tv-power" aria-label="${on ? "Turn the TV off" : "Turn the TV on"}" ${live ? "" : "disabled"}>${I.power}</button></div>
     <div><div class="screen ${on ? "on" : "off"}" style="--brand:${brand}"><span class="app">${on ? esc(name) : "Standby"}</span></div><div class="stand"></div></div>
+    <div class="remote ${on ? "" : "off"}">
+      <div class="dpad">
+        ${key("DPAD_UP", I.up, "Up", "u", true)}${key("DPAD_LEFT", I.left, "Left", "l", true)}
+        ${key("DPAD_CENTER", `<span>OK</span>`, "Select", "c")}
+        ${key("DPAD_RIGHT", I.right, "Right", "r", true)}${key("DPAD_DOWN", I.down, "Down", "d", true)}
+      </div>
+      <div class="rrow">
+        ${key("BACK", I.back, "Back")}${key("HOME", I.home, "Home")}${key("MEDIA_PLAY_PAUSE", `${I.play}`, "Play or pause")}
+        <button class="rk" data-act="tv-mute" aria-label="${muted ? "Unmute" : "Mute"}" ${dis}>${muted ? I.mute : I.speaker}</button>
+      </div>
+      <div class="vol"><button class="rk" data-act="tv-key" data-v="VOLUME_DOWN" data-hold aria-label="Volume down" ${dis}>${I.minus}</button>
+        <div class="vol-bar" style="--p:${typeof vol === "number" ? Math.round(vol * 100) : 0}%"><i></i><span>${typeof vol === "number" ? `${Math.round(vol * 100)}%` : "Volume"}</span></div>
+        <button class="rk" data-act="tv-key" data-v="VOLUME_UP" data-hold aria-label="Volume up" ${dis}>${I.plus}</button></div>
+    </div>
+    <div class="apps">${TV_APPS.map(([n, pkg]) => `<button class="app-chip ${app === pkg ? "now" : ""}" style="--brand:${(APPS[pkg] ?? [0, "150,150,190"])[1]}"
+      data-act="tv-app" data-v="${pkg}" data-name="${esc(n)}" ${live ? "" : "disabled"}>${esc(n)}</button>`).join("")}</div>
     <div class="row"><span class="label">Glow with the TV</span>
       <button class="switch" role="switch" aria-checked="${is(TV_AUTO, "on")}" data-act="toggle" data-id="${TV_AUTO}" aria-label="Glow with the TV"></button></div>
     <div class="row"><span class="label">Bias lighting</span><span class="value">${glowing ? "Active" : "—"}</span></div>`;
 });
 
-// Netflix
-section("#netflix", () => [NF_CONT, NF_WEEK], () => {
-  const shows = at(NF_CONT, "shows") ?? [];
-  const week = st(NF_WEEK);
-  const list = shows.slice(0, 4).map((s) => `
-    <div class="show"><div class="poster" style="--h:${hueOf(s.show)}">${esc(s.show[0] ?? "?")}</div>
-      <div><b>${esc(s.show)}</b><span>${esc(s.next_after)}</span>
-        <small>${esc(s.when)}${s.stopped_at ? ` · stopped at ${esc(s.stopped_at)}` : ""}</small></div></div>`).join("");
+// System health: what's running, what's fresh and what's reachable, at a glance
+const ago = (ms) => { const m = Math.round(ms / 60000); return !Number.isFinite(m) ? "no refresh yet" : m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+const upFor = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : m < 2880 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.floor(m / 1440)} d`; };
+const ageMs = (iso) => iso ? Date.now() - new Date(iso).getTime() : Infinity;
+section("#health", () => [HEALTH, INVEST, T212, SYNC, MODE, HOME, WEATHER, TV, ...LIGHTS.map((l) => l.id), ...calIds()], () => {
+  const h = S[HEALTH];
+  const ha = h?.attributes ?? {};
+  const hAge = ageMs(ha.updated);
+  const supOk = !!h && h.state !== "stopped" && hAge < 180_000;
+  const daytime = new Date().getHours() >= 7 && new Date().getHours() < 22;
+
+  const svcTile = (key, label, okDetail, missing = "Not set up") => {
+    if (!supOk) return ["idle", label, "Unknown while the supervisor isn't reporting"];
+    const sv = ha.services?.[key];
+    if (!sv) return ["idle", label, missing];
+    const rs = sv.restarts ? ` · restarted ${sv.restarts}×` : "";
+    if (sv.state === "running") return [sv.restarts >= 3 ? "warn" : "ok", label, `${okDetail()}${rs}`];
+    if (sv.state === "restarting") return ["warn", label, `Restarting${sv.last_exit != null ? ` (exit ${sv.last_exit})` : ""}${rs}`];
+    return ["bad", label, "Stopped"];
+  };
+  // A data feed is healthy when its service is up, it isn't paused and it refreshed recently enough.
+  const feedTile = (label, id, svcKey, limitDay, limitNight) => {
+    const e = S[id];
+    if (!e) return ["idle", label, "Not set up"];
+    const a = e.attributes;
+    if (a.status === "paused") return ["bad", label, `Paused: ${esc(String(a.paused_reason ?? "").slice(0, 110))}`];
+    const sv = supOk ? ha.services?.[svcKey] : undefined;
+    if (supOk && (!sv || sv.state !== "running")) return ["bad", label, `Service ${sv ? sv.state : "not running"}`];
+    const ms = ageMs(a.updated);
+    return [ms > (daytime ? limitDay : limitNight) * 60_000 ? "warn" : "ok", label, ms > (daytime ? limitDay : limitNight) * 60_000 ? `Last refresh ${ago(ms)}` : `Refreshed ${ago(ms)}`];
+  };
+
+  let sup;
+  if (!h) sup = ["warn", "Supervisor", "Not running. Start it with ./home up so services are watched and restarted"];
+  else if (h.state === "stopped") sup = ["bad", "Supervisor", "Stopped"];
+  else if (hAge > 180_000) sup = ["bad", "Supervisor", `Not reporting · last seen ${ago(hAge)}`];
+  else {
+    const host = ha.host ?? {};
+    const { disk_free_pct: disk, load1: load, cores = 1 } = host;
+    const lvl = disk != null && disk < 5 ? "bad" : (disk != null && disk < 10) || (load != null && load > cores * 1.5) ? "warn" : "ok";
+    sup = [lvl, "Supervisor", `Up ${upFor(ageMs(ha.supervisor_since))}${load != null ? ` · load ${load}` : ""}${disk != null ? ` · ${Math.round(disk)}% disk free` : ""}`];
+  }
+
+  const cals = calIds();
+  const cal = !cals.length ? ["idle", "Calendar", "Not connected"]
+    : calFailed ? ["warn", "Calendar", "Couldn't sync"]
+    : !calFetchedAt ? ["idle", "Calendar", "Loading…"]
+    : Date.now() - calFetchedAt > 15 * 60_000 ? ["warn", "Calendar", `Last synced ${ago(Date.now() - calFetchedAt)}`]
+    : ["ok", "Calendar", `${cals.length} calendar${cals.length > 1 ? "s" : ""} · synced ${ago(Date.now() - calFetchedAt)}`];
+
+  const w = S[WEATHER];
+  const weather = !w || ["unavailable", "unknown"].includes(w.state) ? ["warn", "Weather", "No data"]
+    : ["ok", "Weather", `${Math.round(w.attributes.temperature)}° · ${esc((WEATHER_ICON[w.state] ?? [])[1] ?? w.state)}`];
+
+  const down = LIGHTS.filter((l) => !S[l.id] || S[l.id].state === "unavailable");
+  const bulbs = !down.length ? ["ok", "Bulbs", `All ${LIGHTS.length} reachable`]
+    : down.length === LIGHTS.length ? ["bad", "Bulbs", "None reachable"]
+    : ["warn", "Bulbs", `${down.map((l) => esc(l.name)).join(", ")} unreachable`];
+
+  const tvTile = !S[TV] || S[TV].state === "unavailable" ? ["warn", "TV", "Unreachable"]
+    : ["ok", "TV", is(TV, "on") ? `On · ${esc((APPS[at(TV, "app_id")] ?? [])[0] ?? "app")}` : "Standby"];
+
+  const tiles = [
+    conn?.connected ? ["ok", "Home Assistant", `Connected${conn.haVersion ? ` · ${esc(conn.haVersion)}` : ""}`] : ["bad", "Home Assistant", "Reconnecting…"],
+    sup,
+    svcTile("music_sync", "Music sync", () => is(SYNC, "on") ? `Following the music · ${esc(st(MODE))}` : "Idle, ready", "Not running"),
+    svcTile("presence", "Presence", () => is(HOME, "on") ? "Home" : is(HOME, "off") ? "Away · lights off" : "Running"),
+    feedTile("Hargreaves Lansdown", INVEST, "investments", 180, 540),
+    feedTile("Trading 212", T212, "investments", 90, 300),
+    cal, weather, bulbs, tvTile,
+  ];
+  const bad = tiles.filter((t) => t[0] === "bad").length;
+  const warn = tiles.filter((t) => t[0] === "warn").length;
+  const [cls, text] = bad ? ["bad", `${bad} problem${bad > 1 ? "s" : ""}`] : warn ? ["warn", `${warn} to check`] : ["", "All systems normal"];
   return `
-    <div class="card-head"><div class="card-title"><span class="n-logo">N</span> Continue watching</div>
-      <span class="kicker">${week !== undefined ? `${week} this week` : ""}</span></div>
-    ${shows.length ? `<div class="queue">${list}</div>` : `<p class="empty-note">No history yet. On netflix.com, open <b>Account → your profile → Viewing activity → Download all</b>. The file is picked up from Downloads automatically.</p>`}`;
+    <div class="card-head"><div class="card-title">${I.pulse} System health</div><span class="health-pill ${cls}"><i></i>${text}</span></div>
+    <div class="tiles">${tiles.map(([lvl, name, detail]) => `<div class="tile ${lvl}"><i class="tdot"></i><div><b>${name}</b><span>${detail}</span></div></div>`).join("")}</div>`;
 });
 
 section("#foot", () => [], () => `
@@ -701,6 +809,11 @@ document.addEventListener("click", (ev) => {
   if (!el || el.tagName === "INPUT") return;
   const { act, id, v } = el.dataset;
   if (act === "music") return call("script", "music_command", { command: v });
+  // Mouse/touch presses are handled on pointerdown (so holding repeats); a click with no pointer is the keyboard.
+  if (act === "tv-key") return ev.detail === 0 ? tvKey(v) : undefined;
+  if (act === "tv-power") return call("media_player", is(TV, "on") ? "turn_off" : "turn_on", { entity_id: TV });
+  if (act === "tv-mute") return call("media_player", "volume_mute", { entity_id: TV, is_volume_muted: !at(TV, "is_volume_muted") });
+  if (act === "tv-app") { toast(`Opening ${el.dataset.name}…`); return call("media_player", "play_media", { entity_id: TV, media_type: "app", media_id: v }); }
   if (act === "holding") {
     openHolding = { sedol: v, range: "1Y" };
     const dlg = $("#holding");
@@ -749,6 +862,27 @@ document.addEventListener("change", (ev) => {
   else call("input_number", "set_value", { entity_id: el.dataset.id, value: Number(el.value) });
 });
 // Hold a card still while a slider in it is being dragged, then catch up.
+// Remote keys: press once on touch-down, and keep repeating while the arrows or volume are held.
+let holdTimer, holdRepeat;
+function stopHold() {
+  clearTimeout(holdTimer);
+  clearInterval(holdRepeat);
+  if (busy.delete("#tv")) renderAll(); // catch the card up once the key is released
+}
+document.addEventListener("pointerdown", (ev) => {
+  const b = ev.target.closest?.('[data-act="tv-key"]');
+  if (!b || b.disabled) return;
+  const key = b.dataset.v;
+  tvKey(key);
+  if (b.hasAttribute("data-hold")) {
+    busy.add("#tv"); // don't rebuild the button under the finger while it's held
+    holdTimer = setTimeout(() => { holdRepeat = setInterval(() => tvKey(key), 140); }, 380);
+  }
+});
+document.addEventListener("pointerup", stopHold);
+document.addEventListener("pointercancel", stopHold);
+window.addEventListener("blur", stopHold);
+document.addEventListener("contextmenu", (ev) => { if (ev.target.closest?.(".remote")) ev.preventDefault(); }); // no long-press menu
 document.addEventListener("pointerdown", (ev) => {
   const card = ev.target.closest(".slider")?.closest("section");
   if (card) busy.add(`#${card.id}`);
@@ -788,8 +922,10 @@ function setLive(ok) {
     return;
   }
   setLive(true);
-  conn.addEventListener("ready", () => setLive(true));
-  conn.addEventListener("disconnected", () => setLive(false));
+  const refreshHealth = () => { lastSig["#health"] = null; renderAll(); };
+  conn.addEventListener("ready", () => { setLive(true); refreshHealth(); });
+  conn.addEventListener("disconnected", () => { setLive(false); refreshHealth(); });
+  setInterval(refreshHealth, 30_000); // ages ("refreshed 12 min ago") drift even when no entity changes
   let calKey = null;
   subscribeEntities(conn, (entities) => {
     S = entities;

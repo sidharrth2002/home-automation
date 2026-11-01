@@ -31,7 +31,8 @@ and the background picks up colour from the lights and the album art.
   rain, and gets warmer and dimmer in the evening. These lamps are the only lights in the room, so it stays
   fairly low. If I change it by hand it leaves it alone for two hours.
 - **The Hub.** Plain HTML/JS on Home Assistant's websocket API, no build step. Lights, now playing with
-  controls, the week's calendar (iCloud), my investments, the desk lamp, the TV and Netflix.
+  controls, the week's calendar (iCloud), my investments, the desk lamp, a remote for the TV and a health
+  card that shows what's running and how fresh the data is.
 - **Investments.** Holdings from Hargreaves Lansdown, which has no API, so it logs in like the website does
   (written so it can't lock the account, more on that below), plus the interest on my cash at Trading 212
   through its official API. Values are blurred on the dashboard until I tap to show them.
@@ -49,7 +50,7 @@ flowchart LR
         mic["microphone"]
         spotify["Spotify app<br/>(AppleScript)"]
         sync["music_sync"]
-        side["netflix, presence,<br/>investments"]
+        side["presence,<br/>investments"]
         sup(["./home"])
         audio --> sync
         mic --> sync
@@ -246,15 +247,20 @@ claude mcp add-json -s user home-assistant \
 </details>
 
 <details>
-<summary><b>Calendar, Netflix and presence</b></summary>
+<summary><b>Calendar, presence, the TV remote and the health card</b></summary>
 <br>
 
 Calendar: iCloud over CalDAV. `homeassistant.apply` adds it once `ICLOUD_USERNAME` and `ICLOUD_APP_PASSWORD`
 (an app-specific password) are in `.env`.
 
-Netflix: there's no API, so `python -m netflix --watch` reads the export files from `~/Downloads`. The
-viewing activity download is instant and gives titles and dates; the full personal data export takes a few
-days but includes playback position.
+TV remote: the Hub's TV card has a D-pad, back/home, play/pause, mute, volume (hold to repeat) and buttons that
+launch Netflix, YouTube, Spotify and the other apps. Keys go through `remote.send_command` and apps through
+`media_player.play_media` on the Android TV Remote integration. The TV's volume can only be stepped, not set to a
+level.
+
+Health card: the supervisor publishes `sensor.system_health` every minute and whenever a service changes
+state (per-service state, uptime and restarts, plus load and free disk). The Hub combines that with how recently
+each feed refreshed, whether the bulbs, TV, weather and calendar are reachable, and flags anything stale or down.
 
 Presence: `python -m presence` publishes `binary_sensor.someone_home`. I count as home if my phone has been
 on the Wi-Fi in the last 15 minutes or the Mac has been used in the last 10. When that flips to away,
@@ -287,7 +293,7 @@ The parts of the HA config I care about are JSON files in `homeassistant/`, push
 home                ./home up | down | status | logs
 music_sync/         audio capture, analysis, light show, now playing
 investments/        Hargreaves Lansdown client
-netflix/            export parser
+netflix/            export parser (not currently run; it fed a card I removed)
 presence/           phone on Wi-Fi -> home/away
 stack/              the supervisor behind ./home
 homeassistant/      HA config + apply.py
@@ -297,4 +303,4 @@ tests/
 ```
 
 Tests: `python -m tests.test_analysis` (a synthetic 128 BPM track: tempo, beat timing, drops, TV mode,
-palettes), `tests.test_netflix`, `tests.test_investments` and `tests.test_t212`.
+palettes), `tests.test_investments` and `tests.test_t212`.

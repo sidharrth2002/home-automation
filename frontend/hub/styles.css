@@ -71,7 +71,8 @@ body.dim .blob { opacity: .16; }
     "stack stack stack stack stack stack stack stack music music music music"
     "calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar"
     "invest invest invest invest invest invest invest invest invest cash cash cash"
-    "desk desk desk desk desk tv tv tv netflix netflix netflix netflix"
+    "desk desk desk desk desk desk desk tv tv tv tv tv"
+    "health health health health health health health tv tv tv tv tv"
     "foot foot foot foot foot foot foot foot foot foot foot foot";
 }
 /* Room + scenes share one column beside the music card; the room grows so nothing leaves a gap. */
@@ -79,16 +80,16 @@ body.dim .blob { opacity: .16; }
 .stack .room { flex: 1; }
 .top { grid-area: top; } .room { grid-area: room; } .scenes { grid-area: scenes; }
 .music { grid-area: music; } .desk { grid-area: desk; } .tv { grid-area: tv; }
-.netflix { grid-area: netflix; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .invest-card { grid-area: invest; } .cash-card { grid-area: cash; }
+.health-card { grid-area: health; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .invest-card { grid-area: invest; } .cash-card { grid-area: cash; }
 
 @media (max-width: 1100px) {
   .hub { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas:
-    "top top" "room room" "scenes scenes" "calendar calendar" "invest invest" "cash cash" "music desk" "tv netflix" "foot foot"; }
+    "top top" "room room" "scenes scenes" "calendar calendar" "invest invest" "cash cash" "music desk" "tv health" "foot foot"; }
   .stack { display: contents; }
 }
 @media (max-width: 720px) {
   .hub { grid-template-columns: minmax(0, 1fr); grid-template-areas:
-    "top" "room" "scenes" "music" "calendar" "invest" "cash" "desk" "tv" "netflix" "foot"; }
+    "top" "room" "scenes" "music" "calendar" "invest" "cash" "desk" "tv" "health" "foot"; }
   .chips { justify-content: flex-end; }
   .chips .chip:nth-child(3) { display: none; }
 }
@@ -311,21 +312,61 @@ details.tune .slider { flex: 1; }
 .screen.off .app { color: var(--ink-3); text-shadow: none; font-weight: 500; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
 .stand { width: 30%; height: 6px; margin: -10px auto 0; border-radius: 0 0 8px 8px; background: #0c0c12; }
 
-/* ── netflix ───────────────────────────────────────────────────── */
-.queue { display: flex; flex-direction: column; gap: 10px; }
-.show {
-  position: relative; display: grid; grid-template-columns: 46px 1fr; gap: 14px; align-items: center;
-  padding: 12px; border-radius: 18px; background: rgba(255,255,255,.035); border: 1px solid var(--line);
-}
-.poster {
-  width: 46px; aspect-ratio: 2 / 3; border-radius: 8px; display: grid; place-items: center;
-  font: 400 22px/1 var(--serif); color: rgba(255,255,255,.9);
-  background: linear-gradient(160deg, hsl(var(--h) 70% 45%), hsl(calc(var(--h) + 40) 70% 18%));
-  box-shadow: 0 10px 20px -10px hsl(var(--h) 70% 40%);
-}
-.show b { display: block; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.show span { display: block; color: var(--ink-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.show small { color: var(--ink-3); font: 500 11px/1 var(--mono); }
+/* ── TV remote ─────────────────────────────────────────────────── */
+.tv .card-head { gap: 12px; }
+.tv .card-head .kicker { margin-left: auto; }
+.rk { display: grid; place-items: center; width: 46px; height: 46px; border: 0; border-radius: 50%; cursor: pointer;
+  color: var(--ink); background: rgba(255,255,255,.07); touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; transition: background .15s, transform .1s, opacity .2s; }
+.rk svg { width: 20px; height: 20px; }
+.rk:hover:not(:disabled) { background: rgba(255,255,255,.14); }
+.rk:active:not(:disabled) { transform: scale(.92); background: rgba(255,255,255,.22); }
+.rk:disabled { opacity: .3; cursor: default; }
+.rk.power { width: 36px; height: 36px; flex: none; }
+.rk.power svg { width: 17px; height: 17px; }
+.rk.power.on { color: #5ee6a8; background: rgba(94,230,168,.15); }
+.remote { display: flex; flex-direction: column; gap: 14px; }
+.dpad { width: 176px; aspect-ratio: 1; margin: 0 auto; padding: 8px; border-radius: 50%; border: 1px solid var(--line);
+  background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  display: grid; grid-template: ". u ." 1fr "l c r" 1fr ". d ." 1fr / 1fr 1fr 1fr; }
+.dpad .rk { width: 100%; height: 100%; background: transparent; border-radius: 50%; }
+.dpad .rk:hover:not(:disabled) { background: rgba(255,255,255,.09); }
+.dpad .u { grid-area: u; } .dpad .l { grid-area: l; } .dpad .r { grid-area: r; } .dpad .d { grid-area: d; }
+.dpad .c { grid-area: c; background: rgba(255,255,255,.1); font: 700 13px/1 var(--sans); letter-spacing: .04em; }
+.rrow { display: flex; justify-content: center; gap: 14px; }
+.vol { display: flex; align-items: center; gap: 10px; }
+.vol-bar { position: relative; flex: 1; height: 46px; border-radius: 23px; overflow: hidden; display: grid; place-items: center;
+  background: rgba(255,255,255,.06); }
+.vol-bar i { position: absolute; inset: 0 auto 0 0; width: var(--p); background: linear-gradient(90deg, rgba(var(--a1),.5), rgba(var(--a2),.3));
+  transition: width .25s; }
+.vol-bar span { position: relative; font: 600 12px/1 var(--mono); color: var(--ink-2); }
+.apps { display: flex; flex-wrap: wrap; gap: 8px; }
+.app-chip { padding: 8px 13px; border-radius: 999px; border: 1px solid var(--line); cursor: pointer; background: rgba(255,255,255,.04);
+  color: var(--ink-2); font: 600 12.5px/1 inherit; transition: color .2s, border-color .2s, background .2s, opacity .2s; }
+.app-chip:hover:not(:disabled) { color: var(--ink); border-color: rgba(var(--brand), .6); background: rgba(var(--brand), .12); }
+.app-chip.now { color: rgb(var(--brand)); border-color: rgba(var(--brand), .7); background: rgba(var(--brand), .14); }
+.app-chip:disabled { opacity: .35; cursor: default; }
+
+/* ── system health ─────────────────────────────────────────────── */
+.health-card .card-head { gap: 12px; }
+.health-pill { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+  background: rgba(255,255,255,.06); font: 600 12px/1 var(--sans); color: var(--ink-2); }
+.health-pill i, .tdot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #5ee6a8; box-shadow: 0 0 10px rgba(94,230,168,.8); }
+.health-pill.warn i, .tile.warn .tdot { background: #ffb454; box-shadow: 0 0 10px rgba(255,180,84,.8); }
+.health-pill.bad i, .tile.bad .tdot { background: #ff6b7d; box-shadow: 0 0 10px rgba(255,107,125,.8); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 10px; }
+.tile { display: flex; gap: 12px; align-items: flex-start; min-width: 0; padding: 13px 14px; border-radius: 14px;
+  background: rgba(255,255,255,.035); border: 1px solid var(--line); }
+.tile > div { min-width: 0; }
+.tdot { margin-top: 5px; }
+.tile b { display: block; font-size: 13.5px; font-weight: 600; }
+.tile span { display: block; margin-top: 3px; color: var(--ink-2); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.tile.warn { border-color: rgba(255,180,84,.4); background: rgba(255,180,84,.07); }
+.tile.bad { border-color: rgba(255,107,125,.45); background: rgba(255,107,125,.08); }
+@media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .tile { padding: 11px 12px; gap: 10px; } }
+.tile.idle { opacity: .65; }
+.tile.idle .tdot { background: var(--ink-3); box-shadow: none; }
+
 /* calendar: the week as columns */
 .calendar .kicker b { color: var(--ink); font-weight: 600; }
 .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
@@ -506,7 +547,6 @@ dialog.event h3 { margin: 10px 40px 20px 0; font: 400 32px/1.08 var(--serif); le
 }
 .empty-note { color: var(--ink-2); font-size: 14px; line-height: 1.55; }
 .empty-note b { color: var(--ink); }
-.n-logo { font: 800 18px/1 var(--sans); letter-spacing: -.04em; color: #e50914; }
 
 /* ── footer + toast ────────────────────────────────────────────── */
 .foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 6px 6px 0; color: var(--ink-3); font-size: 12px; }
