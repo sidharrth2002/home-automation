@@ -14,6 +14,16 @@ docker compose up -d
 ```
 Enable "Allow local communication" in the WiZ app first.
 
+## Hub (custom frontend)
+`frontend/hub/` is a hand-built dashboard over Home Assistant's websocket API (vendored
+`home-assistant-js-websocket`, no build step): light orbs in each bulb's live colour, an ambient background
+that takes its colours from the lights and the album art, a now-playing card with a beat ring at the
+detected tempo, the desk lamp's sun arc and colour-temperature scale, the TV and the Netflix queue.
+`homeassistant.apply` copies it into HA's `www` (cache-busted) and registers it as the **Hub** sidebar
+dashboard (`/hub-live`); it also works full-screen at `/local/hub/index.html`, e.g. on a wall tablet.
+It reuses the HA frontend's login, so there's no separate sign-in.
+`.venv/bin/python frontend/screenshot.py /tmp/hub` renders desktop and phone screenshots for review.
+
 ## Dashboard, scripts and automations
 Home Assistant config that matters is kept here as JSON and pushed with
 `.venv/bin/python -m homeassistant.apply`:
