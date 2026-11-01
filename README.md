@@ -33,15 +33,24 @@ default dashboard:
 | --- | --- |
 | `input_boolean.music_sync` | On/off. Bulbs are restored when it goes off, after 30s of silence, or on the next run after a crash. |
 | `input_select.music_sync_mode` | `auto`, `calm`, `party` (chase + strobe on drops), `tv` (see below), `classic` (the original wiz_spotify algorithm). |
+| `input_select.music_sync_colours` | `Album art` (palette from the cover of what's playing in the Mac's Spotify) or `Music key` (hue from harmony). Falls back to `Music key` when Spotify isn't playing or the cover has no colour. |
 | `input_number.music_sync_sensitivity` | Onset threshold. Raise if lights trigger on noise, lower if they miss beats. |
 | `input_number.music_sync_latency` | Fires beats this many ms early to cancel bulb lag. Go negative for Bluetooth speakers. |
 | `sensor.music_sync_tempo` | Detected BPM (and whether the beat grid is locked). |
+| `sensor.music_sync_now_playing` | Current Spotify track, with the cover as its picture and the extracted palette. |
 
 How it works (`music_sync/analysis.py`, `music_sync/show.py`): 23 ms STFT hops; spectral-flux onsets in
 bass/mid/high bands with adaptive thresholds; autocorrelation tempo + comb-filter beat phase + kick PLL, so
 locked beats are *predicted* and sent early; hue from a chroma vector on the circle of fifths (it follows
 the key); per-band AGC; breakdown→drop detection. Bulbs alternate roles (beat vs. snare/hat sparkle) and
 get different hues; updates are rate-limited per bulb and skip no-op changes.
+
+### Album-art colours
+`music_sync/nowplaying.py` asks the Spotify app over AppleScript what's playing (no Spotify developer
+account needed; it never launches Spotify), and `music_sync/palette.py` runs k-means on the cover, merges
+near-identical hues, drops black/grey/white, and keeps up to four colours ranked by coverage × vividness.
+Bulbs take different swatches and rotate through them every bar (auto), two bars (calm) or beat (party);
+drops advance the palette. The first run asks macOS for permission to control Spotify.
 
 ### TV mode
 `tv` is bias lighting rather than a show: warm white (2200–2700K, warmer on bass-heavy scenes), 15% brightness,

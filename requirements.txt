@@ -2,3 +2,4 @@ pywizlight
 websockets
 numpy
 sounddevice
+pillow

@@ -3,8 +3,9 @@
 Bulbs alternate roles: even ones follow the beat/kicks, odd ones also catch snares and hats. When the
 tempo is locked the show fires on *predicted* beats, `latency_ms` early, so the light lands on the beat
 instead of ~100 ms after it; otherwise it reacts to detected kicks/snares. Brightness is a fast-attack,
-tempo-scaled decay over a loudness-following floor, hue follows the music's harmony, and drops get a
-white flash, a hue jump and a temporary boost.
+tempo-scaled decay over a loudness-following floor, and drops get a white flash, a colour jump and a
+temporary boost. Colour comes from the album-art palette when one is set (bulbs take different swatches
+and rotate through them on the beat), otherwise from the music's harmony.
 """
 import colorsys
 import math
@@ -19,6 +20,9 @@ PROFILES = {
     "party": dict(floor=0.02, floor_gain=0.12, depth=1.0, decay=0.3, spread=0.5, hue_tau=1.0, sat=1.0,
                   beat_step=0.03, bar_step=0.08, accent=0.5, flash=True, chase=True, drop_jump=0.5),
 }
+PROFILES["calm"]["palette_every"] = 8  # beats between palette rotations
+PROFILES["auto"]["palette_every"] = 4
+PROFILES["party"]["palette_every"] = 1
 PROFILES["tv"] = dict(PROFILES["calm"], hue_tau=5.0)
 FLASH_S = 0.12
 
@@ -52,6 +56,8 @@ class Show:
         self.tv_peak = 1e-4
         self.tv_level = 0.0
         self.tv_bass = 0.0
+        self.palette = []  # palette.Swatch list from album art; empty = use harmony hue
+        self.palette_idx = 0
 
     @property
     def profile(self):
@@ -102,7 +108,11 @@ class Show:
     def _beat(self, strength, now):
         p = self.profile
         self.beats += 1
-        self.hue_offset += p["beat_step"] + (p["bar_step"] if self.beats % 4 == 0 else 0.0)
+        if self.palette:
+            if self.beats % p["palette_every"] == 0:
+                self.palette_idx += 1
+        else:
+            self.hue_offset += p["beat_step"] + (p["bar_step"] if self.beats % 4 == 0 else 0.0)
         if p["chase"] and self.n > 1:
             self.env[self.beats % self.n] = 1.0
             return
@@ -121,7 +131,10 @@ class Show:
 
     def _drop(self, strength, now):
         p = self.profile
-        self.hue_offset += p["drop_jump"]
+        if self.palette:
+            self.palette_idx += 1
+        else:
+            self.hue_offset += p["drop_jump"]
         self.boost = 1.0
         if p["flash"]:
             self.flash_until = now + FLASH_S
@@ -153,9 +166,13 @@ class Show:
         depth = min(1.0, p["depth"] + 0.3 * self.boost)
         for i in range(self.n):
             level = floor + (1 - floor) * depth * self.env[i]
-            offset = p["spread"] * (i - (self.n - 1) / 2) if self.n > 1 else 0.0
-            hue = (f.hue + self.hue_offset + offset) % 1.0
-            sat = p["sat"] * (1 - 0.7 * self.sparkle[i])
+            if self.palette:
+                swatch = self.palette[(self.palette_idx + i) % len(self.palette)]
+                hue, sat = swatch.h, swatch.light_sat * p["sat"]
+            else:
+                offset = p["spread"] * (i - (self.n - 1) / 2) if self.n > 1 else 0.0
+                hue, sat = (f.hue + self.hue_offset + offset) % 1.0, p["sat"]
+            sat *= 1 - 0.7 * self.sparkle[i]
             r, g, b = colorsys.hsv_to_rgb(hue, sat, 1.0)
             frames.append({"state": True, "r": round(r * 255), "g": round(g * 255), "b": round(b * 255),
                            "dimming": max(10, min(100, round(level * 100)))})

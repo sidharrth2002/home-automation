@@ -114,6 +114,55 @@ def test_tv():
     print("TV OK")
 
 
+def _png(fill):
+    import io
+    from PIL import Image
+    a = np.zeros((200, 200, 3), np.uint8)
+    fill(a)
+    buf = io.BytesIO()
+    Image.fromarray(a).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_palette():
+    """Vivid colours are kept, black/grey dropped, a split background merged, a grey cover gives nothing."""
+    import colorsys
+    from music_sync import palette
+
+    def cover(a):
+        a[:] = (20, 40, 200)
+        a[:, 140:] = (250, 140, 20)
+        a[:30] = (5, 5, 5)
+    hues = [round(s.h, 2) for s in palette.extract(_png(cover))]
+    print(f"palette blue/orange/black: {hues}")
+    assert len(hues) == 2 and abs(hues[0] - 0.65) < 0.03 and abs(hues[1] - 0.09) < 0.03
+
+    def muted(a):  # a sage background in slightly different shades, plus a small red box
+        for i, shade in enumerate((200, 180, 160, 140, 120)):
+            a[i * 40:(i + 1) * 40] = (shade - 15, shade, shade - 30)
+        a[:40, 150:] = (170, 40, 40)
+    sw = palette.extract(_png(muted))
+    print(f"palette muted sage + red: {[(s.hex, round(s.share, 2)) for s in sw]}")
+    assert len(sw) == 2 and sw[0].share > 0.8 and 0.15 < sw[0].h < 0.3
+
+    assert palette.extract(_png(lambda a: a.__setitem__(slice(None), (128, 128, 128)))) == []
+
+    show = Show(2)
+    show.palette = palette.extract(_png(cover))
+    tempo = type("T", (), {"period": 0.5, "locked": False, "due": lambda self, now, lead: []})()
+    frame = lambda t: type("F", (), {"onsets": [], "drop": False, "loudness": 0.5, "hue": 0.0, "rms": 0.1,
+                                     "bands": {"bass": 0.5}})()
+    hue_of = lambda p: round(colorsys.rgb_to_hsv(p["r"] / 255, p["g"] / 255, p["b"] / 255)[0], 2)
+    first = [hue_of(p) for p in show.update(frame(0), tempo, 0.0)]
+    for i in range(4):
+        show._beat(1.0, 0.1 * i)
+    rotated = [hue_of(p) for p in show.update(frame(1), tempo, 1.0)]
+    print(f"bulb hues before/after a bar: {first} -> {rotated}")
+    assert first[0] != first[1] and rotated == first[::-1]
+    print("palette OK")
+
+
 if __name__ == "__main__":
     main()
     test_tv()
+    test_palette()

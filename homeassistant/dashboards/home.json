@@ -156,6 +156,17 @@
               "icon": "mdi:music-circle"
             },
             {
+              "type": "picture-entity",
+              "entity": "sensor.music_sync_now_playing",
+              "name": "Now playing",
+              "show_name": true,
+              "show_state": true,
+              "aspect_ratio": "1:1",
+              "grid_options": {
+                "columns": 12
+              }
+            },
+            {
               "type": "tile",
               "entity": "input_boolean.music_sync",
               "name": "Music sync",
@@ -171,6 +182,20 @@
               "type": "tile",
               "entity": "input_select.music_sync_mode",
               "name": "Mode",
+              "grid_options": {
+                "columns": 12
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "select-options"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "input_select.music_sync_colours",
+              "name": "Colours",
               "grid_options": {
                 "columns": 12
               },

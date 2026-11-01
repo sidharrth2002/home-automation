@@ -1,7 +1,7 @@
 """Bridges Home Assistant UI controls to the music-sync pipeline.
 
-Creates helpers in HA (a toggle, a mode dropdown, sensitivity and latency sliders) and a tempo sensor,
-then watches the helpers over the websocket API. Turning the toggle on starts audio capture + bulb
+Creates helpers in HA (a toggle, mode and colour-source dropdowns, sensitivity and latency sliders) and
+tempo / now-playing sensors, then watches the helpers over the websocket API. Turning the toggle on starts audio capture + bulb
 output; turning it off (or 30s of silence) stops it and restores the bulbs.
 """
 import asyncio
@@ -20,6 +20,7 @@ from . import capture
 from .analysis import HOP, Analyzer
 from .engine import BeatEngine
 from .lights import Lights
+from .nowplaying import NowPlaying
 from .show import Show
 
 log = logging.getLogger("music_sync")
@@ -30,9 +31,12 @@ SWITCH = "input_boolean.music_sync"
 MODE = "input_select.music_sync_mode"
 SENSITIVITY = "input_number.music_sync_sensitivity"
 LATENCY = "input_number.music_sync_latency"
+COLOURS = "input_select.music_sync_colours"
 TEMPO_SENSOR = "sensor.music_sync_tempo"
-WATCHED = (SWITCH, MODE, SENSITIVITY, LATENCY)
+NOW_PLAYING_SENSOR = "sensor.music_sync_now_playing"
+WATCHED = (SWITCH, MODE, SENSITIVITY, LATENCY, COLOURS)
 MODES = ("auto", "calm", "party", "tv", "classic")
+ALBUM_ART, MUSIC_KEY = "Album art", "Music key"
 SILENCE_RMS = 0.005
 SILENCE_STOP_S = 30
 
@@ -89,6 +93,8 @@ class Controller:
         self.mode = "auto"
         self.sensitivity = 1.35
         self.latency_ms = 60.0
+        self.colours = ALBUM_ART
+        self.now_playing = NowPlaying()
         self.session: asyncio.Task | None = None
         self.ha: HA | None = None
         self.token = ""
@@ -110,14 +116,20 @@ class Controller:
         if LATENCY not in states:
             await self.ha.call(type="input_number/create", name="Music Sync Latency", icon="mdi:timer-sync",
                                min=-200, max=300, step=10, mode="slider", unit_of_measurement="ms", initial=60)
+        if COLOURS not in states:
+            await self.ha.call(type="input_select/create", name="Music Sync Colours", icon="mdi:palette",
+                               options=[ALBUM_ART, MUSIC_KEY], initial=ALBUM_ART)
         states = {s["entity_id"]: s for s in await self.ha.call(type="get_states")}
         for eid in WATCHED:
             self.apply(eid, states[eid]["state"])
         self.publish_status()
+        self.publish_now_playing(self.now_playing)
 
     def apply(self, entity_id, state):
         if entity_id == MODE and state in MODES:
             self.mode = state
+        elif entity_id == COLOURS and state in (ALBUM_ART, MUSIC_KEY):
+            self.colours = state
         elif entity_id in (SENSITIVITY, LATENCY):
             try:
                 value = float(state)
@@ -186,6 +198,9 @@ class Controller:
     def _step(self, samples, now, analyzer, show, classic, classic_buf, lights):
         """Analyse one hop and drive the bulbs. Returns the hop's RMS."""
         show.mode, show.latency_ms = self.mode, self.latency_ms
+        # Album colours only while Spotify is actually what's playing; otherwise follow the music's key.
+        use_art = self.colours == ALBUM_ART and self.now_playing.state == "playing"
+        show.palette = self.now_playing.palette if use_art else []
         analyzer.sensitivity = self.sensitivity
         analyzer.hue_tau = show.profile["hue_tau"]
         frame = analyzer.process(samples, now)
@@ -209,7 +224,18 @@ class Controller:
                 "attributes": {"friendly_name": "Music Sync Tempo", "unit_of_measurement": "BPM",
                                "icon": "mdi:metronome", "locked": locked,
                                "confidence": round(tempo.confidence, 2) if tempo else 0.0}}
-        task = asyncio.create_task(asyncio.to_thread(self._post_state, TEMPO_SENSOR, body))
+        self._background(asyncio.to_thread(self._post_state, TEMPO_SENSOR, body))
+
+    def publish_now_playing(self, np_: NowPlaying):
+        attrs = {"friendly_name": "Now Playing", "icon": "mdi:spotify", "player_state": np_.state,
+                 "palette": [s.hex for s in np_.palette]}
+        if np_.art_url:
+            attrs["entity_picture"] = np_.art_url
+        self._background(asyncio.to_thread(self._post_state, NOW_PLAYING_SENSOR,
+                                           {"state": np_.label[:255], "attributes": attrs}))
+
+    def _background(self, coro):
+        task = asyncio.create_task(coro)
         self._bg.add(task)
         task.add_done_callback(self._bg.discard)
 
@@ -224,6 +250,7 @@ class Controller:
 
     async def run(self, token):
         self.token = token
+        self._background(self.now_playing.run(self.publish_now_playing))
         backoff = 1
         while True:
             try:
