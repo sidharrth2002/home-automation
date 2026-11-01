@@ -68,6 +68,9 @@ const I = {
   next: svg(`<path d="M6 6v12l9-6z" fill="currentColor"/><path d="M18 6v12"/>`),
   play: svg(`<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>`),
   pause: svg(`<rect x="7" y="5.5" width="3.2" height="13" rx="1" fill="currentColor"/><rect x="13.8" y="5.5" width="3.2" height="13" rx="1" fill="currentColor"/>`),
+  pin: svg(`<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>`),
+  repeat: svg(`<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>`),
+  notes: svg(`<path d="M5 4h14v16H5z"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/>`),
   cal: svg(`<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>`),
   bulb: svg(`<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>`),
 };
@@ -280,6 +283,47 @@ async function loadCalendars() {
   renderAll();
 }
 
+// event details
+const URL_RE = /\bhttps?:\/\/[^\s<>"]+/g;
+const CALL_RE = /https?:\/\/[^\s<>"]*(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|facetime\.apple\.com|webex\.com|whereby\.com)[^\s<>"]*/i;
+const linkify = (text) => esc(text).replace(URL_RE, (u) => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\//, "").slice(0, 48)}${u.length > 56 ? "…" : ""}</a>`);
+const dur = (ms) => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`; };
+function when(e) {
+  const a = evStart(e), b = evEnd(e);
+  const day = (d) => d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  if (!e.start.dateTime) {
+    const last = new Date(b - 1);
+    return [a.toDateString() === last.toDateString() ? day(a) : `${day(a)} – ${day(last)}`, "All day"];
+  }
+  return [day(a), `${hm(a)} – ${hm(b)}${a.toDateString() === b.toDateString() ? "" : ` (${day(b)})`} · ${dur(b - a)}`];
+}
+function relative(e) {
+  const now = Date.now(), a = evStart(e).getTime(), b = evEnd(e).getTime();
+  if (b <= now) return "Ended";
+  if (a <= now) return `Happening now · ${dur(b - now)} left`;
+  return `Starts in ${dur(a - now)}`;
+}
+function openEvent(e) {
+  const dlg = $("#event");
+  const [date, time] = when(e);
+  const call = `${e.location ?? ""} ${e.description ?? ""}`.match(CALL_RE)?.[0];
+  const isUrl = e.location && /^https?:\/\//.test(e.location.trim());
+  dlg.style.setProperty("--h", hueOf(e.cal));
+  dlg.innerHTML = `
+    <form method="dialog" class="ev-close"><button aria-label="Close">×</button></form>
+    <span class="ev-cal"><i></i>${esc(at(e.cal, "friendly_name") ?? e.cal)}</span>
+    <h3>${esc(e.summary || "Busy")}</h3>
+    <div class="ev-rows">
+      <div class="ev-row">${I.cal}<div><b>${esc(date)}</b><span>${esc(time)}</span><small>${esc(relative(e))}</small></div></div>
+      ${e.location && !isUrl ? `<div class="ev-row">${I.pin}<div><b>${esc(e.location)}</b>
+        <a href="https://maps.apple.com/?q=${encodeURIComponent(e.location)}" target="_blank" rel="noopener">Open in Maps →</a></div></div>` : ""}
+      ${e.rrule ? `<div class="ev-row">${I.repeat}<div><span>Repeats · ${esc(e.rrule.match(/FREQ=(\w+)/)?.[1]?.toLowerCase() ?? "custom")}</span></div></div>` : ""}
+      ${e.description ? `<div class="ev-row">${I.notes}<div class="ev-notes">${linkify(e.description)}</div></div>` : ""}
+    </div>
+    ${call ? `<a class="ev-join" href="${esc(call)}" target="_blank" rel="noopener">Join call</a>` : ""}`;
+  dlg.showModal();
+}
+
 section("#calendar", () => calIds(), () => {
   const ids = calIds();
   const head = (kicker) => `<div class="card-head"><div class="card-title">${I.cal} Calendar</div><span class="kicker">${kicker}</span></div>`;
@@ -298,10 +342,10 @@ section("#calendar", () => calIds(), () => {
       const allDay = !e.start.dateTime;
       const live = !allDay && evStart(e) <= now && evEnd(e) > now;
       const past = !allDay && evEnd(e) <= now;
-      return `<div class="ev ${allDay ? "all-day" : ""} ${live ? "live" : ""} ${past ? "past" : ""}" style="--h:${hueOf(e.cal)}"
-                   title="${esc(e.summary ?? "")}${e.location ? ` · ${esc(e.location)}` : ""}">
+      return `<button class="ev ${allDay ? "all-day" : ""} ${live ? "live" : ""} ${past ? "past" : ""}" style="--h:${hueOf(e.cal)}"
+                   data-act="event" data-i="${calEvents.indexOf(e)}" aria-haspopup="dialog">
         ${allDay ? "" : `<small>${hm(evStart(e))}</small>`}<b>${esc(e.summary || "Busy")}</b>
-        ${e.location && !allDay ? `<span>${esc(e.location)}</span>` : ""}</div>`;
+        ${e.location && !allDay ? `<span>${esc(e.location)}</span>` : ""}</button>`;
     }).join("");
     return `<div class="day ${i === 0 ? "today" : ""}"><div class="day-head"><b>${name}</b><span>${d.getDate()}</span></div>
       ${list || `<p class="free">Free</p>`}</div>`;
@@ -439,6 +483,7 @@ document.addEventListener("click", (ev) => {
   if (!el || el.tagName === "INPUT") return;
   const { act, id, v } = el.dataset;
   if (act === "music") return call("script", "music_command", { command: v });
+  if (act === "event") return calEvents?.[el.dataset.i] && openEvent(calEvents[el.dataset.i]);
   const domain = id.split(".")[0];
   if (act === "light") call("light", "toggle", { entity_id: id });
   else if (act === "toggle") call(domain, "toggle", { entity_id: id });
