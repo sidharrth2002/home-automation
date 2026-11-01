@@ -10,3 +10,5 @@ NetflixViewingHistory*.csv
 ViewingActivity*.csv
 netflix.log
 presence.log
+.home.pid
+home.log

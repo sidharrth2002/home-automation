@@ -14,6 +14,20 @@ docker compose up -d
 ```
 Enable "Allow local communication" in the WiZ app first.
 
+## Running it
+One switch for everything:
+
+```sh
+./home up        # Docker + Home Assistant, then music sync, the Netflix watcher and presence (if configured)
+./home down      # stop all of it; music sync restores the bulbs first
+./home status    # what's running
+./home logs music_sync
+```
+
+The Mac-side services can't live in the container (they need Core Audio and the microphone), so `./home up`
+starts a small supervisor (`python -m stack`) that runs them, restarts any that crash (with backoff), and on
+`./home down` stops them (SIGTERM, then SIGKILL after 10s) before the container is stopped.
+
 ## Hub (custom frontend)
 `frontend/hub/` is a hand-built dashboard over Home Assistant's websocket API (vendored
 `home-assistant-js-websocket`, no build step): light orbs in each bulb's live colour, an ambient background

@@ -1,0 +1,84 @@
+#!/bin/bash
+# One switch for the whole home: Home Assistant (Docker) + the Mac-side services (music sync, Netflix, presence).
+#
+#   ./home up        start everything
+#   ./home down      stop everything (bulbs are restored first)
+#   ./home restart
+#   ./home status
+#   ./home logs [music_sync|netflix|presence|home]
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PIDFILE=.home.pid
+PY=.venv/bin/python
+SERVICES='python -m (music_sync|netflix|presence|stack)( |$)'
+
+supervisor_pid() {
+  [[ -f $PIDFILE ]] && kill -0 "$(cat $PIDFILE)" 2>/dev/null && cat $PIDFILE
+}
+
+wait_for() {  # wait_for <seconds> <description> <command...>
+  local secs=$1 what=$2; shift 2
+  for ((i = 0; i < secs; i++)); do "$@" >/dev/null 2>&1 && return 0; sleep 1; done
+  echo "timed out waiting for $what" >&2; return 1
+}
+
+stop_strays() {  # services started by hand, outside the supervisor
+  local pids
+  pids=$(pgrep -f "$SERVICES" || true)
+  [[ -z $pids ]] && return 0
+  kill -TERM $pids 2>/dev/null || true
+  for _ in {1..10}; do pgrep -f "$SERVICES" >/dev/null || return 0; sleep 1; done
+  pkill -KILL -f "$SERVICES" || true
+}
+
+up() {
+  if pid=$(supervisor_pid); then echo "already running (supervisor pid $pid)"; return; fi
+  if ! docker info >/dev/null 2>&1; then
+    echo "starting Docker…"; open -a Docker
+    wait_for 120 Docker docker info
+  fi
+  docker compose up -d
+  echo -n "waiting for Home Assistant…"
+  wait_for 180 "Home Assistant" curl -sf -o /dev/null http://localhost:8123/manifest.json
+  echo " up"
+  stop_strays
+  # Own session, so `down` can signal the supervisor and nothing else; it stops its children itself.
+  nohup "$PY" -c 'import os, runpy; os.setsid(); runpy.run_module("stack", run_name="__main__")' >> home.log 2>&1 &
+  echo $! > $PIDFILE
+  sleep 1
+  status
+}
+
+down() {
+  if pid=$(supervisor_pid); then
+    echo -n "stopping services…"
+    kill -TERM "$pid"
+    for _ in {1..20}; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+    kill -0 "$pid" 2>/dev/null && kill -KILL -- "-$pid" 2>/dev/null || true
+    echo " done"
+  fi
+  rm -f $PIDFILE
+  stop_strays
+  if docker info >/dev/null 2>&1; then docker compose stop; fi
+  echo "everything is off"
+}
+
+status() {
+  if pid=$(supervisor_pid); then echo "supervisor: running (pid $pid)"; else echo "supervisor: stopped"; fi
+  pgrep -fl "$SERVICES" | grep -v stack | sed -E 's/^([0-9]+) .*-m ([a-z_]+).*/  \2: running (pid \1)/' || true
+  if docker info >/dev/null 2>&1; then
+    echo "homeassistant: $(docker inspect -f '{{.State.Status}}' homeassistant 2>/dev/null || echo missing)"
+  else
+    echo "homeassistant: Docker not running"
+  fi
+}
+
+case "${1:-status}" in
+  up|start) up ;;
+  down|stop) down ;;
+  restart) down; up ;;
+  status) status ;;
+  logs) tail -f "${2:-home}.log" ;;
+  *) sed -n '2,9p' "$0"; exit 1 ;;
+esac
