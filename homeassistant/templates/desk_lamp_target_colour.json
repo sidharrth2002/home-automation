@@ -1,0 +1,6 @@
+{
+  "name": "Desk lamp target colour",
+  "state": "{% set w = states('weather.forecast_home') %}\n{% set c = state_attr('weather.forecast_home', 'cloud_coverage') %}\n{% set clouds = c | float(50) if c is number else {'sunny': 0, 'clear-night': 0, 'partlycloudy': 45, 'cloudy': 90, 'fog': 95, 'rainy': 90, 'pouring': 100, 'lightning': 85, 'lightning-rainy': 100, 'snowy': 90, 'snowy-rainy': 95, 'hail': 100, 'windy': 40, 'windy-variant': 60, 'exceptional': 80}.get(w, 50) %}\n{% set h = now().hour + now().minute / 60 %}\n{% set elev = state_attr('sun.sun', 'elevation') | float(0) %}\n{% set wind = 1 if h < 5 else ([0, [1, (h - 21) / 1.5] | min] | max if elev < -4 else 0) %}\n{% if elev > 8 %}{{ (4000 + 1200 * ([1, (elev - 8) / 22] | min) + 600 * clouds / 100) | round(-1) | int }}\n{% elif elev > -4 %}{{ (2700 + 1300 * (elev + 4) / 12) | round(-1) | int }}\n{% else %}{{ (2700 - 500 * wind) | round(-1) | int }}{% endif %}",
+  "unit_of_measurement": "K",
+  "state_class": "measurement"
+}

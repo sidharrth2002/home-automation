@@ -68,6 +68,8 @@ class Lights:
     def __init__(self, extra_ips: list[str] | None = None):
         self.bulbs: dict[str, Bulb] = {}
         self._extra_ips = extra_ips or [i for i in os.environ.get("WIZ_BULB_IPS", "").split(",") if i]
+        # Bulbs that have their own job (e.g. the adaptive desk lamp) and must never join a show.
+        self._exclude = {m.strip().lower() for m in os.environ.get("WIZ_EXCLUDE_MACS", "").split(",") if m.strip()}
         self._transport: asyncio.DatagramTransport | None = None
         self._tasks: list[asyncio.Task] = []
         self._wake = asyncio.Event()
@@ -105,6 +107,8 @@ class Lights:
             except Exception as e:
                 log.warning("bulb %s unreachable: %s", ip, e)
         for mac, ip in found.items():
+            if mac.lower() in self._exclude:
+                continue
             if mac in self.bulbs:
                 if self.bulbs[mac].ip != ip:
                     log.info("bulb %s moved %s -> %s", mac, self.bulbs[mac].ip, ip)

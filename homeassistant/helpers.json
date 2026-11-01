@@ -1,0 +1,18 @@
+[
+  {
+    "entity_id": "input_boolean.desk_lamp_adaptive",
+    "create": {
+      "name": "Desk lamp adaptive",
+      "icon": "mdi:sun-clock"
+    }
+  },
+  {
+    "entity_id": "timer.desk_lamp_manual",
+    "create": {
+      "name": "Desk lamp manual",
+      "icon": "mdi:hand-back-right",
+      "duration": "02:00:00",
+      "restore": true
+    }
+  }
+]

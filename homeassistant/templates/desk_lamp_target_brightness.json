@@ -1,0 +1,6 @@
+{
+  "name": "Desk lamp target brightness",
+  "state": "{% set h = now().hour + now().minute / 60 %}\n{% set elev = state_attr('sun.sun', 'elevation') | float(0) %}\n{% set wind = 1 if h < 5 else ([0, [1, (h - 21) / 1.5] | min] | max if elev < -4 else 0) %}\n{% set d = states('sensor.outdoor_daylight') | float(0) / 100 %}\n{{ ((90 - 60 * d) * (1 - wind) + 40 * wind) | round(0) | int }}",
+  "unit_of_measurement": "%",
+  "state_class": "measurement"
+}

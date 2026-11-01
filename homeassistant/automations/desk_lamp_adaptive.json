@@ -1,0 +1,74 @@
+{
+  "id": "desk_lamp_adaptive",
+  "alias": "Desk lamp adaptive",
+  "description": "Keeps the desk lamp's colour temperature and brightness matched to the time of day and the light outside (sun height, cloud, rain). Never switches it on or off, and backs off for 2h after a manual change.",
+  "mode": "restart",
+  "triggers": [
+    {
+      "trigger": "state",
+      "entity_id": "light.desk_lamp",
+      "from": "off",
+      "to": "on"
+    },
+    {
+      "trigger": "state",
+      "entity_id": [
+        "sensor.desk_lamp_target_colour",
+        "sensor.desk_lamp_target_brightness"
+      ]
+    },
+    {
+      "trigger": "state",
+      "entity_id": "input_boolean.desk_lamp_adaptive",
+      "to": "on"
+    },
+    {
+      "trigger": "event",
+      "event_type": "timer.finished",
+      "event_data": {
+        "entity_id": "timer.desk_lamp_manual"
+      }
+    },
+    {
+      "trigger": "time_pattern",
+      "minutes": "/10"
+    },
+    {
+      "trigger": "homeassistant",
+      "event": "start"
+    }
+  ],
+  "conditions": [
+    {
+      "condition": "state",
+      "entity_id": "light.desk_lamp",
+      "state": "on"
+    },
+    {
+      "condition": "state",
+      "entity_id": "input_boolean.desk_lamp_adaptive",
+      "state": "on"
+    },
+    {
+      "condition": "state",
+      "entity_id": "timer.desk_lamp_manual",
+      "state": "idle"
+    },
+    {
+      "condition": "template",
+      "value_template": "{{ states('sensor.desk_lamp_target_colour') | is_number and states('sensor.desk_lamp_target_brightness') | is_number }}"
+    }
+  ],
+  "actions": [
+    {
+      "action": "light.turn_on",
+      "target": {
+        "entity_id": "light.desk_lamp"
+      },
+      "data": {
+        "color_temp_kelvin": "{{ states('sensor.desk_lamp_target_colour') | int(4000) }}",
+        "brightness_pct": "{{ states('sensor.desk_lamp_target_brightness') | int(80) }}"
+      }
+    }
+  ]
+}

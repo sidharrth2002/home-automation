@@ -4,7 +4,7 @@ services:
     container_name: homeassistant
     restart: unless-stopped
     environment:
-      - TZ=Asia/Kuala_Lumpur
+      - TZ=Europe/London
     volumes:
       - ./homeassistant/config:/config
     ports:

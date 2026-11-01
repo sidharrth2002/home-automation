@@ -1,0 +1,31 @@
+{
+  "id": "desk_lamp_manual_override",
+  "alias": "Desk lamp manual override",
+  "description": "If the desk lamp is changed by hand (dashboard, WiZ app or remote) to something clearly off-target, pause adaptive control for 2 hours.",
+  "mode": "single",
+  "triggers": [
+    {
+      "trigger": "state",
+      "entity_id": "light.desk_lamp"
+    }
+  ],
+  "conditions": [
+    {
+      "condition": "state",
+      "entity_id": "input_boolean.desk_lamp_adaptive",
+      "state": "on"
+    },
+    {
+      "condition": "template",
+      "value_template": "{% set f, t = trigger.from_state, trigger.to_state %}\n{% if f is none or f.state != 'on' or t.state != 'on' or t.context.parent_id is not none %}false\n{% else %}\n{% set dk = ((t.attributes.color_temp_kelvin or 0) - states('sensor.desk_lamp_target_colour') | int(0)) | abs %}\n{% set db = ((t.attributes.brightness or 0) / 2.55 - states('sensor.desk_lamp_target_brightness') | int(0)) | abs %}\n{{ dk > 250 or db > 12 }}\n{% endif %}"
+    }
+  ],
+  "actions": [
+    {
+      "action": "timer.start",
+      "target": {
+        "entity_id": "timer.desk_lamp_manual"
+      }
+    }
+  ]
+}

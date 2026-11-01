@@ -25,6 +25,22 @@ Home Assistant config that matters is kept here as JSON and pushed with
 
 Edit the JSON and re-run apply rather than editing in the UI, so the repo stays the source of truth.
 
+## Adaptive desk lamp
+`light.desk_lamp` (the third WiZ bulb) follows the time of day and the light outside, entirely inside Home
+Assistant (`homeassistant/templates/`, `homeassistant/automations/desk_lamp_*.json`):
+
+- `sensor.outdoor_daylight` estimates light through the window from sun elevation (0 at -4°, full at 30°),
+  cloud cover from `weather.forecast_home` (up to -70%) and rain/fog/snow (a further -20%).
+- `sensor.desk_lamp_target_colour`: 4000–5200K in daylight, cooler under overcast skies to match diffuse
+  light; ramps to 2700K through sunset, then to 2200K for the 21:00–22:30 wind-down until 05:00.
+- `sensor.desk_lamp_target_brightness`: brighter when it's gloomy (90% in the dark, ~47% on a sunny
+  midday), winding down to 40% at night.
+- The automation only adjusts the lamp while it's on (never switches it), and a manual change that's
+  clearly off-target starts `timer.desk_lamp_manual`, pausing it for 2 hours. `input_boolean.desk_lamp_adaptive`
+  turns the whole thing off.
+
+Music sync never touches it: its MAC is in `WIZ_EXCLUDE_MACS` in `.env`.
+
 ## Music sync
 `.venv/bin/python -m music_sync` connects to Home Assistant and creates its controls, which appear on the
 default dashboard:

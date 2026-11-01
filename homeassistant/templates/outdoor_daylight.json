@@ -1,0 +1,6 @@
+{
+  "name": "Outdoor daylight",
+  "state": "{% set w = states('weather.forecast_home') %}\n{% set c = state_attr('weather.forecast_home', 'cloud_coverage') %}\n{% set clouds = c | float(50) if c is number else {'sunny': 0, 'clear-night': 0, 'partlycloudy': 45, 'cloudy': 90, 'fog': 95, 'rainy': 90, 'pouring': 100, 'lightning': 85, 'lightning-rainy': 100, 'snowy': 90, 'snowy-rainy': 95, 'hail': 100, 'windy': 40, 'windy-variant': 60, 'exceptional': 80}.get(w, 50) %}\n{% set elev = state_attr('sun.sun', 'elevation') | float(0) %}\n{% set sun = [0, [1, (elev + 4) / 34] | min] | max %}\n{% set wet = 0.8 if w in ['rainy', 'pouring', 'lightning-rainy', 'snowy', 'snowy-rainy', 'fog', 'hail'] else 1 %}\n{{ (100 * sun * (1 - 0.7 * clouds / 100) * wet) | round(0) | int }}",
+  "unit_of_measurement": "%",
+  "state_class": "measurement"
+}

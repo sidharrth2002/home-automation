@@ -114,7 +114,7 @@
             {
               "type": "tile",
               "entity": "light.wiz_rgbw_tunable_624d4e",
-              "name": "Light 1",
+              "name": "TV lamp 1",
               "grid_options": {
                 "columns": 12
               },
@@ -131,7 +131,7 @@
             {
               "type": "tile",
               "entity": "light.wiz_rgbw_tunable_4b472c",
-              "name": "Light 2",
+              "name": "TV lamp 2",
               "grid_options": {
                 "columns": 12
               },
@@ -144,6 +144,88 @@
                   "type": "light-color-temp"
                 }
               ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Desk",
+              "icon": "mdi:desk-lamp"
+            },
+            {
+              "type": "tile",
+              "entity": "light.desk_lamp",
+              "name": "Desk lamp",
+              "grid_options": {
+                "columns": 12
+              },
+              "features_position": "bottom",
+              "features": [
+                {
+                  "type": "light-brightness"
+                },
+                {
+                  "type": "light-color-temp"
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "input_boolean.desk_lamp_adaptive",
+              "name": "Adaptive",
+              "tap_action": {
+                "action": "toggle"
+              },
+              "grid_options": {
+                "columns": 6
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "timer.desk_lamp_manual",
+              "name": "Manual hold",
+              "grid_options": {
+                "columns": 6
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.outdoor_daylight",
+              "name": "Light outside",
+              "icon": "mdi:weather-sunny",
+              "grid_options": {
+                "columns": 4
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.desk_lamp_target_colour",
+              "name": "Target",
+              "icon": "mdi:thermometer",
+              "grid_options": {
+                "columns": 4
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.desk_lamp_target_brightness",
+              "name": "Target",
+              "icon": "mdi:brightness-6",
+              "grid_options": {
+                "columns": 4
+              }
+            },
+            {
+              "type": "weather-forecast",
+              "entity": "weather.forecast_home",
+              "forecast_type": "hourly",
+              "show_forecast": true,
+              "grid_options": {
+                "columns": 12
+              }
             }
           ]
         },
