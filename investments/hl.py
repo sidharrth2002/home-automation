@@ -100,6 +100,10 @@ class Holding:
     cost: float | None
     gain: float | None
     gain_pct: float | None
+    day_change: float | None = None
+    day_change_pct: float | None = None
+    yield_pct: float | None = None
+    stock_type: str = ""
 
 
 @dataclass
@@ -239,32 +243,35 @@ class HL:
         soup = BeautifulSoup(r.text, "html.parser")
         out = []
         for table in soup.find_all("table", class_="holdings-table"):
-            heads = [th.get_text(" ", strip=True).lower() for th in table.find("thead").find_all("th")] \
-                if table.find("thead") else []
+            if not table.find("thead") or not table.tbody:
+                continue
+            # Match headers exactly: "Day gain/loss £ %" and "Gain/loss £ %" differ only by the "Day".
+            heads = {th.get_text(" ", strip=True).lower(): i for i, th in enumerate(table.find("thead").find_all("th"))}
 
-            def col(td, *names, fallback):
-                for i, h in enumerate(heads):
-                    if any(n in h for n in names) and i < len(td):
-                        return td[i]
-                return td[fallback] if fallback < len(td) else None
+            def cell(td, header):
+                i = heads.get(header)
+                return td[i].get_text(" ", strip=True) if i is not None and i < len(td) else ""
 
-            for row in (table.tbody.find_all("tr") if table.tbody else []):
+            def pair(td, header):  # "392.21 5.48" -> (392.21, 5.48)
+                nums = [_num(x) for x in cell(td, header).split()]
+                nums = [n for n in nums if n is not None]
+                return (nums + [None, None])[:2]
+
+            for row in table.tbody.find_all("tr"):
                 td = row.find_all("td")
                 if len(td) < 6 or not td[0].find("a"):
                     continue
-                lines = [l.strip() for l in td[1].get_text("\n").split("\n") if l.strip()]
-                href = td[0].find("a")["href"]
-                gain = col(td, "gain/loss (£)", "gain/loss £", fallback=16)
-                gain_pct = col(td, "gain/loss (%)", "gain/loss %", fallback=17)
+                name_cell = td[heads.get("stock", 1)]
+                lines = [l.strip() for l in name_cell.get_text("\n").split("\n") if l.strip()]
+                gain, gain_pct = pair(td, "gain/loss £ %")
+                day, day_pct = pair(td, "day gain/loss £ %")
                 out.append(Holding(
-                    account=account.name, id=href.rstrip("/").split("/")[-1],
+                    account=account.name, id=cell(td, "code") or td[0].get_text(strip=True),
                     name=lines[0] if lines else "?", unit_type=lines[-1] if len(lines) > 1 else "",
-                    units=_num(col(td, "units held", fallback=2).get_text()),
-                    price_p=_num(col(td, "price", fallback=3).get_text()),
-                    value=_num(col(td, "value", fallback=4).get_text()),
-                    cost=_num(col(td, "cost", fallback=5).get_text()),
-                    gain=_num(gain.get_text()) if gain else None,
-                    gain_pct=_num(gain_pct.get_text()) if gain_pct else None))
+                    units=_num(cell(td, "units held")), price_p=_num(cell(td, "price (pence)")),
+                    value=_num(cell(td, "value (£)")), cost=_num(cell(td, "cost (£)")),
+                    gain=gain, gain_pct=gain_pct, day_change=day, day_change_pct=day_pct,
+                    yield_pct=_num(cell(td, "yield (%)")), stock_type=cell(td, "stock type")))
         return out
 
     def snapshot(self):

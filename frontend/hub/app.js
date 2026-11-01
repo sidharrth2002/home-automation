@@ -140,6 +140,7 @@ function renderAll(force = false) {
     if (!force && sig === lastSig[sel]) continue;
     lastSig[sel] = sig;
     $(sel).innerHTML = render();
+    if (sel === "#invest") renderHolding(); // keep an open holding in step with fresh data
   }
   ambient();
   tick();
@@ -362,21 +363,91 @@ section("#calendar", () => calIds(), () => {
 
 // investments (Hargreaves Lansdown): hidden until revealed on this device
 let showMoney = (() => { try { return localStorage.hubShowMoney === "1"; } catch { return false; } })();
+let invRange = "1Y";
+let invAll = false;
+let openHolding = null; // { sedol, range }
 const gbp = (v, dp = 0) => v == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: dp, minimumFractionDigits: dp }).format(v);
 const signed = (v, fmt) => v == null ? "—" : `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
-function sparkline(history) {
-  if (!history || history.length < 2) return "";
-  const vals = history.map((h) => h[1]);
-  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
-  const pts = vals.map((v, i) => [(i / (vals.length - 1)) * 300, 70 - ((v - lo) / span) * 60]);
-  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
-  const up = vals.at(-1) >= vals[0];
-  return `<svg class="spark ${up ? "up" : "down"}" viewBox="0 0 300 80" preserveAspectRatio="none">
-    <defs><linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".35"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
-    <path d="${line} L300 80 L0 80 Z" fill="url(#spark-fill)"/><path d="${line}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    <circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="3.5" fill="currentColor"/></svg>`;
+const pct = (v, dp = 1) => signed(v, (x) => `${x.toFixed(dp)}%`);
+const pence = (p) => p == null ? "—" : p >= 1000 ? gbp(p / 100, 2) : `${p.toFixed(2)}p`;
+const DAY = 86400000;
+const RANGES = { "1M": 31, "3M": 92, "6M": 183, "1Y": 366, "3Y": 1096, "5Y": 1827 };
+const seriesOf = (sedol) => at(`sensor.investment_${String(sedol).toLowerCase()}`, "series") ?? [];
+const sinceDays = (pts, days) => { if (!pts.length) return pts; const cut = pts.at(-1)[0] - days; const i = pts.findIndex((p) => p[0] >= cut); return pts.slice(Math.max(0, i)); };
+const change = (pts) => pts.length > 1 ? (pts.at(-1)[1] / pts[0][1] - 1) * 100 : null;
+const dayDate = (d) => new Date(d * DAY);
+
+// Value of today's holdings through time: units now × each fund's price then (forward-filled), from the day all
+// funds have data. It's "how what I hold has moved", not account value (no deposits/withdrawals in it).
+function portfolioSeries(holdings) {
+  const all = holdings.map((h) => ({ units: h.units ?? 0, pts: seriesOf(h.sedol) })).filter((x) => x.pts.length);
+  if (!all.length) return [];
+  const start = Math.max(...all.map((x) => x.pts[0][0]));
+  const days = [...new Set(all.flatMap((x) => x.pts.map((p) => p[0])))].filter((d) => d >= start).sort((a, b) => a - b);
+  const idx = all.map(() => 0);
+  return days.map((d) => [d, all.reduce((sum, x, k) => {
+    while (idx[k] + 1 < x.pts.length && x.pts[idx[k] + 1][0] <= d) idx[k]++;
+    return sum + (x.units * x.pts[idx[k]][1]) / 100;
+  }, 0)]);
 }
-section("#invest", () => [INVEST], () => {
+
+// Interactive line chart: SVG drawn in a stretchable viewBox, with HTML crosshair/dot/tooltip on hover.
+const charts = new Map();
+let chartSeq = 0;
+function lineChart(pts, { fmt, ref = null, refLabel = "", h = 200, cls = "" } = {}) {
+  if (pts.length < 2) return `<div class="chart empty" style="--h:${h}px"><span>Not enough history yet</span></div>`;
+  const id = `c${++chartSeq}`;
+  if (charts.size > 40) charts.delete(charts.keys().next().value);
+  const vals = pts.map((p) => p[1]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (ref != null) { lo = Math.min(lo, ref); hi = Math.max(hi, ref); }
+  const pad = (hi - lo || hi * 0.02 || 1) * 0.12;
+  lo -= pad; hi += pad;
+  const t0 = pts[0][0], t1 = pts.at(-1)[0];
+  const X = (t) => ((t - t0) / (t1 - t0 || 1)) * 1000;
+  const Y = (v) => h - ((v - lo) / (hi - lo)) * h;
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join("");
+  const up = vals.at(-1) >= vals[0];
+  charts.set(id, { pts, fmt, x: pts.map((p) => X(p[0]) / 10), y: pts.map((p) => (Y(p[1]) / h) * 100) });
+  const refY = ref != null ? (Y(ref) / h) * 100 : null;
+  return `<div class="chart ${up ? "up" : "down"} ${cls}" data-chart="${id}" style="--h:${h}px">
+    <svg viewBox="0 0 1000 ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="g${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".32"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
+      <path d="${line}L1000 ${h}L0 ${h}Z" fill="url(#g${id})"/>
+      <path d="${line}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+    </svg>
+    ${refY != null ? `<i class="chart-ref" style="top:${refY}%"><span>${esc(refLabel)}</span></i>` : ""}
+    <i class="chart-x"></i><i class="chart-dot"></i><div class="chart-tip"></div>
+  </div>`;
+}
+function chartHover(el, clientX) {
+  const c = charts.get(el.dataset.chart);
+  if (!c) return;
+  const r = el.getBoundingClientRect();
+  const fx = clamp(((clientX - r.left) / r.width) * 100, 0, 100);
+  let i = c.x.findIndex((x) => x >= fx);
+  if (i < 0) i = c.x.length - 1;
+  if (i > 0 && fx - c.x[i - 1] < c.x[i] - fx) i--;
+  const [d, v] = c.pts[i];
+  const from = c.pts[0][1];
+  el.style.setProperty("--hx", `${c.x[i]}%`);
+  el.style.setProperty("--hy", `${c.y[i]}%`);
+  el.classList.add("hover");
+  el.querySelector(".chart-tip").innerHTML = `<b>${c.fmt(v)}</b><span class="${v >= from ? "up" : "down"}">${pct((v / from - 1) * 100)}</span><small>${dayDate(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</small>`;
+}
+document.addEventListener("pointermove", (ev) => { const el = ev.target.closest?.(".chart[data-chart]"); if (el) chartHover(el, ev.clientX); });
+document.addEventListener("pointerout", (ev) => { const el = ev.target.closest?.(".chart[data-chart]"); if (el && !el.contains(ev.relatedTarget)) el.classList.remove("hover"); });
+
+function spark(pts) {
+  if (pts.length < 2) return "";
+  const vals = pts.map((p) => p[1]), lo = Math.min(...vals), hi = Math.max(...vals) || 1, span = hi - lo || 1;
+  const d = vals.map((v, i) => `${i ? "L" : "M"}${((i / (vals.length - 1)) * 100).toFixed(1)} ${(26 - ((v - lo) / span) * 24).toFixed(1)}`).join("");
+  return `<svg class="mini ${vals.at(-1) >= vals[0] ? "up" : "down"}" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+}
+const rangeTabs = (act, current, avail) => `<div class="ranges">${Object.keys(RANGES).filter((k) => avail >= RANGES[k] * 0.8 || k === "1M")
+  .map((k) => `<button data-act="${act}" data-v="${k}" aria-pressed="${k === current}">${k}</button>`).join("")}</div>`;
+
+section("#invest", () => [INVEST, ...Object.keys(S).filter((id) => id.startsWith("sensor.investment_"))], () => {
   const e = S[INVEST];
   const head = (right) => `<div class="card-head"><div class="card-title">${I.chart} Investments</div>${right}</div>`;
   if (!e) return head(`<span class="kicker">Not connected</span>`) +
@@ -384,32 +455,84 @@ section("#invest", () => [INVEST], () => {
   const a = e.attributes;
   const total = parseFloat(e.state);
   const holdings = a.holdings ?? [];
-  const max = Math.max(...holdings.map((h) => h.value ?? 0), 1);
+  const stock = holdings.reduce((s, h) => s + (h.value ?? 0), 0) || 1;
   const paused = a.status === "paused" ? `<p class="invest-paused"><b>Refresh paused</b> · ${esc(a.paused_reason ?? "")}<br>Check your details, then run <b>python -m investments login</b> once by hand.</p>` : "";
   const updated = a.updated ? new Date(a.updated) : null;
   const toggle = `<button class="eye" data-act="money" aria-pressed="${showMoney}" aria-label="${showMoney ? "Hide" : "Show"} values">${showMoney ? I.eye : I.eyeOff}</button>`;
+  const biggest = Math.max(...holdings.map((h) => h.value ?? 0), 1);
+  const port = portfolioSeries(holdings);
+  const span = port.length ? port.at(-1)[0] - port[0][0] : 0;
+  const ranged = sinceDays(port, RANGES[invRange]);
+  const rangeMove = change(ranged);
+  const chart = port.length > 1
+    ? `<div class="chart-head"><span class="kicker">Today's holdings over ${invRange} <b class="${(rangeMove ?? 0) >= 0 ? "up" : "down"}">${pct(rangeMove)}</b></span>${rangeTabs("inv-range", invRange, span)}</div>
+       ${lineChart(ranged, { fmt: (v) => `<span class="money">${gbp(v)}</span>`, h: 170 })}`
+    : sparkline(a.history);
+  const rows = (invAll ? holdings : holdings.slice(0, 7)).map((h) => `
+    <button class="holding" data-act="holding" data-v="${esc(h.sedol)}" style="--w:${((h.value ?? 0) / biggest).toFixed(3)}">
+      <i class="bar"></i>
+      <div class="holding-name"><b>${esc(h.name)}</b><span>${((h.value ?? 0) / stock * 100).toFixed(1)}% · ${esc(h.unit_type || h.account)}</span></div>
+      ${spark(sinceDays(seriesOf(h.sedol), 92))}
+      <div class="holding-val"><b class="money">${gbp(h.value)}</b>
+        <span><em class="${(h.day_change_pct ?? 0) >= 0 ? "up" : "down"}">${h.day_change_pct != null ? pct(h.day_change_pct, 2) : ""}</em> <em class="${(h.gain_pct ?? 0) >= 0 ? "up" : "down"}">${h.gain_pct != null ? pct(h.gain_pct) : ""}</em></span></div>
+    </button>`).join("");
   return head(`<span class="kicker">${updated ? `Updated ${hm(updated)}` : ""}</span>${toggle}`) + paused + `
     <div class="invest ${showMoney ? "" : "private"}">
       <div class="invest-summary">
         <div class="invest-total money">${Number.isFinite(total) ? gbp(total) : "—"}</div>
         <div class="invest-deltas">
-          ${a.day_change != null ? `<span class="delta ${a.day_change >= 0 ? "up" : "down"}"><span class="money">${signed(a.day_change, gbp)}</span> today</span>` : ""}
-          ${a.gain != null ? `<span class="delta ${a.gain >= 0 ? "up" : "down"}"><span class="money">${signed(a.gain, gbp)}</span>${a.gain_pct != null ? ` · ${signed(a.gain_pct, (v) => v.toFixed(1) + "%")}` : ""} all time</span>` : ""}
+          ${a.day_change != null ? `<span class="delta ${a.day_change >= 0 ? "up" : "down"}"><span class="money">${signed(a.day_change, gbp)}</span>${a.day_change_pct != null ? ` · ${pct(a.day_change_pct, 2)}` : ""} today</span>` : ""}
+          ${a.gain != null ? `<span class="delta ${a.gain >= 0 ? "up" : "down"}"><span class="money">${signed(a.gain, gbp)}</span>${a.gain_pct != null ? ` · ${pct(a.gain_pct)}` : ""} all time</span>` : ""}
         </div>
-        ${sparkline(a.history)}
+        ${chart}
         <div class="accounts">${(a.accounts ?? []).map((acc) => `<div class="acct"><span>${esc(acc.name)}</span><b class="money">${gbp(acc.total)}</b></div>`).join("")}
           ${a.cash ? `<div class="acct"><span>Cash</span><b class="money">${gbp(a.cash)}</b></div>` : ""}</div>
       </div>
-      <div class="holdings">${holdings.slice(0, 8).map((h) => `
-        <div class="holding" style="--w:${((h.value ?? 0) / max) * 100}%">
-          <div class="holding-name"><b>${esc(h.name)}</b><span>${esc(h.account)}${h.unit_type ? ` · ${esc(h.unit_type)}` : ""}</span></div>
-          <div class="holding-val"><b class="money">${gbp(h.value)}</b>
-            <span class="${(h.gain_pct ?? 0) >= 0 ? "up" : "down"}">${h.gain_pct != null ? signed(h.gain_pct, (v) => v.toFixed(1) + "%") : ""}</span></div>
-          <i class="bar"></i>
-        </div>`).join("") || `<p class="empty-note">No holdings.</p>`}
-        ${holdings.length > 8 ? `<p class="more">+ ${holdings.length - 8} more</p>` : ""}</div>
+      <div class="holdings">
+        <div class="holdings-head"><span>Holding</span><span>3M</span><span>Today · all time</span></div>
+        ${rows || `<p class="empty-note">No holdings.</p>`}
+        ${holdings.length > 7 ? `<button class="more" data-act="inv-all">${invAll ? "Show fewer" : `Show all ${holdings.length}`}</button>` : ""}
+      </div>
     </div>`;
 });
+
+function renderHolding() {
+  const dlg = $("#holding");
+  if (!openHolding || !dlg.open) return;
+  const inv = S[INVEST]?.attributes;
+  const h = inv?.holdings?.find((x) => x.sedol === openHolding.sedol);
+  if (!h) { dlg.close(); return; }
+  const all = seriesOf(h.sedol);
+  const span = all.length ? all.at(-1)[0] - all[0][0] : 0;
+  const pts = sinceDays(all, RANGES[openHolding.range]);
+  const avg = h.cost && h.units ? (h.cost / h.units) * 100 : null; // pence per unit
+  const stock = (inv.holdings ?? []).reduce((s, x) => s + (x.value ?? 0), 0) || 1;
+  const rets = Object.keys(RANGES).filter((k) => span >= RANGES[k] * 0.8)
+    .map((k) => { const r = change(sinceDays(all, RANGES[k])); return `<div class="ret"><span>${k}</span><b class="${(r ?? 0) >= 0 ? "up" : "down"}">${pct(r)}</b></div>`; }).join("");
+  const stat = (label, value, extra = "") => `<div class="pos"><span>${label}</span><b>${value}</b>${extra}</div>`;
+  dlg.style.setProperty("--h", hueOf(h.sedol));
+  dlg.innerHTML = `
+    <form method="dialog" class="ev-close"><button aria-label="Close">×</button></form>
+    <span class="ev-cal"><i></i>${esc(h.stock_type || "Fund")} · ${esc(h.sedol)} · ${esc(h.account)}</span>
+    <h3>${esc(h.name)}</h3>
+    <p class="h-sub">${esc(h.unit_type)}</p>
+    <div class="h-price"><b>${pence(h.price_p)}</b>
+      <span class="${(h.day_change_pct ?? 0) >= 0 ? "up" : "down"}">${h.day_change_pct != null ? `${pct(h.day_change_pct, 2)} today` : ""}</span></div>
+    <div class="chart-head"><span class="kicker">Price, ${openHolding.range} <b class="${(change(pts) ?? 0) >= 0 ? "up" : "down"}">${pct(change(pts))}</b></span>${rangeTabs("h-range", openHolding.range, span)}</div>
+    ${lineChart(pts, { fmt: pence, ref: avg, refLabel: avg ? `Your average ${pence(avg)}` : "", h: 230 })}
+    <div class="rets">${rets}</div>
+    <div class="positions ${showMoney ? "" : "private"}">
+      ${stat("Value", `<span class="money">${gbp(h.value, 2)}</span>`)}
+      ${stat("Gain", `<span class="money ${(h.gain ?? 0) >= 0 ? "up" : "down"}">${signed(h.gain, (v) => gbp(v, 2))}</span>`, `<small class="${(h.gain_pct ?? 0) >= 0 ? "up" : "down"}">${pct(h.gain_pct, 2)}</small>`)}
+      ${stat("Today", `<span class="money ${(h.day_change ?? 0) >= 0 ? "up" : "down"}">${signed(h.day_change, (v) => gbp(v, 2))}</span>`, `<small class="${(h.day_change_pct ?? 0) >= 0 ? "up" : "down"}">${pct(h.day_change_pct, 2)}</small>`)}
+      ${stat("Cost", `<span class="money">${gbp(h.cost, 2)}</span>`)}
+      ${stat("Units", `<span class="money">${h.units?.toLocaleString(undefined, { maximumFractionDigits: 3 }) ?? "—"}</span>`)}
+      ${stat("Average cost", pence(avg))}
+      ${stat("Of portfolio", `${(((h.value ?? 0) / stock) * 100).toFixed(1)}%`)}
+      ${stat("Yield", h.yield_pct != null ? `${h.yield_pct.toFixed(2)}%` : "—")}
+    </div>
+    <p class="h-src">Prices: Financial Times, daily close. Position: Hargreaves Lansdown.</p>`;
+}
 
 // desk: real sun position, weather, adaptive targets
 section("#desk", () => [SUN, WEATHER, OUTDOOR, T_K, T_B, ADAPT, HOLD, MAXB, DESK], () => {
@@ -538,10 +661,20 @@ document.addEventListener("click", (ev) => {
   if (!el || el.tagName === "INPUT") return;
   const { act, id, v } = el.dataset;
   if (act === "music") return call("script", "music_command", { command: v });
+  if (act === "holding") {
+    openHolding = { sedol: v, range: "1Y" };
+    const dlg = $("#holding");
+    dlg.showModal();
+    return renderHolding();
+  }
+  if (act === "h-range") { openHolding.range = v; return renderHolding(); }
+  if (act === "inv-range") { invRange = v; lastSig["#invest"] = null; return renderAll(); }
+  if (act === "inv-all") { invAll = !invAll; lastSig["#invest"] = null; return renderAll(); }
   if (act === "money") {
     showMoney = !showMoney;
     try { localStorage.hubShowMoney = showMoney ? "1" : "0"; } catch { /* private mode */ }
     lastSig["#invest"] = null;
+    renderHolding();
     return renderAll();
   }
   if (act === "event") return calEvents?.[el.dataset.i] && openEvent(calEvents[el.dataset.i]);

@@ -21,6 +21,7 @@ from pathlib import Path
 import keyring
 
 from .hl import DATA, HL, Credentials, Halted, halted_reason, save_json, _halt
+from .prices import Prices, compact
 
 log = logging.getLogger("investments")
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,8 +74,8 @@ def setup():
 
 
 # ── publishing ───────────────────────────────────────────────────
-def post(state, attrs):
-    req = urllib.request.Request(f"{HA_HTTP}/api/states/{SENSOR}", method="POST",
+def post(state, attrs, entity=SENSOR):
+    req = urllib.request.Request(f"{HA_HTTP}/api/states/{entity}", method="POST",
                                  data=json.dumps({"state": state, "attributes": attrs}).encode(),
                                  headers={"Authorization": f"Bearer {os.environ['TOKEN']}",
                                           "Content-Type": "application/json"})
@@ -95,18 +96,51 @@ def publish(accounts):
     history[today] = total
     history = dict(sorted(history.items())[-400:])
     save_json(HISTORY, history)
+    # HL's own day change per holding is better than diffing our snapshots (which miss days the Mac was off).
+    day_changes = [h["day_change"] for h in holdings if h.get("day_change") is not None]
     previous = [v for d, v in history.items() if d < today]
-    day_change = round(total - previous[-1], 2) if previous else None
+    day_change = round(sum(day_changes), 2) if day_changes else (round(total - previous[-1], 2) if previous else None)
+    stock = sum(h["value"] or 0 for h in holdings)
 
     post(total, {**BASE_ATTRS, "status": "ok", "updated": datetime.now().isoformat(timespec="seconds"),
                  "cash": round(sum(a["cash"] or 0 for a in accounts), 2),
                  "invested_cost": round(cost, 2), "gain": round(gain, 2),
                  "gain_pct": round(gain / cost * 100, 2) if cost else None, "day_change": day_change,
+                 "day_change_pct": round(day_change / (stock - day_change) * 100, 2) if day_change and stock else None,
                  "accounts": [{k: a[k] for k in ("name", "total", "stock", "cash")} for a in accounts],
-                 "holdings": [{k: h[k] for k in ("name", "account", "value", "cost", "gain", "gain_pct", "units",
-                                                 "price_p", "unit_type")} for h in holdings],
+                 "holdings": [{**{k: h.get(k) for k in ("name", "account", "value", "cost", "gain", "gain_pct",
+                                                       "units", "price_p", "unit_type", "day_change", "day_change_pct",
+                                                       "yield_pct", "stock_type")}, "sedol": h["id"]}
+                              for h in holdings],
                  "history": [[d, v] for d, v in list(history.items())[-180:]]})
     log.info("published £%.2f across %d accounts, %d holdings", total, len(accounts), len(holdings))
+
+
+_published_series = {}  # sedol -> date last published, so each fund's history is posted once a day
+
+
+def publish_prices(accounts, prices: Prices):
+    """One sensor per fund with its price history (sensor.investment_<sedol>), for the Hub's detail charts."""
+    today = date.today().isoformat()
+    for h in (h for a in accounts for h in a["holdings"]):
+        sedol = h["id"]
+        if _published_series.get(sedol) == today:
+            continue
+        try:
+            series = prices.history(sedol, h["name"])
+        except Exception as e:  # FT down or changed: charts just go stale, nothing else depends on this
+            log.warning("price history for %s failed: %s", h["name"], e)
+            continue
+        if not series:
+            continue
+        # FT quotes some funds in pounds and some in pence; HL always shows pence. Match HL's units.
+        if h.get("price_p") and 50 < h["price_p"] / series[-1][1] < 200:
+            series = [(d, p * 100) for d, p in series]
+        post(round(series[-1][1], 2), {"friendly_name": h["name"], "icon": "mdi:chart-line", "sedol": sedol,
+                                       "unit_of_measurement": "GBX", "source": "FT", "series": compact(series)},
+             entity=f"sensor.investment_{sedol.lower()}")
+        _published_series[sedol] = today
+    log.info("price history published for %d funds", len(_published_series))
 
 
 def publish_paused(reason):
@@ -145,7 +179,9 @@ def refresh(hl: HL, *, manual=False):
             _halt(f"login interrupted ({type(e).__name__}: {e}); not retrying automatically")
         if not hl.logged_in():
             _halt("logged in but the portfolio still isn't readable; pausing rather than logging in again")
-    publish(hl.snapshot())
+    accounts = hl.snapshot()
+    publish(accounts)
+    publish_prices(accounts, Prices())
 
 
 def next_delay():

@@ -196,7 +196,13 @@ the account after a few failed logins, so I was careful with this one:
 ```
 
 After that it refreshes hourly between 07:00 and 22:00 as part of `./home up` and publishes
-`sensor.investments`, which isn't exposed to Claude. `tests/test_investments.py` runs each of those rules
+`sensor.investments`, which isn't exposed to Claude.
+
+Price history for each fund comes from the FT's public fund pages (`investments/prices.py`), looked up by ISIN
+(worked out from the SEDOL for UK funds) and fetched once a day into `sensor.investment_<sedol>`. Only fund
+identifiers are sent to FT. In the Hub, clicking a holding opens its price chart (1M to 5Y) with my average
+cost marked, returns over each period and the position itself. The main chart shows what my current holdings
+would have been worth over time, so it ignores deposits. `tests/test_investments.py` runs each of those rules
 against a fake HL.
 
 </details>
