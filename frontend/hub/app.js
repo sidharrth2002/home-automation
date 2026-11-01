@@ -29,6 +29,7 @@ const TV_AUTO = "automation.tv_bias_lighting";
 const NF_CONT = "sensor.netflix_continue_watching";
 const NF_WEEK = "sensor.netflix_episodes_this_week";
 const INVEST = "sensor.investments";
+const T212 = "sensor.trading212";
 
 const APPS = {
   "com.netflix.ninja": ["Netflix", "229,9,20"],
@@ -72,6 +73,7 @@ const I = {
   pin: svg(`<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>`),
   repeat: svg(`<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>`),
   notes: svg(`<path d="M5 4h14v16H5z"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/>`),
+  piggy: svg(`<path d="M19 11c0-3.3-3.1-6-7-6S5 7.7 5 11c0 1.6.7 3 1.9 4.1V18h3v-1.2c.7.1 1.4.2 2.1.2s1.4-.1 2.1-.2V18h3v-2.9c.6-.5 1.1-1 1.5-1.6H21v-3h-2z"/><circle cx="15.5" cy="10.5" r=".6" fill="currentColor"/><path d="M9 7.5c.8-.9 2-1.2 3.2-1"/>`),
   chart: svg(`<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/>`),
   eye: svg(`<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`),
   eyeOff: svg(`<path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17.7 17.7 0 0 1-3.2 4.2M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>`),
@@ -394,7 +396,7 @@ function portfolioSeries(holdings) {
 // Interactive line chart: SVG drawn in a stretchable viewBox, with HTML crosshair/dot/tooltip on hover.
 const charts = new Map();
 let chartSeq = 0;
-function lineChart(pts, { fmt, ref = null, refLabel = "", h = 200, cls = "" } = {}) {
+function lineChart(pts, { fmt, ref = null, refLabel = "", h = 200, cls = "", delta = true } = {}) {
   if (pts.length < 2) return `<div class="chart empty" style="--h:${h}px"><span>Not enough history yet</span></div>`;
   const id = `c${++chartSeq}`;
   if (charts.size > 40) charts.delete(charts.keys().next().value);
@@ -408,7 +410,7 @@ function lineChart(pts, { fmt, ref = null, refLabel = "", h = 200, cls = "" } = 
   const Y = (v) => h - ((v - lo) / (hi - lo)) * h;
   const line = pts.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join("");
   const up = vals.at(-1) >= vals[0];
-  charts.set(id, { pts, fmt, x: pts.map((p) => X(p[0]) / 10), y: pts.map((p) => (Y(p[1]) / h) * 100) });
+  charts.set(id, { pts, fmt, delta, x: pts.map((p) => X(p[0]) / 10), y: pts.map((p) => (Y(p[1]) / h) * 100) });
   const refY = ref != null ? (Y(ref) / h) * 100 : null;
   return `<div class="chart ${up ? "up" : "down"} ${cls}" data-chart="${id}" style="--h:${h}px">
     <svg viewBox="0 0 1000 ${h}" preserveAspectRatio="none" aria-hidden="true">
@@ -433,7 +435,7 @@ function chartHover(el, clientX) {
   el.style.setProperty("--hx", `${c.x[i]}%`);
   el.style.setProperty("--hy", `${c.y[i]}%`);
   el.classList.add("hover");
-  el.querySelector(".chart-tip").innerHTML = `<b>${c.fmt(v)}</b><span class="${v >= from ? "up" : "down"}">${pct((v / from - 1) * 100)}</span><small>${dayDate(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</small>`;
+  el.querySelector(".chart-tip").innerHTML = `<b>${c.fmt(v)}</b>${c.delta ? `<span class="${v >= from ? "up" : "down"}">${pct((v / from - 1) * 100)}</span>` : ""}<small>${dayDate(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</small>`;
 }
 document.addEventListener("pointermove", (ev) => { const el = ev.target.closest?.(".chart[data-chart]"); if (el) chartHover(el, ev.clientX); });
 document.addEventListener("pointerout", (ev) => { const el = ev.target.closest?.(".chart[data-chart]"); if (el && !el.contains(ev.relatedTarget)) el.classList.remove("hover"); });
@@ -444,6 +446,8 @@ function spark(pts) {
   const d = vals.map((v, i) => `${i ? "L" : "M"}${((i / (vals.length - 1)) * 100).toFixed(1)} ${(26 - ((v - lo) / span) * 24).toFixed(1)}`).join("");
   return `<svg class="mini ${vals.at(-1) >= vals[0] ? "up" : "down"}" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
 }
+const rangeTabsFor = (act, current, avail, keys) => `<div class="ranges">${keys.filter((k) => avail >= RANGES[k] * 0.8 || k === keys[0])
+  .map((k) => `<button data-act="${act}" data-v="${k}" aria-pressed="${k === current}">${k}</button>`).join("")}</div>`;
 const rangeTabs = (act, current, avail) => `<div class="ranges">${Object.keys(RANGES).filter((k) => avail >= RANGES[k] * 0.8 || k === "1M")
   .map((k) => `<button data-act="${act}" data-v="${k}" aria-pressed="${k === current}">${k}</button>`).join("")}</div>`;
 
@@ -493,6 +497,42 @@ section("#invest", () => [INVEST, ...Object.keys(S).filter((id) => id.startsWith
         ${rows || `<p class="empty-note">No holdings.</p>`}
         ${holdings.length > 7 ? `<button class="more" data-act="inv-all">${invAll ? "Show fewer" : `Show all ${holdings.length}`}</button>` : ""}
       </div>
+    </div>`;
+});
+
+// cash (Trading 212): balance and the interest it pays, hidden until revealed like the investments card
+let cashRange = "3M";
+section("#cash", () => [T212], () => {
+  const e = S[T212];
+  const eye = `<button class="eye" data-act="money" aria-pressed="${showMoney}" aria-label="${showMoney ? "Hide" : "Show"} values">${showMoney ? I.eye : I.eyeOff}</button>`;
+  const head = (right) => `<div class="card-head"><div class="card-title">${I.piggy} Cash</div>${right}</div>`;
+  if (!e) return head(`<span class="kicker">Not connected</span>`) +
+    `<p class="empty-note">In the Trading 212 app create a <b>read-only</b> API key (Settings → API), then run <b>python -m investments setup-t212</b> and <b>python -m investments t212</b>.</p>`;
+  const a = e.attributes, it = a.interest ?? {};
+  const cash = parseFloat(e.state);
+  const paused = a.status === "paused" ? `<p class="invest-paused"><b>Refresh paused</b> · ${esc(a.paused_reason ?? "")}<br>Fix the key, then run <b>python -m investments t212</b> by hand.</p>` : "";
+  const updated = a.updated ? new Date(a.updated) : null;
+  const daily = it.daily ?? [];
+  const span = daily.length ? daily.at(-1)[0] - daily[0][0] : 0;
+  const cut = daily.length ? daily.at(-1)[0] - RANGES[cashRange] : 0;
+  let run = 0;
+  const cum = daily.filter((d) => d[0] >= cut).map(([d, v]) => [d, (run += v)]);
+  const lastDay = it.last_date ? new Date(`${it.last_date}T12:00:00`) : null;
+  const stat = (label, v) => `<div class="pos"><span>${label}</span><b class="money">${v == null ? "—" : gbp(v, 2)}</b></div>`;
+  return head(`<span class="kicker">Trading 212</span>${eye}`) + paused + `
+    <div class="cash ${showMoney ? "" : "private"}">
+      <div class="invest-total money">${Number.isFinite(cash) ? gbp(cash, 2) : "—"}</div>
+      <div class="invest-deltas">
+        ${it.last_amount != null ? `<span class="delta up"><span class="money">+${gbp(it.last_amount, 2)}</span> interest${lastDay ? ` · ${lastDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : ""}</span>` : `<span class="delta">No interest paid yet</span>`}
+        ${it.est_rate_pct != null ? `<span class="delta" title="Latest daily payment ×365 over today's balance. The rate and the balance both move.">≈ ${it.est_rate_pct.toFixed(2)}% a year <em class="est">est.</em></span>` : ""}
+      </div>
+      ${cum.length > 1 ? `<div class="chart-head"><span class="kicker">Interest earned</span>${rangeTabsFor("cash-range", cashRange, span, ["1M", "3M", "1Y"])}</div>
+        ${lineChart(cum, { fmt: (v) => `<span class="money">${gbp(v, 2)}</span>`, h: 120, delta: false })}` : ""}
+      <div class="positions cash-stats">
+        ${stat("This month", it.month)}${stat("Last 30 days", it.last30)}
+        ${stat("This year", it.ytd)}${stat("All time", it.all_time)}
+      </div>
+      <p class="h-src">${it.est_month != null ? `At today's rate, about <span class="money">${gbp(it.est_month, 2)}</span> a month. ` : ""}Interest is paid daily${updated ? ` · updated ${hm(updated)}` : ""}.</p>
     </div>`;
 });
 
@@ -668,12 +708,14 @@ document.addEventListener("click", (ev) => {
     return renderHolding();
   }
   if (act === "h-range") { openHolding.range = v; return renderHolding(); }
+  if (act === "cash-range") { cashRange = v; lastSig["#cash"] = null; return renderAll(); }
   if (act === "inv-range") { invRange = v; lastSig["#invest"] = null; return renderAll(); }
   if (act === "inv-all") { invAll = !invAll; lastSig["#invest"] = null; return renderAll(); }
   if (act === "money") {
     showMoney = !showMoney;
     try { localStorage.hubShowMoney = showMoney ? "1" : "0"; } catch { /* private mode */ }
     lastSig["#invest"] = null;
+    lastSig["#cash"] = null;
     renderHolding();
     return renderAll();
   }

@@ -25,9 +25,13 @@ d = pathlib.Path("data/investments")
 out = set()
 if (d / "ft_ids.json").exists():
     out |= set(json.loads((d / "ft_ids.json").read_text()))
+values = []
 if (d / "history.json").exists():
-    for v in json.loads((d / "history.json").read_text()).values():
-        out |= {f"{v:.2f}", f"{v:,.2f}", f"{int(v)}", f"{int(v):,}"}
+    values += json.loads((d / "history.json").read_text()).values()
+if (d / "t212_last.json").exists():  # Trading 212 balances and interest totals
+    values += [v for v in json.loads((d / "t212_last.json").read_text()).values() if isinstance(v, (int, float))]
+for v in values:
+    out |= {f"{v:.2f}", f"{v:,.2f}", f"{int(v)}", f"{int(v):,}"}
 print("\n".join(sorted(x for x in out if len(x) >= 5)))
 EOF
 )

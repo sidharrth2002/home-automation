@@ -35,8 +35,8 @@ def services():
     }
     if os.environ.get("PRESENCE_PHONE_MAC"):
         out["presence"] = [PY, "-m", "presence"]
-    from investments.__main__ import configured  # Keychain lookup; only run once HL credentials are stored
-    if configured():
+    from investments.__main__ import any_configured  # Keychain lookup; only run once credentials are stored
+    if any_configured():
         out["investments"] = [PY, "-m", "investments", "--watch"]
     return out
 

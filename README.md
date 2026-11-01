@@ -32,9 +32,9 @@ and the background picks up colour from the lights and the album art.
   fairly low. If I change it by hand it leaves it alone for two hours.
 - **The Hub.** Plain HTML/JS on Home Assistant's websocket API, no build step. Lights, now playing with
   controls, the week's calendar (iCloud), my investments, the desk lamp, the TV and Netflix.
-- **Investments.** Holdings from Hargreaves Lansdown, which has no API, so it logs in like the website does.
-  It's written so it can't lock the account (more on that below). Values are blurred on the dashboard until
-  I tap to show them.
+- **Investments.** Holdings from Hargreaves Lansdown, which has no API, so it logs in like the website does
+  (written so it can't lock the account, more on that below), plus the interest on my cash at Trading 212
+  through its official API. Values are blurred on the dashboard until I tap to show them.
 - **Talking to it.** Claude can control everything through Home Assistant's MCP server, so "turn the TV lamps
   blue" or "lights out" just works.
 - **Away mode.** If my phone hasn't been on the Wi-Fi for a while and the Mac is idle, everything turns off.
@@ -205,6 +205,23 @@ cost marked, returns over each period and the position itself. The main chart sh
 would have been worth over time, so it ignores deposits. `tests/test_investments.py` runs each of those rules
 against a fake HL.
 
+### Trading 212 cash
+
+Trading 212 has an official API, so this one doesn't log in to anything. `investments/t212.py` uses an API
+key with read-only permissions (created in the app under Settings > API) and only ever makes GET requests. It
+reads the cash balance and the interest paid on uninvested cash, which shows up in the Hub as a card with the
+balance, the latest daily payment, an estimated yearly rate and a chart of interest earned.
+
+```sh
+.venv/bin/python -m investments setup-t212   # key + secret go into the macOS Keychain
+.venv/bin/python -m investments t212         # one supervised connection by hand
+```
+
+If Trading 212 ever refuses the key it stops and doesn't retry, the same as the HL side, until `t212` works by
+hand. Requests are spaced to stay under its rate limits, and after the first run only new interest payments
+are fetched. The key is never written to a file, and `data/` (including the cached interest history) is
+git-ignored. It refreshes every 30 minutes during the day. `tests/test_t212.py` runs against a fake API.
+
 </details>
 
 <details>
@@ -276,4 +293,4 @@ tests/
 ```
 
 Tests: `python -m tests.test_analysis` (a synthetic 128 BPM track: tempo, beat timing, drops, TV mode,
-palettes), `tests.test_netflix` and `tests.test_investments`.
+palettes), `tests.test_netflix`, `tests.test_investments` and `tests.test_t212`.

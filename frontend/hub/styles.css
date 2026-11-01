@@ -70,7 +70,7 @@ body.dim .blob { opacity: .16; }
     "top top top top top top top top top top top top"
     "stack stack stack stack stack stack stack stack music music music music"
     "calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar"
-    "invest invest invest invest invest invest invest invest invest invest invest invest"
+    "invest invest invest invest invest invest invest invest invest cash cash cash"
     "desk desk desk desk desk tv tv tv netflix netflix netflix netflix"
     "foot foot foot foot foot foot foot foot foot foot foot foot";
 }
@@ -79,16 +79,16 @@ body.dim .blob { opacity: .16; }
 .stack .room { flex: 1; }
 .top { grid-area: top; } .room { grid-area: room; } .scenes { grid-area: scenes; }
 .music { grid-area: music; } .desk { grid-area: desk; } .tv { grid-area: tv; }
-.netflix { grid-area: netflix; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .invest-card { grid-area: invest; }
+.netflix { grid-area: netflix; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .invest-card { grid-area: invest; } .cash-card { grid-area: cash; }
 
 @media (max-width: 1100px) {
   .hub { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas:
-    "top top" "room room" "scenes scenes" "calendar calendar" "invest invest" "music desk" "tv netflix" "foot foot"; }
+    "top top" "room room" "scenes scenes" "calendar calendar" "invest invest" "cash cash" "music desk" "tv netflix" "foot foot"; }
   .stack { display: contents; }
 }
 @media (max-width: 720px) {
   .hub { grid-template-columns: minmax(0, 1fr); grid-template-areas:
-    "top" "room" "scenes" "music" "calendar" "invest" "desk" "tv" "netflix" "foot"; }
+    "top" "room" "scenes" "music" "calendar" "invest" "cash" "desk" "tv" "netflix" "foot"; }
   .chips { justify-content: flex-end; }
   .chips .chip:nth-child(3) { display: none; }
 }
@@ -372,6 +372,15 @@ details.tune .slider { flex: 1; }
   border: 1px solid var(--line); min-width: 110px; }
 .acct span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .acct b { font: 500 15px/1.2 var(--mono); }
+
+/* cash */
+.cash-card .card-head { gap: 12px; }
+.cash-card .card-head .kicker { margin-left: auto; }
+.cash .invest-total { font-size: clamp(40px, 4.2vw, 56px); }
+.est { font-style: normal; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-left: 2px; }
+.cash .chart-head { margin-top: 18px; }
+.cash .cash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+.cash .h-src { margin-top: 14px; }
 
 /* charts */
 .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 22px 0 10px; flex-wrap: wrap; }
