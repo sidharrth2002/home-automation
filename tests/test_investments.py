@@ -72,6 +72,14 @@ def run():
         assert s.posts[1]["secure-number[1]"] == "2" and s.posts[1]["secure-number[3]"] == "6", s.posts[1]
         assert not hl.HALT.exists()
 
+        # HL now lands on the portfolio overview after stage 2; that's a success too
+        s = FakeSession(stage2_to="my-accounts/portfolio_overview"); client(s, tmp).login(CREDS)
+        assert not hl.HALT.exists()
+        # ...but an unknown page after stage 2 still halts
+        s = FakeSession(stage2_to="my-accounts/verify-device")
+        expect(hl.Halted, lambda: client(s, tmp).login(CREDS))
+        hl.HALT.unlink()
+
         # stage 1 rejected -> halt, and the next automatic login sends nothing at all
         s = FakeSession(stage1_to="my-accounts/login-step-one")
         expect(hl.Halted, lambda: client(s, tmp).login(CREDS))

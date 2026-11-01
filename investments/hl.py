@@ -27,6 +27,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "investments"
 COOKIES = DATA / "hl_cookies.txt"
 HALT = DATA / "HALTED"
+# Where HL lands after a successful stage 2. Kept to an explicit list: anything else (a new verification step,
+# an error page) must halt rather than be mistaken for success.
+LOGGED_IN_PATHS = {"/my-accounts", "/my-accounts/portfolio_overview"}
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
 
@@ -190,7 +193,7 @@ class HL:
             "secure-number[2]": creds.secure_number[wanted[1]],
             "secure-number[3]": creds.secure_number[wanted[2]],
             "submit": "Log in", "hl_vt": token})
-        if self._path(r) != "/my-accounts":
+        if self._path(r) not in LOGGED_IN_PATHS:
             _halt(f"stage 2 (password/secure number) was not accepted: ended on {self._path(r)}. {self._error(r.text)}")
 
         HALT.unlink(missing_ok=True)
