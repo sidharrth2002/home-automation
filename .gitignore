@@ -5,3 +5,7 @@ homeassistant/config/
 .DS_Store
 __pycache__/
 music_sync.log
+data/
+NetflixViewingHistory*.csv
+ViewingActivity*.csv
+netflix.log

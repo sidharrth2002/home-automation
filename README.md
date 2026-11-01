@@ -65,3 +65,17 @@ isn't already running, and turns it off (restoring the bulbs) when the TV turns 
 
 `.venv/bin/python -m tests.test_analysis` checks the pipeline against a synthetic 128 BPM track.
 First run triggers macOS system-audio (and, for TV mode, microphone) permission prompts.
+
+## Netflix history
+Netflix has no public API, so this reads its official exports:
+
+- **Viewing activity** (netflix.com → Account → profile → Viewing activity → *Download all*): titles and
+  dates, instantly. Gives recently watched and the last episode per show.
+- **Full data export** (Account → *Download your personal information*, takes days): adds session length and
+  the playback position, so the dashboard can show "stopped at 41:20".
+
+`.venv/bin/python -m netflix --watch` picks up the newest export from `~/Downloads` (or `data/netflix/`),
+re-checks every 5 minutes, and publishes `sensor.netflix_last_watched`, `sensor.netflix_continue_watching`
+and `sensor.netflix_episodes_this_week` for the dashboard's Netflix section. Exports are git-ignored.
+Set `NETFLIX_PROFILE` in `.env` to pick a profile from a multi-profile full export.
+`.venv/bin/python -m tests.test_netflix` covers both formats and US/UK date order.

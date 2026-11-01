@@ -4,7 +4,7 @@
       "title": "Home",
       "path": "home",
       "type": "sections",
-      "max_columns": 3,
+      "max_columns": 4,
       "icon": "mdi:home-variant",
       "badges": [
         {
@@ -285,6 +285,50 @@
               },
               "tap_action": {
                 "action": "toggle"
+              }
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "cards": [
+            {
+              "type": "heading",
+              "heading": "Netflix",
+              "icon": "mdi:netflix"
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.netflix_episodes_this_week",
+              "name": "Episodes this week",
+              "icon": "mdi:television-play",
+              "grid_options": {
+                "columns": 6
+              }
+            },
+            {
+              "type": "tile",
+              "entity": "sensor.netflix_continue_watching",
+              "name": "Shows in progress",
+              "icon": "mdi:play-pause",
+              "grid_options": {
+                "columns": 6
+              }
+            },
+            {
+              "type": "markdown",
+              "title": "Continue watching",
+              "content": "{% set shows = state_attr('sensor.netflix_continue_watching', 'shows') or [] %}\n{% for s in shows %}\n**{{ s.show }}**<br>{{ s.next_after }}{% if s.stopped_at %} \u00b7 stopped at {{ s.stopped_at }}{% endif %} \u00b7 *{{ s.when }}*\n{% else %}\nNo export yet. On netflix.com: Account \u2192 your profile \u2192 Viewing activity \u2192 **Download all**. The file is picked up from Downloads automatically.\n{% endfor %}",
+              "grid_options": {
+                "columns": 12
+              }
+            },
+            {
+              "type": "markdown",
+              "title": "Recently watched",
+              "content": "{% for v in (state_attr('sensor.netflix_last_watched', 'recent') or [])[:8] %}\n{{ '\ud83c\udfac' if v.movie else '\ud83d\udcfa' }} {{ v.title }} \u00b7 *{{ v.when }}*\n{% endfor %}\n<small>From {{ state_attr('sensor.netflix_last_watched', 'source') or 'no' }} export, {{ state_attr('sensor.netflix_last_watched', 'export_date') or '' }}</small>",
+              "grid_options": {
+                "columns": 12
               }
             }
           ]
