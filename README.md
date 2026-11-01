@@ -49,7 +49,7 @@ flowchart LR
         mic["microphone"]
         spotify["Spotify app<br/>(AppleScript)"]
         sync["music_sync"]
-        side["netflix / presence /<br/>investments"]
+        side["netflix, presence,<br/>investments"]
         sup(["./home"])
         audio --> sync
         mic --> sync
@@ -64,11 +64,15 @@ flowchart LR
     claude["Claude"]
     icloud["iCloud"]
     hl["Hargreaves<br/>Lansdown"]
+    t212["Trading 212<br/>(official API)"]
+    ft["FT<br/>(fund prices)"]
 
     sync -- UDP --> bulbs
     sync <-- websocket --> ha
     side -- REST --> ha
-    hl -.-> side
+    hl -. read-only .-> side
+    t212 -. read-only .-> side
+    ft -.-> side
     ha -- desk lamp --> bulbs
     ha <--> tv
     icloud -- CalDAV --> ha
