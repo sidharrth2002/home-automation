@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Tiny Home Assistant CLI (REST, token from .env).
+
+  bin/ha states [filter]                          entity, state and the useful attributes
+  bin/ha call light.turn_on light.desk_lamp brightness_pct=30 rgb_color=[255,0,0]
+  bin/ha call script.turn_on script.party_mode
+  bin/ha call script.music_command command=play_pause
+
+Values are parsed as JSON when they can be (numbers, lists, true/false), otherwise kept as strings.
+Several entities can be given comma-separated.
+"""
+import json
+import os
+import sys
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+HA = os.environ.get("HA_HTTP", "http://localhost:8123")
+SHOW = ("brightness", "rgb_color", "color_temp_kelvin", "app_id", "media_title", "player_state", "temperature",
+        "unit_of_measurement", "options", "friendly_name")
+
+
+def token():
+    for line in (ROOT / ".env").read_text().splitlines():
+        if line.startswith("TOKEN="):
+            return line.split("=", 1)[1].strip().strip("'\"")
+    sys.exit("TOKEN missing from .env")
+
+
+def request(path, body=None):
+    req = urllib.request.Request(f"{HA}{path}", method="POST" if body is not None else "GET",
+                                 data=None if body is None else json.dumps(body).encode(),
+                                 headers={"Authorization": f"Bearer {token()}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read() or b"null")
+
+
+def value(text):
+    try:
+        return json.loads(text)
+    except ValueError:
+        return text
+
+
+def main(args):
+    if not args or args[0] in ("-h", "--help"):
+        sys.exit(__doc__)
+    if args[0] == "states":
+        needle = args[1] if len(args) > 1 else ""
+        for s in sorted(request("/api/states"), key=lambda s: s["entity_id"]):
+            name = s["attributes"].get("friendly_name", "")
+            if needle in s["entity_id"] or needle.lower() in name.lower():
+                attrs = {k: v for k, v in s["attributes"].items() if k in SHOW and k != "friendly_name"}
+                print(f"{s['entity_id']} ({name}): {s['state']} {json.dumps(attrs) if attrs else ''}")
+    elif args[0] == "call":
+        domain, service = args[1].split(".", 1)
+        data = {}
+        rest = args[2:]
+        if rest and "=" not in rest[0]:
+            data["entity_id"] = rest.pop(0).split(",")
+        for kv in rest:
+            k, v = kv.split("=", 1)
+            data[k] = value(v)
+        changed = request(f"/api/services/{domain}/{service}", data)
+        for s in changed or []:
+            print(f"{s['entity_id']}: {s['state']}")
+        print("ok")
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
