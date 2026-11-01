@@ -69,6 +69,7 @@ body.dim .blob { opacity: .16; }
   grid-template-areas:
     "top top top top top top top top top top top top"
     "stack stack stack stack stack stack stack stack music music music music"
+    "calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar"
     "desk desk desk desk desk tv tv tv netflix netflix netflix netflix"
     "foot foot foot foot foot foot foot foot foot foot foot foot";
 }
@@ -77,16 +78,16 @@ body.dim .blob { opacity: .16; }
 .stack .room { flex: 1; }
 .top { grid-area: top; } .room { grid-area: room; } .scenes { grid-area: scenes; }
 .music { grid-area: music; } .desk { grid-area: desk; } .tv { grid-area: tv; }
-.netflix { grid-area: netflix; } .foot { grid-area: foot; }
+.netflix { grid-area: netflix; } .foot { grid-area: foot; } .calendar { grid-area: calendar; }
 
 @media (max-width: 1100px) {
   .hub { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas:
-    "top top" "room room" "scenes scenes" "music desk" "tv netflix" "foot foot"; }
+    "top top" "room room" "scenes scenes" "calendar calendar" "music desk" "tv netflix" "foot foot"; }
   .stack { display: contents; }
 }
 @media (max-width: 720px) {
   .hub { grid-template-columns: minmax(0, 1fr); grid-template-areas:
-    "top" "room" "scenes" "music" "desk" "tv" "netflix" "foot"; }
+    "top" "room" "scenes" "music" "calendar" "desk" "tv" "netflix" "foot"; }
   .chips { justify-content: flex-end; }
   .chips .chip:nth-child(3) { display: none; }
 }
@@ -242,6 +243,21 @@ h1 em { font-style: italic; color: rgb(var(--a1)); transition: color 2s var(--ea
 .music.live .pulse.p2 { animation-delay: calc(var(--beat, .5s) / 2); border-color: rgba(var(--a2), .5); }
 @keyframes ring { 0% { transform: scale(.72); opacity: .9; } 100% { transform: scale(1.05); opacity: 0; } }
 .track { text-align: center; }
+/* playback */
+.progress { --p: 0%; }
+.progress .bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+.progress .bar i { display: block; height: 100%; width: var(--p); border-radius: inherit; transition: width 1s linear;
+  background: linear-gradient(90deg, rgba(var(--a1),1), rgba(var(--a2),1)); box-shadow: 0 0 12px rgba(var(--a1),.8); }
+.progress .times { display: flex; justify-content: space-between; margin-top: 7px; color: var(--ink-3); font: 500 11px/1 var(--mono); }
+.transport { display: flex; justify-content: center; align-items: center; gap: 22px; margin-top: -6px; }
+.transport button { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
+  background: transparent; color: var(--ink-2); transition: transform .15s, color .2s, background .2s; }
+.transport button:hover { color: var(--ink); background: rgba(255,255,255,.08); }
+.transport button:active { transform: scale(.92); }
+.transport button svg { width: 22px; height: 22px; }
+.transport .pp { width: 58px; height: 58px; background: var(--ink); color: #07070b; box-shadow: 0 8px 30px rgba(var(--a1),.45); }
+.transport .pp:hover { background: #fff; color: #07070b; }
+.transport .pp svg { width: 26px; height: 26px; }
 .track h2 { margin: 0; font: 400 28px/1.05 var(--serif); letter-spacing: -.01em; overflow-wrap: anywhere; }
 .track p { margin: 6px 0 0; color: var(--ink-2); }
 .swatches { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
@@ -309,6 +325,34 @@ details.tune .slider { flex: 1; }
 .show b { display: block; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .show span { display: block; color: var(--ink-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .show small { color: var(--ink-3); font: 500 11px/1 var(--mono); }
+/* calendar: the week as columns */
+.calendar .kicker b { color: var(--ink); font-weight: 600; }
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+.day { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 16px;
+  background: rgba(255,255,255,.03); border: 1px solid transparent; }
+.day.today { background: rgba(var(--a1),.08); border-color: rgba(var(--a1),.25); }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.day-head b { font-size: 13px; font-weight: 600; }
+.day-head span { font: 400 22px/1 var(--serif); color: var(--ink-2); }
+.day.today .day-head span { color: var(--ink); }
+.ev { position: relative; padding: 7px 9px 7px 12px; border-radius: 10px; background: hsla(var(--h), 70%, 60%, .12); min-width: 0; }
+.ev::before { content: ""; position: absolute; left: 4px; top: 7px; bottom: 7px; width: 3px; border-radius: 3px; background: hsl(var(--h), 75%, 65%); }
+.ev b { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev small { display: block; color: var(--ink-2); font: 500 10.5px/1.4 var(--mono); }
+.ev span { display: block; color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev.all-day { padding: 5px 9px; background: hsla(var(--h), 70%, 60%, .22); }
+.ev.all-day::before { display: none; }
+.ev.live { background: hsla(var(--h), 75%, 60%, .28); box-shadow: 0 0 0 1px hsla(var(--h), 80%, 70%, .5), 0 0 24px hsla(var(--h), 80%, 60%, .25); }
+.ev.past { opacity: .4; }
+.free { margin: 2px 0 0; color: var(--ink-3); font-size: 12px; }
+@media (max-width: 1100px) { .week { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .week { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .day { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+  .day-head { width: 100%; margin: 0; }
+  .ev { flex: 1 1 100%; }
+  .day:not(.today):has(.free) { display: none; }
+}
 .empty-note { color: var(--ink-2); font-size: 14px; line-height: 1.55; }
 .empty-note b { color: var(--ink); }
 .n-logo { font: 800 18px/1 var(--sans); letter-spacing: -.04em; color: #e50914; }

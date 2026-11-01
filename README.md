@@ -18,7 +18,8 @@ Enable "Allow local communication" in the WiZ app first.
 `frontend/hub/` is a hand-built dashboard over Home Assistant's websocket API (vendored
 `home-assistant-js-websocket`, no build step): light orbs in each bulb's live colour, an ambient background
 that takes its colours from the lights and the album art, a now-playing card with a beat ring at the
-detected tempo, the desk lamp's sun arc and colour-temperature scale, the TV and the Netflix queue.
+detected tempo, playback controls and track progress, the week's calendar, the desk lamp's sun arc and
+colour-temperature scale, the TV and the Netflix queue.
 `homeassistant.apply` copies it into HA's `www` (cache-busted) and registers it as the **Hub** sidebar
 dashboard (`/hub-live`); it also works full-screen at `/local/hub/index.html`, e.g. on a wall tablet.
 It reuses the HA frontend's login, so there's no separate sign-in.
@@ -30,7 +31,10 @@ Home Assistant config that matters is kept here as JSON and pushed with
 
 - `homeassistant/dashboards/home.json` — the **Home** dashboard (`/home-hub`): a sections view with scene
   buttons, light tiles (brightness + colour temperature), music-sync controls and the TV.
-- `homeassistant/scripts/` — Party, Chill, Movie and All off.
+- `homeassistant/scripts/` — Party, Chill, Movie and All off, plus `music_command` (play/pause/next/previous:
+  the Mac's Spotify if it's open, else the TV; carried out by music_sync).
+- iCloud calendars (CalDAV) are added automatically once `ICLOUD_USERNAME` and `ICLOUD_APP_PASSWORD` (an
+  app-specific password) are in `.env`; the Hub shows the next 7 days from every `calendar.*` entity.
 - `homeassistant/automations/` — TV bias lighting.
 
 Edit the JSON and re-run apply rather than editing in the UI, so the repo stays the source of truth.
@@ -65,7 +69,14 @@ default dashboard:
 | `input_number.music_sync_sensitivity` | Onset threshold. Raise if lights trigger on noise, lower if they miss beats. |
 | `input_number.music_sync_latency` | Fires beats this many ms early to cancel bulb lag. Go negative for Bluetooth speakers. |
 | `sensor.music_sync_tempo` | Detected BPM (and whether the beat grid is locked). |
-| `sensor.music_sync_now_playing` | Current Spotify track, with the cover as its picture and the extracted palette. |
+| `sensor.music_sync_now_playing` | Current Spotify track, with the cover as its picture, the extracted palette and `media_position`/`media_duration`/`media_position_updated_at` (published on track, state or seek changes; UIs interpolate). |
+
+**Where it listens:** `tv` mode always uses the microphone. Other modes tap the Mac's audio, but if the Mac
+is silent for 3s while the TV is on (e.g. Spotify on the TV) they switch to the microphone, and switch back
+as soon as the Mac makes sound. The microphone has a slow AGC, since a laptop across the room hears the TV
+at around -55 dBFS. The Mac's Spotify "playing" state can't be used for this: it says playing while it's
+remote-controlling the TV. In `tv` mode, a music app in the foreground on the TV (Spotify, YouTube Music, …)
+gets the `auto` show instead of bias lighting.
 
 How it works (`music_sync/analysis.py`, `music_sync/show.py`): 23 ms STFT hops; spectral-flux onsets in
 bass/mid/high bands with adaptive thresholds; autocorrelation tempo + comb-filter beat phase + kick PLL, so

@@ -69,6 +69,23 @@ def apply_template(token, spec, existing_entries):
     print(f"template: {spec['name']} ({action})")
 
 
+def ensure_icloud_calendar(token):
+    """Add iCloud calendars (CalDAV) once ICLOUD_USERNAME / ICLOUD_APP_PASSWORD are in .env."""
+    user, password = os.environ.get("ICLOUD_USERNAME"), os.environ.get("ICLOUD_APP_PASSWORD")
+    if not (user and password):
+        print("calendar: skipped (set ICLOUD_USERNAME and ICLOUD_APP_PASSWORD in .env)")
+        return
+    if rest(token, "/api/config/config_entries/entry?domain=caldav", method="GET"):
+        print("calendar: iCloud already connected")
+        return
+    flow = rest(token, "/api/config/config_entries/flow", {"handler": "caldav"})
+    result = rest(token, f"/api/config/config_entries/flow/{flow['flow_id']}",
+                  {"url": "https://caldav.icloud.com", "username": user, "password": password, "verify_ssl": True})
+    if result.get("type") != "create_entry":
+        raise RuntimeError(f"iCloud calendar not added: {result.get('errors') or result}")
+    print("calendar: iCloud connected")
+
+
 async def main():
     load_env()
     token = os.environ["TOKEN"]
@@ -84,6 +101,8 @@ async def main():
     entries = {e["title"]: e for e in rest(token, "/api/config/config_entries/entry?domain=template", method="GET")}
     for f in sorted((ROOT / "templates").glob("*.json")):
         apply_template(token, json.loads(f.read_text()), entries)
+
+    ensure_icloud_calendar(token)
 
     for kind in ("script", "automation"):
         for f in sorted((ROOT / f"{kind}s").glob("*.json")):

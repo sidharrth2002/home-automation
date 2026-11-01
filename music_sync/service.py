@@ -34,11 +34,17 @@ LATENCY = "input_number.music_sync_latency"
 COLOURS = "input_select.music_sync_colours"
 TEMPO_SENSOR = "sensor.music_sync_tempo"
 NOW_PLAYING_SENSOR = "sensor.music_sync_now_playing"
-WATCHED = (SWITCH, MODE, SENSITIVITY, LATENCY, COLOURS)
+COMMAND_EVENT = "music_sync_command"  # fired by the play/pause/skip scripts: {"command": "play_pause"|"next"|"previous"}
+TV = os.environ.get("TV_ENTITY", "media_player.smart_tv_pro")
+WATCHED = (SWITCH, MODE, SENSITIVITY, LATENCY, COLOURS, TV)
 MODES = ("auto", "calm", "party", "tv", "classic")
 ALBUM_ART, MUSIC_KEY = "Album art", "Music key"
+# TV apps that play music rather than video: TV mode gives these a real (auto) show instead of bias lighting.
+TV_MUSIC_APPS = ("com.spotify.tv.android", "com.google.android.youtube.tvmusic", "com.apple.android.music",
+                 "com.amazon.music.tv", "deezer.android.tv", "com.aspiro.tidal", "com.soundcloud.android")
 SILENCE_RMS = 0.005
 SILENCE_STOP_S = 30
+TV_FALLBACK_S = 3  # Mac silent this long while the TV is on -> listen to the room instead
 
 
 def load_env():
@@ -71,17 +77,19 @@ class HA:
         return await asyncio.wait_for(fut, 10)
 
     async def events(self):
-        """Dispatch results to pending calls and yield state_changed events."""
+        """Dispatch results to pending calls and yield subscribed events."""
         async for raw in self.ws:
             m = json.loads(raw)
             if m.get("type") == "result" and m["id"] in self._pending:
                 fut = self._pending.pop(m["id"])
+                if fut.done():
+                    continue  # the caller already timed out
                 if m.get("success"):
                     fut.set_result(m.get("result"))
                 else:
                     fut.set_exception(RuntimeError(m.get("error")))
             elif m.get("type") == "event":
-                yield m["event"]["data"]
+                yield m["event"]
 
     async def service(self, domain, service, entity_id, **data):
         return await self.call(type="call_service", domain=domain, service=service,
@@ -94,6 +102,8 @@ class Controller:
         self.sensitivity = 1.35
         self.latency_ms = 60.0
         self.colours = ALBUM_ART
+        self.tv_app: str | None = None  # foreground app while the TV is on, else None
+        self.mac_heard_at = 0.0
         self.now_playing = NowPlaying()
         self.session: asyncio.Task | None = None
         self.ha: HA | None = None
@@ -121,12 +131,43 @@ class Controller:
                                options=[ALBUM_ART, MUSIC_KEY], initial=ALBUM_ART)
         states = {s["entity_id"]: s for s in await self.ha.call(type="get_states")}
         for eid in WATCHED:
-            self.apply(eid, states[eid]["state"])
+            if eid in states:
+                self.apply(eid, states[eid]["state"], states[eid]["attributes"])
         self.publish_status()
         self.publish_now_playing(self.now_playing)
 
-    def apply(self, entity_id, state):
-        if entity_id == MODE and state in MODES:
+    @property
+    def tv_on(self):
+        return self.tv_app is not None
+
+    @property
+    def show_mode(self):
+        """TV mode follows the TV: bias lighting for video, a proper show when a music app is up."""
+        if self.mode == "tv" and self.tv_app in TV_MUSIC_APPS:
+            return "auto"
+        return self.mode
+
+    def want_mic(self):
+        """Listen to the room for TV mode, or when the TV is on (and the Mac is silent; see run_session).
+
+        The Mac's Spotify state can't decide this: it reports "playing" while remote-controlling the TV.
+        """
+        return self.mode == "tv" or self.tv_on
+
+    async def _watch_mac(self):
+        """While listening to the room, keep an ear on the Mac so a Mac session can take back over."""
+        source = capture.hops(HOP)
+        try:
+            async for samples in source:
+                if float(np.sqrt(np.mean(samples ** 2))) >= SILENCE_RMS:
+                    self.mac_heard_at = time.monotonic()
+        finally:
+            await source.aclose()
+
+    def apply(self, entity_id, state, attrs=None):
+        if entity_id == TV:
+            self.tv_app = ((attrs or {}).get("app_id") or "") if state not in ("off", "unavailable", "unknown") else None
+        elif entity_id == MODE and state in MODES:
             self.mode = state
         elif entity_id == COLOURS and state in (ALBUM_ART, MUSIC_KEY):
             self.colours = state
@@ -155,21 +196,31 @@ class Controller:
             last_status = time.monotonic()
             log.info("music sync started with %d bulbs", len(lights.bulbs))
             done = False
+            # TV mode listens to the room (whatever the TV plays, from any app). Other modes tap the Mac, but
+            # fall back to the room when the Mac is silent and the TV is on (e.g. Spotify on the TV).
+            use_mic = self.mode == "tv"
             while not done:
-                # TV mode listens to the room (whatever the TV plays, from any app); the rest tap the Mac.
-                use_mic = self.mode == "tv"
                 source = capture.mic_hops(HOP) if use_mic else capture.hops(HOP)
                 log.info("listening to %s", "the microphone" if use_mic else "system audio")
                 last_sound = time.monotonic()
+                watcher = asyncio.create_task(self._watch_mac()) if use_mic and self.mode != "tv" else None
                 try:
                     async for samples in source:
-                        if (self.mode == "tv") != use_mic:
-                            break  # switched between TV and Mac audio; reopen the right source
                         now = time.monotonic()
+                        mac_live = watcher is not None and now - self.mac_heard_at < 0.5
+                        if use_mic and (not self.want_mic() or mac_live):
+                            use_mic = False  # TV off, or the Mac started making sound
+                            break
+                        if not use_mic and self.mode == "tv":
+                            use_mic = True
+                            break
                         if self._step(samples, now, analyzer, show, classic, classic_buf, lights) >= SILENCE_RMS:
                             last_sound = now
+                        elif not use_mic and self.tv_on and now - last_sound > TV_FALLBACK_S:
+                            use_mic = True
+                            break
                         elif not use_mic and now - last_sound > SILENCE_STOP_S:
-                            # TV scenes go quiet all the time, so only Mac-audio sessions time out.
+                            # Rooms are never silent, so only Mac-audio sessions time out.
                             log.info("no audio for %ds, stopping", SILENCE_STOP_S)
                             done = True
                         if now - last_status > 2:
@@ -180,6 +231,9 @@ class Controller:
                     else:
                         done = True  # the capture source ended
                 finally:
+                    if watcher:
+                        watcher.cancel()
+                        await asyncio.gather(watcher, return_exceptions=True)
                     await source.aclose()
         except asyncio.CancelledError:
             raise
@@ -197,7 +251,7 @@ class Controller:
 
     def _step(self, samples, now, analyzer, show, classic, classic_buf, lights):
         """Analyse one hop and drive the bulbs. Returns the hop's RMS."""
-        show.mode, show.latency_ms = self.mode, self.latency_ms
+        show.mode, show.latency_ms = self.show_mode, self.latency_ms
         # Album colours only while Spotify is actually what's playing; otherwise follow the music's key.
         use_art = self.colours == ALBUM_ART and self.now_playing.state == "playing"
         show.palette = self.now_playing.palette if use_art else []
@@ -217,6 +271,21 @@ class Controller:
             lights.render(show.update(frame, analyzer.tempo, now))
         return frame.rms
 
+    async def command(self, name):
+        """Transport controls: the Mac's Spotify if it's open, otherwise whatever the TV is playing."""
+        if name not in ("play_pause", "next", "previous"):
+            return
+        try:
+            if self.now_playing.state in ("playing", "paused") and await self.now_playing.command(name):
+                if await self.now_playing.poll():
+                    self.publish_now_playing(self.now_playing)
+            elif self.tv_on and self.ha:
+                service = {"play_pause": "media_play_pause", "next": "media_next_track",
+                           "previous": "media_previous_track"}[name]
+                await self.ha.service("media_player", service, TV)
+        except Exception:
+            log.exception("command %s failed", name)
+
     def publish_status(self, tempo=None):
         """Mirror the detected tempo into HA as a sensor (REST, since the websocket API can't set states)."""
         locked = bool(tempo and tempo.locked)
@@ -228,7 +297,8 @@ class Controller:
 
     def publish_now_playing(self, np_: NowPlaying):
         attrs = {"friendly_name": "Now Playing", "icon": "mdi:spotify", "player_state": np_.state,
-                 "palette": [s.hex for s in np_.palette]}
+                 "palette": [s.hex for s in np_.palette], "media_position": round(np_.position, 1),
+                 "media_duration": round(np_.duration, 1), "media_position_updated_at": np_.position_at}
         if np_.art_url:
             attrs["entity_picture"] = np_.art_url
         self._background(asyncio.to_thread(self._post_state, NOW_PLAYING_SENSOR,
@@ -257,21 +327,28 @@ class Controller:
                 self.ha = await HA.connect(token)
                 pump = asyncio.create_task(self._pump())
                 await self.ha.call(type="subscribe_events", event_type="state_changed")
+                await self.ha.call(type="subscribe_events", event_type=COMMAND_EVENT)
                 await self.ensure_helpers()
                 log.info("connected to Home Assistant")
                 backoff = 1
                 await pump
             except (OSError, websockets.WebSocketException, asyncio.TimeoutError) as e:
                 log.warning("Home Assistant connection lost (%s); retrying in %ds", e, backoff)
+            except Exception:
+                log.exception("controller error; reconnecting in %ds", backoff)
             self.ha = None
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30)
 
     async def _pump(self):
-        async for data in self.ha.events():
-            eid = data["entity_id"]
+        async for event in self.ha.events():
+            data = event["data"]
+            if event["event_type"] == COMMAND_EVENT:
+                self._background(self.command(data.get("command")))
+                continue
+            eid = data.get("entity_id")
             if eid in WATCHED and data.get("new_state"):
-                self.apply(eid, data["new_state"]["state"])
+                self.apply(eid, data["new_state"]["state"], data["new_state"].get("attributes"))
 
 
 async def main():

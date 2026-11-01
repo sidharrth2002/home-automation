@@ -64,6 +64,11 @@ const I = {
   home: svg(`<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>`),
   away: svg(`<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>`),
   lamp: svg(`<path d="M8 3h8l3 8H5z"/><path d="M12 11v8M8 21h8"/>`),
+  prev: svg(`<path d="M18 6v12L9 12z" fill="currentColor"/><path d="M6 6v12"/>`),
+  next: svg(`<path d="M6 6v12l9-6z" fill="currentColor"/><path d="M18 6v12"/>`),
+  play: svg(`<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>`),
+  pause: svg(`<rect x="7" y="5.5" width="3.2" height="13" rx="1" fill="currentColor"/><rect x="13.8" y="5.5" width="3.2" height="13" rx="1" fill="currentColor"/>`),
+  cal: svg(`<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>`),
   bulb: svg(`<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>`),
 };
 const WEATHER_ICON = {
@@ -94,6 +99,7 @@ function kelvinToRgb(k) {
   return [r, g, b].map((v) => Math.round(clamp(v, 0, 255)));
 }
 const rgbOf = (e) => e?.attributes?.rgb_color ?? (e?.attributes?.color_temp_kelvin ? kelvinToRgb(e.attributes.color_temp_kelvin) : [255, 196, 140]);
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const hexToRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const hueOf = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 
@@ -193,7 +199,7 @@ section("#scenes", () => [SYNC, MODE, ...LIGHTS.map((l) => l.id)], () => {
 
 // music sync + now playing
 let tuneOpen = false;
-section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, TEMPO, NOW], () => {
+section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, TEMPO, NOW, TV], () => {
   const sync = is(SYNC, "on");
   const mode = st(MODE);
   const [title, artist] = String(st(NOW) ?? "").split(" — ");
@@ -208,6 +214,20 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, TEMPO, NOW], () => {
   const sens = num(SENS, 1.35);
   const lat = num(LAT, 60);
   const sub = nothing ? "Spotify isn't playing" : `${esc(artist ?? "")}${playing ? "" : " · paused"}`;
+  const dur = Number(at(NOW, "media_duration")) || 0;
+  // Transport goes to the Mac's Spotify, or the TV when Spotify isn't open (see the music_command script).
+  const controls = !nothing || is(TV, "on");
+  const progress = !nothing && dur > 0 ? `
+    <div class="progress" data-pos="${Number(at(NOW, "media_position")) || 0}" data-at="${Number(at(NOW, "media_position_updated_at")) || 0}"
+         data-dur="${dur}" data-playing="${playing}">
+      <div class="bar"><i></i></div>
+      <div class="times"><span class="t-pos">0:00</span><span class="t-left">-${fmtTime(dur)}</span></div></div>` : "";
+  const transport = controls ? `
+    <div class="transport">
+      <button data-act="music" data-v="previous" aria-label="Previous track">${I.prev}</button>
+      <button class="pp" data-act="music" data-v="play_pause" aria-label="${playing ? "Pause" : "Play"}">${playing ? I.pause : I.play}</button>
+      <button data-act="music" data-v="next" aria-label="Next track">${I.next}</button>
+    </div>` : "";
   return `
     ${art ? `<div class="backdrop" style="background-image:url('${esc(art)}')"></div>` : ""}
     <div class="card-head"><div class="card-title">${I.music} Music sync</div>
@@ -216,6 +236,7 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, TEMPO, NOW], () => {
       <div class="art ${art ? "" : "empty"}" ${art ? `style="background-image:url('${esc(art)}')"` : ""}>${art ? "" : I.music}</div></div>
     <div class="track"><h2>${esc(nothing ? "Nothing playing" : title)}</h2><p>${sub}</p>
       <div class="swatches">${palette.map((h) => `<i style="background:${esc(h)};color:${esc(h)}" title="${esc(h)}"></i>`).join("")}</div></div>
+    ${progress}${transport}
     <div class="row"><span class="kicker">Mode</span>
       <span class="bpm">${Number.isFinite(bpm) ? `<b>${Math.round(bpm)}</b> BPM${locked ? " · locked" : ""}` : sync ? "finding the beat…" : "idle"}</span></div>
     <div class="seg">${modes.map((m) => `<button data-act="select" data-id="${MODE}" data-v="${esc(m)}" aria-pressed="${m === mode}">${m === "tv" ? "TV" : esc(m)}</button>`).join("")}</div>
@@ -229,6 +250,66 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, TEMPO, NOW], () => {
         <input class="slider" type="range" min="-200" max="300" step="10" value="${lat}" data-act="number" data-id="${LAT}" data-unit=" ms" style="--p:${((lat + 200) / 500) * 100}%">
         <span class="value">${lat} ms</span></div>
     </details>`;
+});
+
+// calendar: the week ahead from every calendar.* entity (iCloud via CalDAV)
+const CAL_DAYS = 7;
+let calEvents = null; // null until the first fetch
+const calIds = () => Object.keys(S).filter((id) => id.startsWith("calendar.")).sort();
+const evStart = (e) => new Date(e.start.dateTime ?? `${e.start.date}T00:00:00`);
+const evEnd = (e) => new Date(e.end.dateTime ?? `${e.end.date}T00:00:00`);
+const hm = (d) => d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+
+async function loadCalendars() {
+  const ids = calIds();
+  const from = new Date(); from.setHours(0, 0, 0, 0);
+  const to = new Date(from); to.setDate(to.getDate() + CAL_DAYS);
+  try {
+    const auth = conn.options.auth;
+    if (auth.expired) await auth.refreshAccessToken();
+    const lists = await Promise.all(ids.map(async (id) => {
+      const r = await fetch(`/api/calendars/${id}?start=${from.toISOString()}&end=${to.toISOString()}`,
+        { headers: { Authorization: `Bearer ${auth.accessToken}` } });
+      return r.ok ? (await r.json()).map((e) => ({ ...e, cal: id })) : [];
+    }));
+    calEvents = lists.flat().sort((a, b) => evStart(a) - evStart(b));
+  } catch {
+    calEvents = calEvents ?? [];
+  }
+  lastSig["#calendar"] = null;
+  renderAll();
+}
+
+section("#calendar", () => calIds(), () => {
+  const ids = calIds();
+  const head = (kicker) => `<div class="card-head"><div class="card-title">${I.cal} Calendar</div><span class="kicker">${kicker}</span></div>`;
+  if (!ids.length) {
+    return head("Not connected") + `<p class="empty-note">Connect iCloud: create an app-specific password at <b>account.apple.com → Sign-In and Security</b>, put <b>ICLOUD_USERNAME</b> and <b>ICLOUD_APP_PASSWORD</b> in the project's <b>.env</b>, then run <b>python -m homeassistant.apply</b>.</p>`;
+  }
+  if (!calEvents) return head("") + `<span class="skeleton">Loading…</span>`;
+  const now = new Date();
+  const next = calEvents.find((e) => e.start.dateTime && evEnd(e) > now);
+  const days = Array.from({ length: CAL_DAYS }, (_, i) => {
+    const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + i);
+    const end = new Date(d); end.setDate(end.getDate() + 1);
+    const evs = calEvents.filter((e) => evStart(e) < end && evEnd(e) > d);
+    const name = i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString(undefined, { weekday: "short" });
+    const list = evs.map((e) => {
+      const allDay = !e.start.dateTime;
+      const live = !allDay && evStart(e) <= now && evEnd(e) > now;
+      const past = !allDay && evEnd(e) <= now;
+      return `<div class="ev ${allDay ? "all-day" : ""} ${live ? "live" : ""} ${past ? "past" : ""}" style="--h:${hueOf(e.cal)}"
+                   title="${esc(e.summary ?? "")}${e.location ? ` · ${esc(e.location)}` : ""}">
+        ${allDay ? "" : `<small>${hm(evStart(e))}</small>`}<b>${esc(e.summary || "Busy")}</b>
+        ${e.location && !allDay ? `<span>${esc(e.location)}</span>` : ""}</div>`;
+    }).join("");
+    return `<div class="day ${i === 0 ? "today" : ""}"><div class="day-head"><b>${name}</b><span>${d.getDate()}</span></div>
+      ${list || `<p class="free">Free</p>`}</div>`;
+  }).join("");
+  const kicker = next
+    ? (evStart(next) <= now ? `Now · ${esc(next.summary || "Busy")}` : `Next · ${esc(next.summary || "Busy")} <b data-starts="${evStart(next).toISOString()}"></b>`)
+    : `${calEvents.length} this week`;
+  return head(kicker) + `<div class="week">${days}</div>`;
 });
 
 // desk: real sun position, weather, adaptive targets
@@ -332,6 +413,18 @@ function tick() {
   $("#clock").innerHTML = `${String(h).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}<span class="sec">${String(d.getSeconds()).padStart(2, "0")}</span>`;
   $("#date").textContent = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
   $("#hello").textContent = h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  document.querySelectorAll(".progress").forEach((el) => {
+    const dur = Number(el.dataset.dur);
+    const since = el.dataset.playing === "true" ? Date.now() / 1000 - Number(el.dataset.at) : 0;
+    const pos = clamp(Number(el.dataset.pos) + since, 0, dur);
+    el.style.setProperty("--p", `${(pos / dur) * 100}%`);
+    el.querySelector(".t-pos").textContent = fmtTime(pos);
+    el.querySelector(".t-left").textContent = `-${fmtTime(dur - pos)}`;
+  });
+  document.querySelectorAll("[data-starts]").forEach((el) => {
+    const mins = Math.round((new Date(el.dataset.starts) - d) / 60000);
+    el.textContent = mins <= 0 ? "now" : mins < 60 ? `in ${mins} min` : mins < 1440 ? `in ${Math.floor(mins / 60)}h ${mins % 60}m` : "";
+  });
   document.querySelectorAll("[data-until]").forEach((el) => {
     const until = el.dataset.until && new Date(el.dataset.until);
     if (!until) return;
@@ -345,6 +438,7 @@ document.addEventListener("click", (ev) => {
   const el = ev.target.closest("[data-act]");
   if (!el || el.tagName === "INPUT") return;
   const { act, id, v } = el.dataset;
+  if (act === "music") return call("script", "music_command", { command: v });
   const domain = id.split(".")[0];
   if (act === "light") call("light", "toggle", { entity_id: id });
   else if (act === "toggle") call(domain, "toggle", { entity_id: id });
@@ -415,8 +509,12 @@ function setLive(ok) {
   setLive(true);
   conn.addEventListener("ready", () => setLive(true));
   conn.addEventListener("disconnected", () => setLive(false));
+  let calKey = null;
   subscribeEntities(conn, (entities) => {
     S = entities;
     renderAll();
+    const key = calIds().join();
+    if (key !== calKey) { calKey = key; loadCalendars(); }
   });
+  setInterval(() => conn.connected && loadCalendars(), 5 * 60_000);
 })();

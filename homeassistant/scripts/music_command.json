@@ -1,0 +1,17 @@
+{
+  "alias": "Music command",
+  "description": "Play/pause or skip whatever is playing: the Mac's Spotify if it's open, otherwise the TV (handled by music_sync).",
+  "icon": "mdi:play-pause",
+  "mode": "queued",
+  "fields": {
+    "command": {
+      "name": "Command",
+      "required": true,
+      "default": "play_pause",
+      "selector": {"select": {"options": ["play_pause", "next", "previous"]}}
+    }
+  },
+  "sequence": [
+    {"event": "music_sync_command", "event_data": {"command": "{{ command }}"}}
+  ]
+}
