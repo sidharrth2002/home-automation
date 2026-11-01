@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Home hub icon: a lit roofline over the room's three bulbs, in the Hub's ambient colours. -->
+  <defs>
+    <radialGradient id="haze1" cx="18%" cy="12%" r="70%">
+      <stop offset="0" stop-color="#6a2cf0" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#7b2ff7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="haze2" cx="92%" cy="96%" r="70%">
+      <stop offset="0" stop-color="#ff7a3c" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#ff7a3c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="roof" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff5fc1"/>
+      <stop offset=".5" stop-color="#fff4e6"/>
+      <stop offset="1" stop-color="#4fd6ff"/>
+    </linearGradient>
+    <radialGradient id="core-pink" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#fff"/><stop offset=".62" stop-color="#ffb3df"/>
+      <stop offset=".86" stop-color="#ff3cac"/><stop offset="1" stop-color="#ff3cac" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core-amber" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#fff"/><stop offset=".62" stop-color="#ffe2b0"/>
+      <stop offset=".86" stop-color="#ffa630"/><stop offset="1" stop-color="#ffa630" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core-cyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#fff"/><stop offset=".62" stop-color="#bdf0ff"/>
+      <stop offset=".86" stop-color="#2bc4ff"/><stop offset="1" stop-color="#2bc4ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur-xl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="60"/></filter>
+    <filter id="blur-m" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#0a0a14"/>
+  <rect width="1024" height="1024" fill="url(#haze1)"/>
+  <rect width="1024" height="1024" fill="url(#haze2)"/>
+
+  <!-- light pooling on the "floor" -->
+  <ellipse cx="512" cy="800" rx="330" ry="70" fill="#ffb066" opacity=".22" filter="url(#blur-xl)"/>
+
+  <!-- halos -->
+  <circle cx="318" cy="660" r="170" fill="#ff3cac" opacity=".6" filter="url(#blur-xl)"/>
+  <circle cx="706" cy="660" r="170" fill="#2bc4ff" opacity=".6" filter="url(#blur-xl)"/>
+  <circle cx="512" cy="640" r="190" fill="#ffa630" opacity=".65" filter="url(#blur-xl)"/>
+  <circle cx="318" cy="660" r="95" fill="#ff3cac" opacity=".7" filter="url(#blur-m)"/>
+  <circle cx="706" cy="660" r="95" fill="#2bc4ff" opacity=".7" filter="url(#blur-m)"/>
+  <circle cx="512" cy="640" r="110" fill="#ffa630" opacity=".75" filter="url(#blur-m)"/>
+
+  <!-- roofline: glow, then the line -->
+  <path d="M176 500 L512 214 L848 500" fill="none" stroke="url(#roof)" stroke-width="64" stroke-linecap="round"
+        stroke-linejoin="round" opacity=".7" filter="url(#blur-m)"/>
+  <path d="M176 500 L512 214 L848 500" fill="none" stroke="url(#roof)" stroke-width="40" stroke-linecap="round"
+        stroke-linejoin="round"/>
+
+  <!-- the three bulbs -->
+  <circle cx="318" cy="660" r="74" fill="url(#core-pink)"/>
+  <circle cx="706" cy="660" r="74" fill="url(#core-cyan)"/>
+  <circle cx="512" cy="640" r="86" fill="url(#core-amber)"/>
+</svg>
