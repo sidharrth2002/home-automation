@@ -45,6 +45,7 @@ TV_MUSIC_APPS = ("com.spotify.tv.android", "com.google.android.youtube.tvmusic",
 SILENCE_RMS = 0.005
 SILENCE_STOP_S = 30
 TV_FALLBACK_S = 3  # Mac silent this long while the TV is on -> listen to the room instead
+MAC_TAKEOVER_S = 1.5  # Mac sound sustained this long while on the mic -> back to Mac audio
 
 
 def load_env():
@@ -157,9 +158,11 @@ class Controller:
     async def _watch_mac(self):
         """While listening to the room, keep an ear on the Mac so a Mac session can take back over."""
         source = capture.hops(HOP)
+        loud = 0  # consecutive hops with sound; a notification blip shouldn't steal the session
         try:
             async for samples in source:
-                if float(np.sqrt(np.mean(samples ** 2))) >= SILENCE_RMS:
+                loud = loud + 1 if float(np.sqrt(np.mean(samples ** 2))) >= SILENCE_RMS else 0
+                if loud * HOP / capture.SAMPLE_RATE >= MAC_TAKEOVER_S:
                     self.mac_heard_at = time.monotonic()
         finally:
             await source.aclose()
