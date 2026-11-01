@@ -2,6 +2,7 @@
 
   .venv/bin/python frontend/screenshot.py /tmp/hub   -> /tmp/hub-desktop.png, /tmp/hub-phone.png
   .venv/bin/python frontend/screenshot.py /tmp/hub ".ev"   (click the first match before capturing)
+  HUB_REDACT=1 ...   blur calendar entries (for screenshots that get shared, e.g. the README)
 
 The HA token from .env is only put in the temporary profile's localStorage, which is deleted afterwards.
 """
@@ -46,6 +47,9 @@ async def main(prefix, click=None):
                 await cmd("Emulation.setDeviceMetricsOverride", width=w, height=h, deviceScaleFactor=2 if mobile else 1, mobile=mobile)
                 await cmd("Page.navigate", url=URL)
                 await asyncio.sleep(5)
+                if os.environ.get("HUB_REDACT"):
+                    css = ".ev b,.ev span,.ev small{filter:blur(5px)}"
+                    await cmd("Runtime.evaluate", expression=f"document.head.insertAdjacentHTML('beforeend','<style>{css}</style>')")
                 r = await cmd("Runtime.evaluate", expression="[...document.querySelectorAll('section')].map(s=>s.id+':'+s.innerText.slice(0,60).replace(/\\n/g,' | ')).join('\\n')", returnByValue=True)
                 logs.append(f"== {name}\n" + r["result"]["value"])
                 if click:
