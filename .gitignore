@@ -9,3 +9,4 @@ data/
 NetflixViewingHistory*.csv
 ViewingActivity*.csv
 netflix.log
+presence.log

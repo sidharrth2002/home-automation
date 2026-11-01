@@ -57,6 +57,10 @@
     {
       "condition": "template",
       "value_template": "{{ states('sensor.desk_lamp_target_colour') | is_number and states('sensor.desk_lamp_target_brightness') | is_number }}"
+    },
+    {
+      "condition": "template",
+      "value_template": "{{ not is_state('binary_sensor.someone_home', 'off') }}"
     }
   ],
   "actions": [

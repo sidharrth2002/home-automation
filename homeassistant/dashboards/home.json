@@ -9,6 +9,12 @@
       "badges": [
         {
           "type": "entity",
+          "entity": "binary_sensor.someone_home",
+          "name": "Home",
+          "show_name": true
+        },
+        {
+          "type": "entity",
           "entity": "input_boolean.music_sync",
           "name": "Sync",
           "show_name": true,

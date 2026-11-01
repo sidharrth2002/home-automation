@@ -97,3 +97,11 @@ re-checks every 5 minutes, and publishes `sensor.netflix_last_watched`, `sensor.
 and `sensor.netflix_episodes_this_week` for the dashboard's Netflix section. Exports are git-ignored.
 Set `NETFLIX_PROFILE` in `.env` to pick a profile from a multi-profile full export.
 `.venv/bin/python -m tests.test_netflix` covers both formats and US/UK date order.
+
+## Presence
+`.venv/bin/python -m presence` publishes `binary_sensor.someone_home`. You count as home if your phone was
+seen on the Wi-Fi in the last 15 min (ping, or the iPhone sync port answering or refusing; its IP is
+looked up from `PRESENCE_PHONE_MAC` each cycle) or the Mac was used in the last 10 min. When it turns off,
+`Away: everything off` stops music sync and turns off every light, and the TV and desk-lamp automations do
+nothing while you're away. If the presence service isn't running the sensor is missing (not `off`), so
+nothing is switched off by mistake.

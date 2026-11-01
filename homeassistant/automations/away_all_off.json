@@ -1,0 +1,33 @@
+{
+  "id": "away_all_off",
+  "alias": "Away: everything off",
+  "description": "When nobody is home (phone off the Wi-Fi for 15 min and the Mac idle), stop music sync and turn off every light.",
+  "mode": "single",
+  "triggers": [
+    {
+      "trigger": "state",
+      "entity_id": "binary_sensor.someone_home",
+      "from": "on",
+      "to": "off"
+    }
+  ],
+  "actions": [
+    {
+      "action": "input_boolean.turn_off",
+      "target": {
+        "entity_id": "input_boolean.music_sync"
+      }
+    },
+    {
+      "delay": {
+        "seconds": 3
+      }
+    },
+    {
+      "action": "light.turn_off",
+      "target": {
+        "entity_id": "all"
+      }
+    }
+  ]
+}
