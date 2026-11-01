@@ -70,6 +70,7 @@ body.dim .blob { opacity: .16; }
     "top top top top top top top top top top top top"
     "stack stack stack stack stack stack stack stack music music music music"
     "calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar"
+    "invest invest invest invest invest invest invest invest invest invest invest invest"
     "desk desk desk desk desk tv tv tv netflix netflix netflix netflix"
     "foot foot foot foot foot foot foot foot foot foot foot foot";
 }
@@ -78,16 +79,16 @@ body.dim .blob { opacity: .16; }
 .stack .room { flex: 1; }
 .top { grid-area: top; } .room { grid-area: room; } .scenes { grid-area: scenes; }
 .music { grid-area: music; } .desk { grid-area: desk; } .tv { grid-area: tv; }
-.netflix { grid-area: netflix; } .foot { grid-area: foot; } .calendar { grid-area: calendar; }
+.netflix { grid-area: netflix; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .invest-card { grid-area: invest; }
 
 @media (max-width: 1100px) {
   .hub { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas:
-    "top top" "room room" "scenes scenes" "calendar calendar" "music desk" "tv netflix" "foot foot"; }
+    "top top" "room room" "scenes scenes" "calendar calendar" "invest invest" "music desk" "tv netflix" "foot foot"; }
   .stack { display: contents; }
 }
 @media (max-width: 720px) {
   .hub { grid-template-columns: minmax(0, 1fr); grid-template-areas:
-    "top" "room" "scenes" "music" "calendar" "desk" "tv" "netflix" "foot"; }
+    "top" "room" "scenes" "music" "calendar" "invest" "desk" "tv" "netflix" "foot"; }
   .chips { justify-content: flex-end; }
   .chips .chip:nth-child(3) { display: none; }
 }
@@ -349,6 +350,44 @@ details.tune .slider { flex: 1; }
 .ev.all-day::before { display: none; }
 .ev.live { background: hsla(var(--h), 75%, 60%, .28); box-shadow: 0 0 0 1px hsla(var(--h), 80%, 70%, .5), 0 0 24px hsla(var(--h), 80%, 60%, .25); }
 .ev.past { opacity: .4; }
+/* investments */
+.invest-card .card-head { gap: 12px; }
+.invest-card .card-head .kicker { margin-left: auto; }
+.eye { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer;
+  color: var(--ink-2); background: rgba(255,255,255,.07); transition: background .2s, color .2s; }
+.eye:hover { color: var(--ink); background: rgba(255,255,255,.13); }
+.eye svg { width: 18px; height: 18px; }
+.invest { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(18px, 3vw, 44px); }
+.invest .money { transition: filter .35s, opacity .35s; }
+.invest.private .money { filter: blur(9px); opacity: .7; user-select: none; }
+.invest-total { font: 400 clamp(44px, 5.4vw, 72px)/1 var(--serif); letter-spacing: -.02em; }
+.invest-deltas { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; font-size: 13px; color: var(--ink-2); }
+.delta { display: inline-flex; gap: 6px; align-items: baseline; }
+.up { color: #5ee6a8; } .down { color: #ff7a8a; }
+.delta.up .money, .delta.down .money { font-weight: 600; }
+.spark { display: block; width: 100%; height: 86px; margin: 18px 0 14px; overflow: visible; }
+.spark.up { color: #5ee6a8; } .spark.down { color: #ff7a8a; }
+.accounts { display: flex; flex-wrap: wrap; gap: 8px; }
+.acct { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,.04);
+  border: 1px solid var(--line); min-width: 110px; }
+.acct span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.acct b { font: 500 15px/1.2 var(--mono); }
+.holdings { display: flex; flex-direction: column; gap: 6px; }
+.holding { position: relative; display: flex; justify-content: space-between; gap: 14px; align-items: center;
+  padding: 10px 14px; border-radius: 14px; overflow: hidden; background: rgba(255,255,255,.025); }
+.holding .bar { position: absolute; inset: 0 auto 0 0; width: var(--w); z-index: 0; border-radius: inherit;
+  background: linear-gradient(90deg, rgba(var(--a1),.16), rgba(var(--a2),.06)); }
+.holding > div { position: relative; z-index: 1; min-width: 0; }
+.holding-name b { display: block; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.holding-name span { display: block; font-size: 11.5px; color: var(--ink-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.holding-val { text-align: right; flex: none; }
+.holding-val b { display: block; font: 500 14px/1.2 var(--mono); }
+.holding-val span { font: 500 11.5px/1.4 var(--mono); }
+.more { margin: 4px 0 0; color: var(--ink-3); font-size: 12px; }
+.invest-paused { margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5;
+  background: rgba(255,170,60,.12); border: 1px solid rgba(255,170,60,.35); color: #ffd9a3; }
+@media (max-width: 720px) { .invest { grid-template-columns: minmax(0, 1fr); } }
+
 /* event details */
 dialog.event { width: min(440px, calc(100vw - 32px)); max-height: min(80vh, 640px); overflow: auto; padding: 26px 26px 24px;
   border-radius: 26px; border: 1px solid var(--line); color: var(--ink);

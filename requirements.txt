@@ -3,3 +3,6 @@ websockets
 numpy
 sounddevice
 pillow
+requests
+beautifulsoup4
+keyring

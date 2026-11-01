@@ -28,6 +28,7 @@ const TV = "media_player.smart_tv_pro";
 const TV_AUTO = "automation.tv_bias_lighting";
 const NF_CONT = "sensor.netflix_continue_watching";
 const NF_WEEK = "sensor.netflix_episodes_this_week";
+const INVEST = "sensor.investments";
 
 const APPS = {
   "com.netflix.ninja": ["Netflix", "229,9,20"],
@@ -71,6 +72,9 @@ const I = {
   pin: svg(`<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>`),
   repeat: svg(`<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>`),
   notes: svg(`<path d="M5 4h14v16H5z"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/>`),
+  chart: svg(`<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/>`),
+  eye: svg(`<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`),
+  eyeOff: svg(`<path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17.7 17.7 0 0 1-3.2 4.2M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>`),
   cal: svg(`<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>`),
   bulb: svg(`<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>`),
 };
@@ -356,6 +360,57 @@ section("#calendar", () => calIds(), () => {
   return head(kicker) + `<div class="week">${days}</div>`;
 });
 
+// investments (Hargreaves Lansdown): hidden until revealed on this device
+let showMoney = (() => { try { return localStorage.hubShowMoney === "1"; } catch { return false; } })();
+const gbp = (v, dp = 0) => v == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: dp, minimumFractionDigits: dp }).format(v);
+const signed = (v, fmt) => v == null ? "—" : `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
+function sparkline(history) {
+  if (!history || history.length < 2) return "";
+  const vals = history.map((h) => h[1]);
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const pts = vals.map((v, i) => [(i / (vals.length - 1)) * 300, 70 - ((v - lo) / span) * 60]);
+  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const up = vals.at(-1) >= vals[0];
+  return `<svg class="spark ${up ? "up" : "down"}" viewBox="0 0 300 80" preserveAspectRatio="none">
+    <defs><linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".35"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
+    <path d="${line} L300 80 L0 80 Z" fill="url(#spark-fill)"/><path d="${line}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="3.5" fill="currentColor"/></svg>`;
+}
+section("#invest", () => [INVEST], () => {
+  const e = S[INVEST];
+  const head = (right) => `<div class="card-head"><div class="card-title">${I.chart} Investments</div>${right}</div>`;
+  if (!e) return head(`<span class="kicker">Not connected</span>`) +
+    `<p class="empty-note">Run <b>python -m investments setup</b> in the project (your Hargreaves Lansdown details go into the macOS Keychain), then <b>python -m investments login</b>.</p>`;
+  const a = e.attributes;
+  const total = parseFloat(e.state);
+  const holdings = a.holdings ?? [];
+  const max = Math.max(...holdings.map((h) => h.value ?? 0), 1);
+  const paused = a.status === "paused" ? `<p class="invest-paused"><b>Refresh paused</b> · ${esc(a.paused_reason ?? "")}<br>Check your details, then run <b>python -m investments login</b> once by hand.</p>` : "";
+  const updated = a.updated ? new Date(a.updated) : null;
+  const toggle = `<button class="eye" data-act="money" aria-pressed="${showMoney}" aria-label="${showMoney ? "Hide" : "Show"} values">${showMoney ? I.eye : I.eyeOff}</button>`;
+  return head(`<span class="kicker">${updated ? `Updated ${hm(updated)}` : ""}</span>${toggle}`) + paused + `
+    <div class="invest ${showMoney ? "" : "private"}">
+      <div class="invest-summary">
+        <div class="invest-total money">${Number.isFinite(total) ? gbp(total) : "—"}</div>
+        <div class="invest-deltas">
+          ${a.day_change != null ? `<span class="delta ${a.day_change >= 0 ? "up" : "down"}"><span class="money">${signed(a.day_change, gbp)}</span> today</span>` : ""}
+          ${a.gain != null ? `<span class="delta ${a.gain >= 0 ? "up" : "down"}"><span class="money">${signed(a.gain, gbp)}</span>${a.gain_pct != null ? ` · ${signed(a.gain_pct, (v) => v.toFixed(1) + "%")}` : ""} all time</span>` : ""}
+        </div>
+        ${sparkline(a.history)}
+        <div class="accounts">${(a.accounts ?? []).map((acc) => `<div class="acct"><span>${esc(acc.name)}</span><b class="money">${gbp(acc.total)}</b></div>`).join("")}
+          ${a.cash ? `<div class="acct"><span>Cash</span><b class="money">${gbp(a.cash)}</b></div>` : ""}</div>
+      </div>
+      <div class="holdings">${holdings.slice(0, 8).map((h) => `
+        <div class="holding" style="--w:${((h.value ?? 0) / max) * 100}%">
+          <div class="holding-name"><b>${esc(h.name)}</b><span>${esc(h.account)}${h.unit_type ? ` · ${esc(h.unit_type)}` : ""}</span></div>
+          <div class="holding-val"><b class="money">${gbp(h.value)}</b>
+            <span class="${(h.gain_pct ?? 0) >= 0 ? "up" : "down"}">${h.gain_pct != null ? signed(h.gain_pct, (v) => v.toFixed(1) + "%") : ""}</span></div>
+          <i class="bar"></i>
+        </div>`).join("") || `<p class="empty-note">No holdings.</p>`}
+        ${holdings.length > 8 ? `<p class="more">+ ${holdings.length - 8} more</p>` : ""}</div>
+    </div>`;
+});
+
 // desk: real sun position, weather, adaptive targets
 section("#desk", () => [SUN, WEATHER, OUTDOOR, T_K, T_B, ADAPT, HOLD, MAXB, DESK], () => {
   const elev = at(SUN, "elevation") ?? 0;
@@ -483,6 +538,12 @@ document.addEventListener("click", (ev) => {
   if (!el || el.tagName === "INPUT") return;
   const { act, id, v } = el.dataset;
   if (act === "music") return call("script", "music_command", { command: v });
+  if (act === "money") {
+    showMoney = !showMoney;
+    try { localStorage.hubShowMoney = showMoney ? "1" : "0"; } catch { /* private mode */ }
+    lastSig["#invest"] = null;
+    return renderAll();
+  }
   if (act === "event") return calEvents?.[el.dataset.i] && openEvent(calEvents[el.dataset.i]);
   const domain = id.split(".")[0];
   if (act === "light") call("light", "toggle", { entity_id: id });
