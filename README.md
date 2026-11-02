@@ -39,9 +39,8 @@ and the background picks up colour from the lights and the album art.
 - **iPhone widget.** A Scriptable widget in the same neon style: the three bulbs as glowing orbs, what's
   playing with its album art, the TV, home/away and the weather, in small, medium, large and lock screen sizes.
   Tapping a bulb on it toggles that lamp.
-- **Welcome home.** One button on the Hub: the TV lamps power up in arc-reactor blue, the Mac says "Welcome home,
-  Sid" in a British voice, the desk lamp comes on at its adaptive level, then the lamps settle to warm white and the
-  TV wakes.
+- **Welcome home.** One button on the Hub: the TV lamps power up in arc-reactor blue, the desk lamp comes on at its
+  adaptive level, the lamps settle to warm white, and the TV wakes and says "Welcome home, Sid" in a British voice.
 - **Talking to it.** Claude can control everything through Home Assistant's MCP server, so "turn the TV lamps
   blue" or "lights out" just works.
 - **Away mode.** If my phone hasn't been on the Wi-Fi for a while and the Mac is idle, everything turns off.
@@ -243,16 +242,22 @@ git-ignored. It refreshes every 30 minutes during the day. `tests/test_t212.py` 
 
 `homeassistant/scripts/welcome_home.json` is the sequence. WiZ bulbs can't do transitions, so the power-up is a quick
 ramp of brightness steps in blue before they settle to 2700K. The desk lamp takes the adaptive targets, so it comes
-on at the right level for the time of day, and the TV is only switched on if it's off.
+on at the right level for the time of day. If the TV was off, it's switched on and the greeting plays through it
+(about 15 seconds after the press, most of it the TV booting). If it was already on, the greeting comes from the Mac
+straight away instead, so it doesn't cut off whatever's playing.
 
-The voice is `announce/`, a small service started by `./home up` that speaks on the Mac with macOS's own text to
-speech whenever Home Assistant fires a `home_say` event, so any script or automation can say something:
+The voice is `announce/`, a small service started by `./home up` that speaks with macOS's own text to speech whenever
+Home Assistant fires a `home_say` event, so any script or automation can say something. With `"target": "tv"` it
+renders the speech to a WAV file under a random name in `/local/announce/`, waits for the TV to wake, casts it, and
+closes the cast player afterwards; if the TV doesn't come up it says it on the Mac.
 
 ```json
-{"event": "home_say", "event_data": {"text": "Goodnight, Sid.", "voice": "Daniel", "rate": 170}}
+{"event": "home_say", "event_data": {"text": "Goodnight, Sid.", "target": "tv", "rate": 170}}
 ```
 
-Daniel (British English) is the default; `ANNOUNCE_VOICE` in `.env` picks another installed voice (`say -v '?'`).
+It uses the most natural British voice installed. The built-in compact Daniel sounds robotic; Apple's Premium voices
+(System Settings > Accessibility > Spoken Content > System voice > Manage Voices, e.g. Jamie (Premium)) sound far
+more human and are picked up automatically once downloaded. `ANNOUNCE_VOICE` in `.env` overrides the choice.
 Text is passed to `say` as a plain argument after `--`, never through a shell, and announcements queue instead of
 talking over each other. Claude knows the script as "Welcome home" or "I'm home". `tests/test_announce.py` covers
 what reaches `say`.
