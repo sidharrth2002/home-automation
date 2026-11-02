@@ -67,7 +67,7 @@ async function run(family, feed, { param = null, online = true, cached = null, a
       return new Proxy(t, {
         get(_, k) {
           if (k === "then") return undefined;
-          if (k === "loadJSON") return async () => { if (!online) throw new Error("offline"); if (!url.includes("feed")) throw new Error("bad url"); return feed; };
+          if (k === "loadJSON") return async () => { if (!online) throw new Error("offline"); if (!url.includes("feed") && !process.env.HARNESS_FEED) throw new Error("bad url"); return feed; };
           if (k === "loadImage") return async () => { if (!art) throw new Error("no art"); return { img: true }; };
           if (k === "load") return async () => { if (!online || url.startsWith("http://y.local")) throw new Error("offline"); log.posts.push({ url, method: t.method }); return ""; };
           if (k === "response") return { statusCode: status };
@@ -110,6 +110,15 @@ const feed = (over = {}) => ({
 const assert = (cond, msg) => { if (!cond) { console.error(`FAIL ${msg}`); process.exit(1); } };
 
 (async () => {
+  // node tests/widget_smoke.js with HARNESS_FEED=<live feed json> WIDGET_JS=<installed script>: which taps would a fresh draw get?
+  if (process.env.HARNESS_FEED) {
+    const live = JSON.parse(fs.readFileSync(process.env.HARNESS_FEED, "utf8"));
+    for (const family of ["small", "medium", "large"]) {
+      const { widget } = await run(family, live);
+      console.log(family.padEnd(7), "tap targets:", urls(widget).filter((u) => u.includes("action=")).map((u) => u.split("action=")[1]));
+    }
+    return;
+  }
   const families = ["small", "medium", "large", "extraLarge", "accessoryCircular", "accessoryRectangular", "accessoryInline"];
   const cases = {
     "normal": [feed(), {}],
