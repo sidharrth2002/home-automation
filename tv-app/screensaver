@@ -1,0 +1,46 @@
+#!/bin/bash
+# Make the Hub the TV's screensaver, or put Google's back. Google TV hides third-party screensavers in its settings,
+# but the system setting behind it accepts any installed screensaver, and adb (developer mode) can change it.
+#   tv-app/screensaver on       use the Hub's ambient screen (the app must be installed: tv-app/deploy)
+#   tv-app/screensaver off      back to whatever it was before (recorded in data/tv/original-screensaver.txt)
+#   tv-app/screensaver test     bring the screensaver up now (by idling the TV briefly); any button on the remote ends it
+#   tv-app/screensaver status
+set -euo pipefail
+cd "$(dirname "$0")"
+source ./adb.sh
+OURS=com.sid.home/.HubDream
+SAVED=../data/tv/original-screensaver.txt
+setting() { "$ADB" -s "$SERIAL" shell settings get secure "$1" | tr -d '\r'; }
+
+case "${1:-status}" in
+  on)
+    current=$(setting screensaver_components)
+    if [[ $current != "$OURS" && ! -f $SAVED ]]; then  # remember the original once, never overwrite it with ours
+      mkdir -p "$(dirname "$SAVED")"
+      for k in screensaver_components screensaver_enabled screensaver_activate_on_sleep; do echo "$k=$(setting $k)"; done > "$SAVED"
+    fi
+    "$ADB" -s "$SERIAL" shell settings put secure screensaver_components "$OURS"
+    "$ADB" -s "$SERIAL" shell settings put secure screensaver_enabled 1
+    "$ADB" -s "$SERIAL" shell settings put secure screensaver_activate_on_sleep 1
+    echo "the Hub is now the screensaver" ;;
+  off)
+    original=$(sed -n 's/^screensaver_components=//p' "$SAVED" 2>/dev/null)
+    "$ADB" -s "$SERIAL" shell settings put secure screensaver_components "${original:-com.google.android.apps.tv.dreamx/.service.Backdrop}"
+    echo "screensaver back to ${original:-the Google TV default}" ;;
+  test)
+    # `cmd dreams start-dreaming` needs root and Google TV ignores the Somnambulator launcher, so idle into it: go to the
+    # home screen, shorten the idle timeout for a moment, and always put the user's timeout back.
+    original=$("$ADB" -s "$SERIAL" shell settings get system screen_off_timeout | tr -d '\r')
+    trap '"$ADB" -s "$SERIAL" shell settings put system screen_off_timeout "$original"' EXIT
+    "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_HOME
+    "$ADB" -s "$SERIAL" shell settings put system screen_off_timeout 15000
+    echo "waiting for the TV to idle into the screensaver (don't touch the remote)..."
+    for _ in $(seq 1 90); do
+      "$ADB" -s "$SERIAL" shell dumpsys dreams | grep -q "mCurrentDream=DreamRecord" && { echo "screensaver is up: $("$ADB" -s "$SERIAL" shell dumpsys dreams | grep -o 'name=ComponentInfo{[^}]*}' | head -1)"; exit 0; }
+      sleep 1
+    done
+    echo "it didn't start within 90s (was the remote touched?)" >&2; exit 1 ;;
+  status)
+    echo "screensaver: $(setting screensaver_components) (enabled: $(setting screensaver_enabled))" ;;
+  *) sed -n '2,8p' "$0"; exit 1 ;;
+esac

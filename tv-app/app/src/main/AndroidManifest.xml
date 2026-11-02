@@ -24,5 +24,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The Hub as the TV's screensaver (switched on over adb: tv-app/screensaver). -->
+        <service
+            android:name=".HubDream"
+            android:exported="true"
+            android:label="Home Hub"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

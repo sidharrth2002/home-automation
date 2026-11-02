@@ -31,6 +31,9 @@ const HEALTH = "sensor.system_health";
 const INVEST = "sensor.investments";
 // TV mode: inside the Android TV app (its user agent says HomeHubTV), or ?tv=1 to try it in a browser.
 const TV_MODE = /HomeHubTV/.test(navigator.userAgent) || new URLSearchParams(location.search).has("tv");
+// Ambient mode: the TV's screensaver (?ambient=1). A quiet, glanceable screen, never finances.
+const AMBIENT = new URLSearchParams(location.search).has("ambient");
+if (AMBIENT) document.documentElement.classList.add("ambient-mode");
 if (TV_MODE) {
   document.documentElement.classList.add("tv-mode");
   // A desktop-sized canvas scaled up to the screen, so the full layout fits and reads from the sofa.
@@ -687,6 +690,32 @@ section("#tv", () => [TV, TV_AUTO, SYNC, MODE], () => {
     <div class="row"><span class="label">Bias lighting</span><span class="value">${glowing ? "Active" : "—"}</span></div>`;
 });
 
+// Ambient (screensaver): the time, what's playing, the bulbs, the weather and the next event, slowly drifting
+section("#ambient", () => (AMBIENT ? [NOW, WEATHER, ...LIGHTS.map((l) => l.id), ...calIds()] : []), () => {
+  if (!AMBIENT) return "";
+  const playing = at(NOW, "player_state") === "playing";
+  const [title, artist] = String(st(NOW) ?? "").split(" — ");
+  const art = at(NOW, "entity_picture");
+  const now = new Date();
+  const next = (calEvents ?? []).find((e) => e.start.dateTime && evEnd(e) > now);
+  const [wIcon, wLabel] = WEATHER_ICON[st(WEATHER)] ?? [I.cloud, ""];
+  const bulbs = LIGHTS.map((l) => {
+    const e = S[l.id];
+    const on = e?.state === "on";
+    return `<span class="amb-bulb"><i class="aorb ${on ? "on" : ""}" style="--c:${(on ? rgbOf(e) : [255, 255, 255]).join(",")};--b:${(on ? pctOf(e) : 0) / 100}"></i>${l.tag}</span>`;
+  }).join("");
+  return `<div class="amb">
+    <div class="amb-time" id="amb-time"></div>
+    <div class="amb-date" id="amb-date"></div>
+    ${playing && title ? `<div class="amb-music">${art ? `<i class="amb-art" style="background-image:url('${esc(art)}')"></i>` : ""}
+      <div><b>${esc(title)}</b><span>${esc(artist ?? "")}</span></div></div>` : ""}
+    <div class="amb-row">${bulbs}
+      ${S[WEATHER] ? `<span class="amb-chip">${wIcon}${Math.round(at(WEATHER, "temperature"))}° ${esc(wLabel)}</span>` : ""}
+      ${next ? `<span class="amb-chip">${I.cal}${hm(evStart(next))} · ${esc(next.summary || "Busy")}</span>` : ""}
+    </div>
+  </div>`;
+});
+
 // System health: what's running, what's fresh and what's reachable, at a glance
 const ago = (ms) => { const m = Math.round(ms / 60000); return !Number.isFinite(m) ? "no refresh yet" : m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 const upFor = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : m < 2880 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.floor(m / 1440)} d`; };
@@ -794,6 +823,10 @@ function ambient() {
 function tick() {
   const d = new Date();
   const h = d.getHours();
+  if (AMBIENT && $("#amb-time")) {
+    $("#amb-time").textContent = `${String(h).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    $("#amb-date").textContent = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  }
   $("#clock").innerHTML = `${String(h).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}<span class="sec">${String(d.getSeconds()).padStart(2, "0")}</span>`;
   $("#date").textContent = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
   $("#hello").textContent = h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";

@@ -3,12 +3,7 @@ package com.sid.home;
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.KeyEvent;
-import android.view.WindowManager;
-import android.webkit.WebResourceError;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 
 /**
  * The Hub on the TV: a full-screen WebView pointed at the Hub, which notices the "HomeHubTV" user agent and
@@ -21,49 +16,17 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
-        // It's a dashboard: keep the screen awake while it's the app in front.
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // No keep-screen-on: left idle, the TV drifts into the screensaver, which is the Hub's own ambient screen
+        // (HubDream) once tv-app/screensaver has switched it on.
 
         // Debug builds can be inspected from the Mac (chrome://inspect, or adb forward to the devtools socket).
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         web = new WebView(this);
-        WebSettings s = web.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true); // the Hub keeps its Home Assistant login in localStorage
-        s.setMediaPlaybackRequiresUserGesture(false);
-        s.setUseWideViewPort(true); // honour the Hub's TV viewport
-        s.setLoadWithOverviewMode(true);
-        s.setUserAgentString(s.getUserAgentString() + " HomeHubTV/1");
-        web.setBackgroundColor(0xFF07070B);
-        web.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
-                if (req.isForMainFrame()) showOffline();
-            }
-        });
+        Hub.configure(web, null);
         setContentView(web);
         web.requestFocus();
-        if (saved == null) web.loadUrl(freshHubUrl());
+        if (saved == null) web.loadUrl(Hub.url(null));
         else web.restoreState(saved);
-    }
-
-    /**
-     * Home Assistant serves /local/ with long-lived caching, so a plain load could keep showing an old Hub after an
-     * update. A throwaway query string fetches the page fresh on every launch; its scripts and styles carry content
-     * hashes, so those still cache properly.
-     */
-    private static String freshHubUrl() {
-        return BuildConfig.HUB_URL + (BuildConfig.HUB_URL.contains("?") ? "&" : "?") + "app=" + System.currentTimeMillis();
-    }
-
-    /** The Mac is off or the Hub isn't running: say so, and keep retrying. */
-    private void showOffline() {
-        String html = "<html><body style='margin:0;height:100vh;display:grid;place-items:center;background:#07070b;"
-                + "color:#e8e8f0;font:28px -apple-system,Roboto,sans-serif;text-align:center'><div>"
-                + "<div style='font-size:44px;margin-bottom:16px'>Can't reach the Hub</div>"
-                + "<div style='opacity:.6'>Is the Mac on and <code>./home up</code> running? Trying again…</div></div>"
-                + "<script>setTimeout(function(){location.href='" + BuildConfig.HUB_URL + "?app='+Date.now()},10000)</script></body></html>";
-        web.loadDataWithBaseURL(BuildConfig.HUB_URL, html, "text/html", "utf-8", null);
     }
 
     /**

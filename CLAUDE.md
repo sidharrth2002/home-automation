@@ -99,6 +99,12 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
 - TV GPUs mis-draw heavy effects: `backdrop-filter` and large blurred layers left a card's contents drawn shifted
   after scrolling. TV mode turns them off and paints each card with `contain: paint`; keep new effects out of TV mode
   or test them there (scroll down and back up, then `screencap`).
+- The screensaver (`HubDream`, the Hub with `?ambient=1`) is set with `settings put secure screensaver_components`;
+  `tv-app/screensaver on|off|test|status`. The original value is saved once in `data/tv/original-screensaver.txt`
+  (Google's `dreamx/.service.Backdrop`). `cmd dreams start-dreaming` needs root and the Somnambulator launcher is
+  ignored, so `test` idles into it by briefly shortening `system screen_off_timeout`, always restoring it. A dream can
+  start a little after the timeout; check `dumpsys dreams` for `mCurrentDream`. FLAG_KEEP_SCREEN_ON in an app blocks
+  the screensaver, which is why the Hub app doesn't use it. The ambient screen must never show finances.
 - The TV app adds `?app=<timestamp>` when it loads the Hub, because HA caches `/local/` pages for a long time.
 - `tv-app/app/src/debug/res/` is a git-ignored overlay for personal resources (the launcher banner with the user's
   photo). The committed banner in `src/main` must stay generic. Personal photos (`*.heic`) are git-ignored and blocked

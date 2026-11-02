@@ -277,6 +277,16 @@ direction (sliders take left/right), OK to press, Back closing an open panel bef
 on-screen remote hidden since you're holding the real one. On Home Assistant's one-off sign-in page the arrows step
 between fields like Tab. `?tv=1` shows TV mode in any browser.
 
+The app is also the TV's **screensaver**: the Hub's ambient screen (a big clock and date, what's playing with its
+cover, the three bulbs in their live colours, the weather and the next event), drifting slowly so nothing burns in.
+Google TV hides third-party screensavers in its settings, but the setting underneath accepts any installed one, so
+it's switched over adb, and the original is recorded first so it can go back. Leaving the Hub app idle also drifts
+into it. `?ambient=1` previews it in a browser.
+
+```sh
+tv-app/screensaver on | off | test | status
+```
+
 ```sh
 tv-app/deploy           # build with Gradle, install over adb and open it (TV_HOST in .env)
 tv-app/deploy --build   # just the APK
