@@ -69,6 +69,15 @@ def apply_template(token, spec, existing_entries):
     print(f"template: {spec['name']} ({action})")
 
 
+def apply_widget_actions(token):
+    """The iPhone widget's tap targets: one webhook automation whose ids are secrets, so it's built from a local key
+    rather than stored in the repo."""
+    from widget.__main__ import automation_config
+    cfg = automation_config()
+    rest(token, f"/api/config/automation/config/{cfg['id']}", cfg)
+    print("automation: widget_actions")
+
+
 def ensure_icloud_calendar(token):
     """Add iCloud calendars (CalDAV) once ICLOUD_USERNAME / ICLOUD_APP_PASSWORD are in .env."""
     user, password = os.environ.get("ICLOUD_USERNAME"), os.environ.get("ICLOUD_APP_PASSWORD")
@@ -121,6 +130,7 @@ async def main():
             rest(token, f"/api/config/{kind}/config/{f.stem}", json.loads(f.read_text()))
             print(f"{kind}: {f.stem}")
 
+    apply_widget_actions(token)
     await apply_voice(ha)
 
     existing = {d["url_path"] for d in await ha.call(type="lovelace/dashboards/list")}

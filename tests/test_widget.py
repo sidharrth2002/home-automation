@@ -48,6 +48,33 @@ def run():
     nothing = w.build([{"entity_id": "sensor.music_sync_now_playing", "state": "Nothing playing", "attributes": {}}])
     assert nothing["music"]["title"] is None
 
+    assert [l["action"] for l in feed["lights"]] == ["tv1", "desk", "tv2"], "each bulb carries the action its tap triggers"
+
+    # the tap targets: one automation, webhooks that are local-only, POST-only, secret, and each does exactly one thing
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        w.DATA, w.KEY_FILE = tmp / "data", tmp / "data" / "key"
+        auto = w.automation_config()
+        triggers = {t["id"]: t for t in auto["triggers"]}
+        assert set(triggers) == {"tv1", "desk", "tv2", "off", "ping"}
+        assert all(t["trigger"] == "webhook" and t["local_only"] is True and t["allowed_methods"] == ["POST"] for t in triggers.values())
+        ids = [t["webhook_id"] for t in triggers.values()]
+        assert len(set(ids)) == 5 and all(i.startswith("widget-") and len(i) >= 39 for i in ids), ids
+        assert w.key() not in "".join(ids), "the feed's name must not be derivable from the webhook ids"
+        assert "ping" not in w.PHONE_ACTIONS, "the test-only action isn't handed to the phone"
+        branches = {b["conditions"][0]["id"]: b["sequence"] for b in auto["actions"][0]["choose"]}
+        assert branches["desk"] == [{"action": "light.toggle", "target": {"entity_id": "light.desk_lamp"}}]
+        assert branches["tv1"][0]["target"]["entity_id"] == "light.wiz_rgbw_tunable_624d4e"
+        assert branches["tv2"][0]["target"]["entity_id"] == "light.wiz_rgbw_tunable_4b472c"
+        assert branches["off"] == [{"action": "script.turn_on", "target": {"entity_id": "script.all_off"}}]
+        assert branches["ping"] == [{"event": "widget_ping"}]
+        assert {j["action"] for seq in branches.values() for j in seq if "action" in j} <= {"light.toggle", "script.turn_on"}, \
+            "the webhooks must not be able to do anything but toggle lamps or run all_off"
+        # a different key gives different ids, so deleting the key revokes every address
+        old = ids
+        w.KEY_FILE.unlink()
+        assert not set(old) & {t["webhook_id"] for t in w.automation_config()["triggers"]}
+
     # the feed file is written atomically under a secret name, and the key is private
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)

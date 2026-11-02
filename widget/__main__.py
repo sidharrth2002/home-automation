@@ -2,7 +2,12 @@
 
   python -m widget --watch    the service (run by ./home up): every 20s write the feed the widget reads
   python -m widget url        print the feed URLs
+  python -m widget hooks      print the tap-target (webhook) URLs, e.g. for building Shortcuts buttons
   python -m widget install    write the ready-to-paste widget script to data/widget/Home.js (--copy: also to the clipboard)
+
+Tapping a light on the widget calls a Home Assistant webhook: a secret, LAN-only address (derived from the same
+key) that triggers one automation, which does exactly one thing: toggle that lamp (or turn everything off). The
+phone never holds a Home Assistant token.
 
 The feed is deliberately boring: whether each light is on and its colour, what's playing, the TV, home/away and
 the weather. No finances, no calendar. It's a JSON file under Home Assistant's /local/ folder, whose name is a
@@ -10,6 +15,8 @@ random secret, so the phone needs no Home Assistant token and nothing else on th
 who has the URL can read those few facts, so treat it like a password and don't commit it (it lives in data/,
 which is git-ignored).
 """
+import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -32,6 +39,10 @@ EVERY_S = 20
 
 # What the widget may know about. Adding an entity here is how it ends up on a lock screen, so keep it short.
 LIGHTS = (("light.wiz_rgbw_tunable_624d4e", "TV 1"), ("light.desk_lamp", "Desk"), ("light.wiz_rgbw_tunable_4b472c", "TV 2"))
+# What a tap on the widget can do. Each name is a webhook in the `widget_actions` automation (see automation_config).
+LIGHT_ACTIONS = {"tv1": LIGHTS[0][0], "desk": LIGHTS[1][0], "tv2": LIGHTS[2][0]}
+ACTIONS = (*LIGHT_ACTIONS, "off", "ping")  # "ping" does nothing visible; it lets the path be tested without touching a light
+PHONE_ACTIONS = tuple(a for a in ACTIONS if a != "ping")
 SYNC, MODE, NOW = "input_boolean.music_sync", "input_select.music_sync_mode", "sensor.music_sync_now_playing"
 TV, HOME, WEATHER, HEALTH = "media_player.smart_tv_pro", "binary_sensor.someone_home", "weather.forecast_home", "sensor.system_health"
 
@@ -63,10 +74,11 @@ def build(states: list[dict]) -> dict:
         return (s["state"], s.get("attributes", {})) if s else (None, {})
 
     lights = []
+    action_of = {eid: act for act, eid in LIGHT_ACTIONS.items()}
     for eid, name in LIGHTS:
         state, a = get(eid)
         on = state == "on"
-        lights.append({"name": name, "on": on, "reachable": state not in (None, "unavailable"),
+        lights.append({"name": name, "action": action_of[eid], "on": on, "reachable": state not in (None, "unavailable"),
                        "pct": round((a.get("brightness") or 0) / 255 * 100) if on else 0,
                        "rgb": a.get("rgb_color") if on else None})
     now_state, now = get(NOW)
@@ -85,6 +97,33 @@ def build(states: list[dict]) -> dict:
         "weather": {"state": w_state, "temp": w.get("temperature")} if w_state else None,
         "health": get(HEALTH)[0],
     }
+
+
+def action_id(name: str) -> str:
+    """The webhook id for an action: unguessable, and different for each action and each key."""
+    return "widget-" + hmac.new(key().encode(), f"action:{name}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def automation_config() -> dict:
+    """The one Home Assistant automation behind the widget's tap targets. Built here, not stored in the repo, because the
+    webhook ids are secrets (homeassistant.apply pushes it)."""
+    branch = lambda name, *sequence: {"conditions": [{"condition": "trigger", "id": name}], "sequence": list(sequence)}
+    return {
+        "id": "widget_actions", "alias": "Widget actions", "mode": "queued", "max": 10,
+        "description": "Tap targets for the iPhone widget: toggle a lamp, or everything off. Webhooks, LAN only.",
+        "triggers": [{"trigger": "webhook", "webhook_id": action_id(a), "allowed_methods": ["POST"], "local_only": True, "id": a}
+                     for a in ACTIONS],
+        "actions": [{"choose": [
+            *[branch(a, {"action": "light.toggle", "target": {"entity_id": eid}}) for a, eid in LIGHT_ACTIONS.items()],
+            branch("off", {"action": "script.turn_on", "target": {"entity_id": "script.all_off"}}),
+            branch("ping", {"event": "widget_ping"}),
+        ]}],
+    }
+
+
+def action_bases() -> list[str]:
+    name = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True).stdout.strip()
+    return [f"http://{h}:8123" for h in [lan_ip()] + ([f"{name}.local"] if name else [])]
 
 
 def fetch_states():
@@ -118,7 +157,9 @@ def feed_urls() -> list[str]:
 
 
 def install(copy=False) -> Path:
+    actions = {"ids": {a: action_id(a) for a in PHONE_ACTIONS}, "bases": action_bases()}
     script = TEMPLATE.read_text().replace('"__FEED_URLS__"', json.dumps(feed_urls())) \
+        .replace('"__ACTIONS__"', json.dumps(actions)) \
         .replace("__HUB_URL__", f"http://{lan_ip()}:8123/local/hub/index.html")
     DATA.mkdir(parents=True, exist_ok=True)
     INSTALLED.write_text(script)
@@ -148,6 +189,9 @@ def main():
         watch()
     elif cmd == "url":
         print("\n".join(feed_urls()))
+    elif cmd == "hooks":
+        for a in ACTIONS:
+            print(f"{a:5} POST {action_bases()[0]}/api/webhook/{action_id(a)}")
     elif cmd == "install":
         path = install(copy="--copy" in sys.argv)
         print(f"Wrote {path}" + ("\nCopied to the clipboard; paste it into a new Scriptable script." if "--copy" in sys.argv else ""))

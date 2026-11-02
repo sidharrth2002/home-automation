@@ -1,10 +1,12 @@
 // Home: an iPhone widget for the home Hub, written for the free Scriptable app.
+// Tapping a bulb in the medium or large widget toggles it: iOS opens this script, which makes the call and stops.
 // Install with `python -m widget install --copy` (it fills in the private feed address), then paste into a new
 // Scriptable script and add a Scriptable widget to the home or lock screen. Small, medium, large and the lock
 // screen widgets are all supported. It reads a small JSON feed (see widget/__main__.py), never Home Assistant itself.
 // icon-color: purple; icon-glyph: lightbulb;
 
 const FEEDS = "__FEED_URLS__"; // replaced by the installer: the feed's address on the home network
+const ACTIONS = "__ACTIONS__"; // tap targets: secret LAN webhooks that each toggle one lamp (see widget/__main__.py)
 const HUB = "__HUB_URL__"; // tapping the widget opens the Hub
 const STALE_MIN = 3; // the Mac normally refreshes the feed every 20s
 // iOS treats this as a request, not a promise: it redraws widgets on its own budget (often 15+ minutes), so a song
@@ -110,8 +112,28 @@ function text(parent, str, size, opts = {}) {
   return t;
 }
 
+// Tapping a bulb opens this script with ?action=..., which does the toggle (see act). Small widgets only get one tap
+// target (the whole widget), so only the medium and large layouts use these.
+const actionUrl = (action) => `${URLScheme.forRunningScript()}?action=${encodeURIComponent(action)}`;
+const LABELS = { tv1: "TV lamp 1", desk: "Desk lamp", tv2: "TV lamp 2", off: "All lights" };
+
+async function act(action) {
+  const id = ACTIONS.ids[action];
+  if (!id) return false;
+  for (const base of ACTIONS.bases) {
+    try {
+      const req = new Request(`${base}/api/webhook/${id}`);
+      req.method = "POST";
+      req.timeoutInterval = 6;
+      await req.load();
+      if (req.response && req.response.statusCode === 200) return true;
+    } catch (e) { /* not reachable at this address: try the next */ }
+  }
+  return false;
+}
+
 // The orbs with a name and brightness under each.
-function orbRow(parent, d, size, gap) {
+function orbRow(parent, d, size, gap, tappable = false) {
   const row = parent.addStack();
   row.centerAlignContent();
   row.spacing = gap;
@@ -119,6 +141,7 @@ function orbRow(parent, d, size, gap) {
     const col = row.addStack();
     col.layoutVertically();
     col.centerAlignContent();
+    if (tappable && l.action && ACTIONS.ids[l.action]) col.url = actionUrl(l.action);
     const img = col.addImage(orb(l));
     img.imageSize = new Size(size, size);
     img.centerAlignImage();
@@ -199,7 +222,7 @@ async function medium(w, res) {
   w.addSpacer(6);
   const mid = w.addStack();
   mid.centerAlignContent();
-  orbRow(mid, d, 48, 8);
+  orbRow(mid, d, 48, 8, true);
   mid.addSpacer(14);
   await music(mid, d, false);
   mid.addSpacer();
@@ -216,7 +239,7 @@ async function large(w, res) {
   top.addSpacer();
   text(top, [s.presence, clock()].filter(Boolean).join(" · "), 12, { alpha: 0.6 });
   w.addSpacer(10);
-  orbRow(w, d, 70, 22);
+  orbRow(w, d, 70, 22, true);
   w.addSpacer(14);
   await music(w, d, true);
   w.addSpacer(14);
@@ -237,6 +260,17 @@ async function large(w, res) {
       tile.size = new Size(142, 0); // fixed width so the pair shares the row; 0 = height fits the content
     }
     w.addSpacer(8);
+  }
+  if (ACTIONS.ids.off) {
+    const off = w.addStack();
+    off.centerAlignContent();
+    off.setPadding(9, 0, 9, 0);
+    off.cornerRadius = 12;
+    off.backgroundColor = white(0.08);
+    off.url = actionUrl("off");
+    off.addSpacer();
+    text(off, "All lights off", 12.5, { weight: "semibold", alpha: 0.85 });
+    off.addSpacer();
   }
   w.addSpacer();
   footer(w, { problems: s.problems }, 10.5, res);
@@ -277,22 +311,38 @@ function unreachable(w) {
 }
 
 // ── run ──────────────────────────────────────────────────────────
-const family = config.widgetFamily || "medium";
-const w = new ListWidget();
-const res = await load();
-if (!res) {
-  unreachable(w);
-} else if (family.startsWith("accessory")) {
-  lockScreen(w, res, family);
-} else {
-  background(w, res.data);
-  if (family === "small") await small(w, res);
-  else if (family === "large" || family === "extraLarge") await large(w, res);
-  else await medium(w, res);
+async function main() {
+  // Opened by a tap on a bulb: do the toggle, tell the user only if it didn't work, and stop.
+  const action = args.queryParameters && args.queryParameters.action;
+  if (action && !config.runsInWidget) {
+    if (!(await act(action))) {
+      const a = new Alert();
+      a.title = `Couldn't reach the home`;
+      a.message = `${LABELS[action] || "That"} didn't change. Connect to your home Wi-Fi and try again.`;
+      a.addAction("OK");
+      await a.presentAlert();
+    }
+    return Script.complete();
+  }
+
+  const family = config.widgetFamily || "medium";
+  const w = new ListWidget();
+  const res = await load();
+  if (!res) {
+    unreachable(w);
+  } else if (family.startsWith("accessory")) {
+    lockScreen(w, res, family);
+  } else {
+    background(w, res.data);
+    if (family === "small") await small(w, res);
+    else if (family === "large" || family === "extraLarge") await large(w, res);
+    else await medium(w, res);
+  }
+  w.url = HUB;
+  const playing = !!(res && res.data.music && res.data.music.playing);
+  w.refreshAfterDate = new Date(Date.now() + (playing ? REFRESH_PLAYING_MIN : REFRESH_IDLE_MIN) * 60000);
+  if (config.runsInWidget) Script.setWidget(w);
+  else await w.presentMedium();
+  Script.complete();
 }
-w.url = HUB;
-const playing = !!(res && res.data.music && res.data.music.playing);
-w.refreshAfterDate = new Date(Date.now() + (playing ? REFRESH_PLAYING_MIN : REFRESH_IDLE_MIN) * 60000);
-if (config.runsInWidget) Script.setWidget(w);
-else await w.presentMedium();
-Script.complete();
+await main();

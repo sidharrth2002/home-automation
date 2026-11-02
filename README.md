@@ -38,6 +38,7 @@ and the background picks up colour from the lights and the album art.
   through its official API. Values are blurred on the dashboard until I tap to show them.
 - **iPhone widget.** A Scriptable widget in the same neon style: the three bulbs as glowing orbs, what's
   playing with its album art, the TV, home/away and the weather, in small, medium, large and lock screen sizes.
+  Tapping a bulb on it toggles that lamp.
 - **Talking to it.** Claude can control everything through Home Assistant's MCP server, so "turn the TV lamps
   blue" or "lights out" just works.
 - **Away mode.** If my phone hasn't been on the Wi-Fi for a while and the Mac is idle, everything turns off.
@@ -243,6 +244,16 @@ It doesn't talk to Home Assistant and there's no token on the phone. Instead the
 name is a random secret. The feed has the three lights (on, brightness, colour), what's playing, the TV, home/away
 and the weather, and nothing else: no finances and no calendar. `tests/test_widget.py` checks that nothing outside
 that list can get into it.
+
+**Tapping a bulb** (medium and large widgets; a large one also has an "All lights off" button) toggles it. iOS
+opens the script, which POSTs to a Home Assistant webhook and stops. The webhooks are one automation,
+`widget_actions`, that `homeassistant.apply` builds from the same local key rather than storing in the repo: five
+secret addresses, LAN-only and POST-only, each doing exactly one thing (toggle a lamp, run `script.all_off`, or a
+"ping" that does nothing, used for testing). A leaked address can flip a lamp from your home network and nothing
+more, and deleting `data/widget/key` revokes all of them. Two limits, both iOS's: a tap flashes the Scriptable app
+open for a moment, and the widget's picture of the bulb catches up only when iOS next redraws it. For buttons that
+don't leave the home screen, the Home Assistant Companion app has interactive widgets, or `python -m widget hooks`
+prints the addresses so a one-step Shortcut can call each of them from the Shortcuts widget.
 
 ```sh
 .venv/bin/python -m widget install --copy   # fills in the private address and copies the script to the clipboard
