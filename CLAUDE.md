@@ -96,6 +96,10 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   Debug builds allow WebView inspection: `adb forward tcp:9229 localabstract:webview_devtools_remote_<pid>`, then
   CDP on localhost:9229. `adb exec-out screencap -p` screenshots the TV. A screenshot right after launch can show the
   Hub before its scripts run; wait before concluding it's broken.
+- TV GPUs mis-draw heavy effects: `backdrop-filter` and large blurred layers left a card's contents drawn shifted
+  after scrolling. TV mode turns them off and paints each card with `contain: paint`; keep new effects out of TV mode
+  or test them there (scroll down and back up, then `screencap`).
+- The TV app adds `?app=<timestamp>` when it loads the Hub, because HA caches `/local/` pages for a long time.
 - `tv-app/app/src/debug/res/` is a git-ignored overlay for personal resources (the launcher banner with the user's
   photo). The committed banner in `src/main` must stay generic. Personal photos (`*.heic`) are git-ignored and blocked
   by the commit guard.

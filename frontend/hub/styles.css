@@ -592,3 +592,16 @@ dialog.event h3 { margin: 10px 40px 20px 0; font: 400 32px/1.08 var(--serif); le
 .tv-mode .orb:focus { outline-offset: 10px; }
 /* you're holding the real remote, so the on-screen one and the power button would only switch off this screen */
 .tv-mode .remote, .tv-mode .apps, .tv-mode .rk.power { display: none; }
+/* TV GPUs: the frosted-glass blur behind cards and the blurred album-art glow leave stale layers after a scroll (a
+   card's contents get drawn shifted inside it), and they're the most expensive things on the page. Near-solid glass
+   instead, and each card painted as one self-contained layer. */
+.tv-mode .card, .tv-mode .scene, .tv-mode dialog.event, .tv-mode .toast { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.tv-mode dialog.event::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(4,4,8,.75); }
+.tv-mode .card { contain: paint; background: linear-gradient(180deg, rgba(255,255,255,.06), transparent 40%), rgba(15,15,24,.84); }
+.tv-mode .scene { contain: paint; }
+.tv-mode .music .backdrop { display: none; }
+/* a shorter music card, so the Room card beside it (which matches its height) isn't so tall */
+.tv-mode .art-wrap { width: min(100%, 200px); margin-top: 0; }
+.tv-mode .track h2 { font-size: 24px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tv-mode .music { gap: 14px; }
+.tv-mode details.tune { display: none; }

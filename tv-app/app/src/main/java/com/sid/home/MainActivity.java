@@ -43,8 +43,17 @@ public class MainActivity extends Activity {
         });
         setContentView(web);
         web.requestFocus();
-        if (saved == null) web.loadUrl(BuildConfig.HUB_URL);
+        if (saved == null) web.loadUrl(freshHubUrl());
         else web.restoreState(saved);
+    }
+
+    /**
+     * Home Assistant serves /local/ with long-lived caching, so a plain load could keep showing an old Hub after an
+     * update. A throwaway query string fetches the page fresh on every launch; its scripts and styles carry content
+     * hashes, so those still cache properly.
+     */
+    private static String freshHubUrl() {
+        return BuildConfig.HUB_URL + (BuildConfig.HUB_URL.contains("?") ? "&" : "?") + "app=" + System.currentTimeMillis();
     }
 
     /** The Mac is off or the Hub isn't running: say so, and keep retrying. */
@@ -53,7 +62,7 @@ public class MainActivity extends Activity {
                 + "color:#e8e8f0;font:28px -apple-system,Roboto,sans-serif;text-align:center'><div>"
                 + "<div style='font-size:44px;margin-bottom:16px'>Can't reach the Hub</div>"
                 + "<div style='opacity:.6'>Is the Mac on and <code>./home up</code> running? Trying again…</div></div>"
-                + "<script>setTimeout(function(){location.href='" + BuildConfig.HUB_URL + "'},10000)</script></body></html>";
+                + "<script>setTimeout(function(){location.href='" + BuildConfig.HUB_URL + "?app='+Date.now()},10000)</script></body></html>";
         web.loadDataWithBaseURL(BuildConfig.HUB_URL, html, "text/html", "utf-8", null);
     }
 
