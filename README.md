@@ -285,6 +285,7 @@ into it. `?ambient=1` previews it in a browser.
 
 ```sh
 tv-app/screensaver on | off | test | status
+tv-app/screensaver delay 1     # start after 1 minute idle (it was 10)
 ```
 
 ```sh

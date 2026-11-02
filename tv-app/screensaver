@@ -4,6 +4,7 @@
 #   tv-app/screensaver on       use the Hub's ambient screen (the app must be installed: tv-app/deploy)
 #   tv-app/screensaver off      back to whatever it was before (recorded in data/tv/original-screensaver.txt)
 #   tv-app/screensaver test     bring the screensaver up now (by idling the TV briefly); any button on the remote ends it
+#   tv-app/screensaver delay N  start it after N minutes idle (the original delay is recorded first, for `off`)
 #   tv-app/screensaver status
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -26,6 +27,8 @@ case "${1:-status}" in
   off)
     original=$(sed -n 's/^screensaver_components=//p' "$SAVED" 2>/dev/null)
     "$ADB" -s "$SERIAL" shell settings put secure screensaver_components "${original:-com.google.android.apps.tv.dreamx/.service.Backdrop}"
+    delay=$(sed -n 's/^screen_off_timeout=//p' "$SAVED" 2>/dev/null)
+    [[ -n $delay ]] && "$ADB" -s "$SERIAL" shell settings put system screen_off_timeout "$delay"
     echo "screensaver back to ${original:-the Google TV default}" ;;
   test)
     # `cmd dreams start-dreaming` needs root and Google TV ignores the Somnambulator launcher, so idle into it: go to the
@@ -40,7 +43,17 @@ case "${1:-status}" in
       sleep 1
     done
     echo "it didn't start within 90s (was the remote touched?)" >&2; exit 1 ;;
+  delay)
+    minutes=${2:-}
+    [[ $minutes =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v m="$minutes" 'BEGIN { exit !(m >= 0.25 && m <= 120) }' \
+      || { echo "usage: tv-app/screensaver delay <minutes, 0.25-120>" >&2; exit 1; }
+    mkdir -p "$(dirname "$SAVED")"
+    grep -q "^screen_off_timeout=" "$SAVED" 2>/dev/null \
+      || echo "screen_off_timeout=$("$ADB" -s "$SERIAL" shell settings get system screen_off_timeout | tr -d '\r')" >> "$SAVED"
+    "$ADB" -s "$SERIAL" shell settings put system screen_off_timeout "$(awk -v m="$minutes" 'BEGIN { printf "%d", m * 60000 }')"
+    echo "the screensaver now starts after $minutes min idle" ;;
   status)
-    echo "screensaver: $(setting screensaver_components) (enabled: $(setting screensaver_enabled))" ;;
+    ms=$("$ADB" -s "$SERIAL" shell settings get system screen_off_timeout | tr -d '\r')
+    echo "screensaver: $(setting screensaver_components) (enabled: $(setting screensaver_enabled)), after $(awk -v ms="$ms" 'BEGIN { printf "%g", ms / 60000 }') min idle" ;;
   *) sed -n '2,8p' "$0"; exit 1 ;;
 esac
