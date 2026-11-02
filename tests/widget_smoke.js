@@ -24,13 +24,15 @@ const stack = () => strict("WidgetStack", ["addText", "addImage", "addStack", "a
   "centerAlignContent", "setPadding"], ["backgroundColor", "cornerRadius", "size", "spacing", "url"]);
 const text = () => strict("WidgetText", ["centerAlignText", "leftAlignText", "rightAlignText"],
   ["text", "font", "textColor", "lineLimit", "minimumScaleFactor", "url"]);
-const image = () => strict("WidgetImage", ["centerAlignImage"], ["imageSize", "cornerRadius", "url"]);
+const image = () => strict("WidgetImage", ["centerAlignImage"], ["imageSize", "cornerRadius", "url"], { __isImage: true });
 function ret(name, k, t, a) {
   const child = k === "addStack" ? stack() : k === "addText" ? text() : k === "addImage" ? image() : null;
   if (child) { if (k === "addText") child.text = a[0]; t.__children.push(child); return child; }
   if (k === "getImage") return { image: true };
   return undefined;
 }
+// every image (by its size) anywhere in a widget
+const images = (node, out = []) => { if ("__isImage" in node) out.push(node.imageSize.w); node.__children.forEach((c) => images(c, out)); return out; };
 // every tap target (stack url) anywhere in a widget
 const urls = (node, out = []) => { if (node.url) out.push(node.url); node.__children.forEach((c) => urls(c, out)); return out; };
 
@@ -153,7 +155,10 @@ const assert = (cond, msg) => { if (!cond) { console.error(`FAIL ${msg}`); proce
   for (const [param, expect] of [["desk", "?action=desk"], ["tv1", "?action=tv1"], ["tv2", "?action=tv2"], ["off", "?action=off"]]) {
     const b = (await run("small", feed(), { param })).widget;
     assert(b.url && b.url.startsWith("scriptable:///run/Home") && b.url.endsWith(expect), `button widget ${param} should toggle on tap: ${b.url}`);
+    const sizes = images(b);
+    assert(param === "off" ? sizes.length === 0 : sizes.length === 1 && sizes[0] === 96, `button ${param} should draw one big bulb (or none for All off), got ${sizes}`);
   }
+  assert(images((await run("small", feed())).widget).length === 3, "the plain small widget shows all three bulbs");
   assert((await run("small", feed(), { param: "nonsense" })).widget.url === "http://hub", "an unknown parameter falls back to the normal small widget");
   assert((await run("small", feed(), { param: "ping" })).widget.url === "http://hub", "the check action is not a button");
   assert((await run("small", feed(), { param: null })).widget.url === "http://hub", "a small widget with no parameter opens the Hub");
