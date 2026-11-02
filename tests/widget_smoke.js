@@ -34,9 +34,9 @@ function ret(name, k, t, a) {
 // every tap target (stack url) anywhere in a widget
 const urls = (node, out = []) => { if (node.url) out.push(node.url); node.__children.forEach((c) => urls(c, out)); return out; };
 
-const ACTIONS = { ids: { tv1: "id-tv1", desk: "id-desk", tv2: "id-tv2", off: "id-off" }, bases: ["http://x:8123", "http://y.local:8123"] };
+const ACTIONS = { ids: { tv1: "id-tv1", desk: "id-desk", tv2: "id-tv2", off: "id-off", ping: "id-ping" }, bases: ["http://x:8123", "http://y.local:8123"] };
 const results = [];
-async function run(family, feed, { online = true, cached = null, art = true, query = {}, runsInWidget = true, actions = ACTIONS, status = 200 } = {}) {
+async function run(family, feed, { param = null, online = true, cached = null, art = true, query = {}, runsInWidget = true, actions = ACTIONS, status = 200 } = {}) {
   const widget = strict("ListWidget", ["addText", "addImage", "addStack", "addSpacer", "setPadding", "presentSmall",
     "presentMedium", "presentLarge"], ["backgroundColor", "backgroundGradient", "url", "refreshAfterDate",
     "addAccessoryWidgetBackground", "spacing"]);
@@ -44,9 +44,8 @@ async function run(family, feed, { online = true, cached = null, art = true, que
   const log = { posts: [], alerts: [], widgets: [], completed: 0 };
   const ctx = {
     config: { runsInWidget, widgetFamily: family },
-    args: { queryParameters: query, widgetParameter: null },
-    URLScheme: { forRunningScript: () => "scriptable:///run/Home" },
-    Script: { setWidget: (w) => log.widgets.push(w), complete() { log.completed++; } },
+    args: { queryParameters: query, widgetParameter: param },
+    Script: { setWidget: (w) => log.widgets.push(w), complete() { log.completed++; }, name: () => "Home" },
     ListWidget: function () { return widget; },
     Alert: function () {
       return strict("Alert", ["addAction", "presentAlert"], ["title", "message"], { __log: log });
@@ -146,8 +145,20 @@ const assert = (cond, msg) => { if (!cond) { console.error(`FAIL ${msg}`); proce
   assert(large.length === 4 && large.some((u) => u.endsWith("?action=off")), `large should have three bulbs and All lights off: ${large}`);
   assert((await tapUrls("small")).length === 0, "small widgets only have the one whole-widget tap");
   assert((await tapUrls("medium", { actions: { ids: {}, bases: [] } })).length === 0, "no tap targets without webhooks");
+  assert(medium.every((u) => u.startsWith("scriptable:///run/Home?action=")), `tap URLs should open the Home script: ${medium}`);
   const whole = (await run("medium", feed())).widget.url;
   assert(whole === "http://hub", "the widget itself should still open the Hub");
+
+  // ── one-lamp button widgets (small, with a parameter): the whole widget is the tap target ──
+  for (const [param, expect] of [["desk", "?action=desk"], ["tv1", "?action=tv1"], ["tv2", "?action=tv2"], ["off", "?action=off"]]) {
+    const b = (await run("small", feed(), { param })).widget;
+    assert(b.url && b.url.startsWith("scriptable:///run/Home") && b.url.endsWith(expect), `button widget ${param} should toggle on tap: ${b.url}`);
+  }
+  assert((await run("small", feed(), { param: "nonsense" })).widget.url === "http://hub", "an unknown parameter falls back to the normal small widget");
+  assert((await run("small", feed(), { param: "ping" })).widget.url === "http://hub", "the check action is not a button");
+  assert((await run("small", feed(), { param: null })).widget.url === "http://hub", "a small widget with no parameter opens the Hub");
+  assert((await run("small", feed(), { param: "desk", online: false })).widget.url === "http://hub", "with no data at all the button shouldn't try to toggle");
+  assert((await run("medium", feed(), { param: "desk" })).widget.url === "http://hub", "the parameter only matters for small widgets");
 
   // ── a tap runs the script in the app ──────────────────────────
   let r = await run("medium", feed(), { runsInWidget: false, query: { action: "desk" } });
@@ -165,9 +176,18 @@ const assert = (cond, msg) => { if (!cond) { console.error(`FAIL ${msg}`); proce
   r = await run("medium", feed(), { runsInWidget: false, query: { action: "tv1" }, status: 500 });
   assert(r.log.alerts.length === 1, "a non-200 answer should be reported, not swallowed");
 
+  // run from inside Scriptable with no action: a setup check that says what works, then the preview
+  r = await run("medium", feed(), { runsInWidget: false });
+  assert(r.log.alerts.length === 1 && /version 4/.test(r.log.alerts[0].message) && /Can read the home's feed/.test(r.log.alerts[0].message)
+    && /Tap actions work/.test(r.log.alerts[0].message), `the check should report success: ${JSON.stringify(r.log.alerts)}`);
+  assert(r.log.posts.length === 1 && r.log.posts[0].url.endsWith("/id-ping"), "the check should only ping, never toggle a light");
+  assert(r.widget.__calls.some(([k]) => k === "presentMedium"), "the check should still show the preview");
+  r = await run("medium", feed(), { runsInWidget: false, online: false });
+  assert(/Can't read the feed/.test(r.log.alerts[0].message) && /Can't reach the tap actions/.test(r.log.alerts[0].message), "the check should say what's wrong away from home");
+
   // the same query inside a widget (iOS rendering it) must not trigger anything
   r = await run("medium", feed(), { runsInWidget: true, query: { action: "desk" } });
   assert(r.log.posts.length === 0, "rendering a widget must never toggle a light");
 
-  console.log(`widget script OK (${renders} renders across ${families.length} sizes, tap targets and the tap handler checked)`);
+  console.log(`widget script OK (${renders} renders across ${families.length} sizes, tap targets, button widgets and the tap handler checked)`);
 })();

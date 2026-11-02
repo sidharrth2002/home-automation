@@ -41,8 +41,8 @@ EVERY_S = 20
 LIGHTS = (("light.wiz_rgbw_tunable_624d4e", "TV 1"), ("light.desk_lamp", "Desk"), ("light.wiz_rgbw_tunable_4b472c", "TV 2"))
 # What a tap on the widget can do. Each name is a webhook in the `widget_actions` automation (see automation_config).
 LIGHT_ACTIONS = {"tv1": LIGHTS[0][0], "desk": LIGHTS[1][0], "tv2": LIGHTS[2][0]}
-ACTIONS = (*LIGHT_ACTIONS, "off", "ping")  # "ping" does nothing visible; it lets the path be tested without touching a light
-PHONE_ACTIONS = tuple(a for a in ACTIONS if a != "ping")
+ACTIONS = (*LIGHT_ACTIONS, "off", "ping")  # "ping" does nothing visible; it tests the path without touching a light
+PHONE_ACTIONS = ACTIONS  # the phone uses "ping" for its setup check
 SYNC, MODE, NOW = "input_boolean.music_sync", "input_select.music_sync_mode", "sensor.music_sync_now_playing"
 TV, HOME, WEATHER, HEALTH = "media_player.smart_tv_pro", "binary_sensor.someone_home", "weather.forecast_home", "sensor.system_health"
 

@@ -1,4 +1,5 @@
 // Home: an iPhone widget for the home Hub, written for the free Scriptable app.
+// A small widget with the parameter tv1, desk, tv2 or off is a single button for that lamp (or all of them).
 // Tapping a bulb in the medium or large widget toggles it: iOS opens this script, which makes the call and stops.
 // Install with `python -m widget install --copy` (it fills in the private feed address), then paste into a new
 // Scriptable script and add a Scriptable widget to the home or lock screen. Small, medium, large and the lock
@@ -6,6 +7,7 @@
 // icon-color: purple; icon-glyph: lightbulb;
 
 const FEEDS = "__FEED_URLS__"; // replaced by the installer: the feed's address on the home network
+const VERSION = 4; // shown by the in-app check, so you can tell which copy of the script you pasted
 const ACTIONS = "__ACTIONS__"; // tap targets: secret LAN webhooks that each toggle one lamp (see widget/__main__.py)
 const HUB = "__HUB_URL__"; // tapping the widget opens the Hub
 const STALE_MIN = 3; // the Mac normally refreshes the feed every 20s
@@ -114,8 +116,8 @@ function text(parent, str, size, opts = {}) {
 
 // Tapping a bulb opens this script with ?action=..., which does the toggle (see act). Small widgets only get one tap
 // target (the whole widget), so only the medium and large layouts use these.
-const actionUrl = (action) => `${URLScheme.forRunningScript()}?action=${encodeURIComponent(action)}`;
-const LABELS = { tv1: "TV lamp 1", desk: "Desk lamp", tv2: "TV lamp 2", off: "All lights" };
+const actionUrl = (action) => `scriptable:///run/${encodeURIComponent(Script.name())}?action=${encodeURIComponent(action)}`;
+const LABELS = { tv1: "TV lamp 1", desk: "Desk lamp", tv2: "TV lamp 2", off: "All lights", ping: "Check" };
 
 async function act(action) {
   const id = ACTIONS.ids[action];
@@ -193,6 +195,49 @@ function footer(parent, s, size, res) {
     note.font = Font.systemFont(size - 1);
     note.textColor = new Color("#ffb454", 0.8);
   }
+}
+
+// Run from inside Scriptable (not as a widget), the script checks its own setup and says what it found.
+async function selfTest(res) {
+  const ping = await act("ping");
+  const lines = [
+    `Script version ${VERSION}`,
+    res && res.live ? "✓ Can read the home's feed" : "✗ Can't read the feed (on your home Wi-Fi?)",
+    ping ? "✓ Tap actions work" : "✗ Can't reach the tap actions (on your home Wi-Fi?)",
+    "",
+    "To toggle a bulb, use a medium or large widget and tap right on the bulb. Small widgets only open the Hub.",
+  ];
+  const a = new Alert();
+  a.title = "Home widget check";
+  a.message = lines.join("\n");
+  a.addAction("OK");
+  await a.presentAlert();
+}
+
+// One lamp as a button: a big orb with its name, and the whole widget is the tap target.
+function button(w, res, action) {
+  const d = res.data;
+  w.setPadding(10, 10, 10, 10);
+  if (action === "off") {
+    const on = d.lights.filter((l) => l.on).length;
+    w.addSpacer();
+    const t = text(w, "All off", 20, { weight: "bold" });
+    t.centerAlignText();
+    const u = text(w, on ? `${on} on` : "all dark", 12, { alpha: 0.5 });
+    u.centerAlignText();
+    w.addSpacer();
+    return;
+  }
+  const l = d.lights.find((x) => x.action === action);
+  if (!l) { w.addSpacer(); text(w, `Unknown lamp: ${action}`, 11, { alpha: 0.6 }); w.addSpacer(); return; }
+  const col = w.addStack();
+  col.layoutVertically();
+  col.centerAlignContent();
+  const img = col.addImage(orb(l));
+  img.imageSize = new Size(96, 96);
+  img.centerAlignImage();
+  text(col, l.name, 13, { weight: "semibold", alpha: l.on ? 0.9 : 0.55 }).centerAlignText();
+  text(col, l.on ? `${l.pct}%` : "off", 11, { alpha: 0.5 }).centerAlignText();
 }
 
 // ── layouts ──────────────────────────────────────────────────────
@@ -326,19 +371,23 @@ async function main() {
   }
 
   const family = config.widgetFamily || "medium";
+  const param = args.widgetParameter ? String(args.widgetParameter).trim() : null;
+  const buttonFor = param && ACTIONS.ids[param] && param !== "ping" ? param : null; // a one-lamp button widget
   const w = new ListWidget();
   const res = await load();
+  if (!config.runsInWidget) await selfTest(res);
   if (!res) {
     unreachable(w);
   } else if (family.startsWith("accessory")) {
     lockScreen(w, res, family);
   } else {
     background(w, res.data);
-    if (family === "small") await small(w, res);
+    if (family === "small" && buttonFor) button(w, res, buttonFor);
+    else if (family === "small") await small(w, res);
     else if (family === "large" || family === "extraLarge") await large(w, res);
     else await medium(w, res);
   }
-  w.url = HUB;
+  w.url = family === "small" && buttonFor && res ? actionUrl(buttonFor) : HUB;
   const playing = !!(res && res.data.music && res.data.music.playing);
   w.refreshAfterDate = new Date(Date.now() + (playing ? REFRESH_PLAYING_MIN : REFRESH_IDLE_MIN) * 60000);
   if (config.runsInWidget) Script.setWidget(w);

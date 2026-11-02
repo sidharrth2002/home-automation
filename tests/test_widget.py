@@ -61,7 +61,7 @@ def run():
         ids = [t["webhook_id"] for t in triggers.values()]
         assert len(set(ids)) == 5 and all(i.startswith("widget-") and len(i) >= 39 for i in ids), ids
         assert w.key() not in "".join(ids), "the feed's name must not be derivable from the webhook ids"
-        assert "ping" not in w.PHONE_ACTIONS, "the test-only action isn't handed to the phone"
+        assert "ping" in w.PHONE_ACTIONS, "the phone's setup check uses the harmless ping"
         branches = {b["conditions"][0]["id"]: b["sequence"] for b in auto["actions"][0]["choose"]}
         assert branches["desk"] == [{"action": "light.toggle", "target": {"entity_id": "light.desk_lamp"}}]
         assert branches["tv1"][0]["target"]["entity_id"] == "light.wiz_rgbw_tunable_624d4e"

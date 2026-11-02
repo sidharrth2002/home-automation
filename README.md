@@ -245,6 +245,11 @@ name is a random secret. The feed has the three lights (on, brightness, colour),
 and the weather, and nothing else: no finances and no calendar. `tests/test_widget.py` checks that nothing outside
 that list can get into it.
 
+**Setting it up on the phone.** Run the script once inside Scriptable (the play button): a "Home widget check" says which
+script version you pasted, whether it can read the feed and whether the tap actions work. Taps on bulbs need a medium or
+large widget. For a guaranteed-simple version, add small Scriptable widgets and set each one's *Parameter* to `tv1`,
+`desk`, `tv2` or `off`: each is one big bulb (or an "All off" button) and tapping it toggles it.
+
 **Tapping a bulb** (medium and large widgets; a large one also has an "All lights off" button) toggles it. iOS
 opens the script, which POSTs to a Home Assistant webhook and stops. The webhooks are one automation,
 `widget_actions`, that `homeassistant.apply` builds from the same local key rather than storing in the repo: five
