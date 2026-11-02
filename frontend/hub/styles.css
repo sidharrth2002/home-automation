@@ -229,6 +229,7 @@ h1 em { font-style: italic; color: rgb(var(--a1)); transition: color 2s var(--ea
 .scene[aria-pressed="true"] { border-color: rgba(255,255,255,.35); box-shadow: 0 20px 50px -20px var(--glow); }
 .scene[aria-pressed="true"]::before { opacity: .75; }
 .scene > * { position: relative; }
+.scene > svg { flex: none; } /* a two-line title must not squash the icon */
 /* Welcome home: the arc reactor */
 .scene.hero { border-color: rgba(0,212,255,.35); box-shadow: 0 18px 50px -24px rgba(0,190,255,.8); }
 .scene.hero::before { opacity: .45; }
@@ -582,3 +583,12 @@ dialog.event h3 { margin: 10px 40px 20px 0; font: 400 32px/1.08 var(--serif); le
   .greeting { text-align: left; }
   .top-right { flex-direction: row; align-items: center; justify-content: space-between; }
 }
+
+/* ── TV mode (the Android TV app) ──────────────────────────────── */
+.tv-mode { cursor: none; }
+.tv-mode :focus { outline: 3px solid #7fe9ff; outline-offset: 4px; scroll-margin: 90px;
+  box-shadow: 0 0 0 7px rgba(0,212,255,.18), 0 0 34px rgba(0,212,255,.45); }
+.tv-mode .scene:focus, .tv-mode .holding:focus, .tv-mode .ev:focus, .tv-mode .app-chip:focus { transform: scale(1.04); }
+.tv-mode .orb:focus { outline-offset: 10px; }
+/* you're holding the real remote, so the on-screen one and the power button would only switch off this screen */
+.tv-mode .remote, .tv-mode .apps, .tv-mode .rk.power { display: none; }

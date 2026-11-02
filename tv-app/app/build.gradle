@@ -1,0 +1,25 @@
+plugins {
+    id "com.android.application"
+}
+
+// The Hub's address is passed in at build time by ./deploy (-PhubUrl=...), so it isn't stored in the repo.
+def hubUrl = project.findProperty("hubUrl") ?: "http://homeassistant.local:8123/local/hub/index.html"
+
+android {
+    namespace "com.sid.home"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.sid.home"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+        buildConfigField "String", "HUB_URL", "\"${hubUrl}\""
+    }
+    buildFeatures { buildConfig true }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

@@ -13,3 +13,14 @@ presence.log
 .home.pid
 home.log
 *.log
+
+# Android TV app build output
+tv-app/.gradle/
+tv-app/build/
+tv-app/app/build/
+tv-app/local.properties
+
+# personal photos, and the TV banner built from one (debug-only resource overlay)
+*.heic
+*.HEIC
+tv-app/app/src/debug/

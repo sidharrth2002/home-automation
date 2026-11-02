@@ -41,6 +41,8 @@ and the background picks up colour from the lights and the album art.
   Tapping a bulb on it toggles that lamp.
 - **Welcome home.** One button on the Hub: the TV lamps power up in arc-reactor blue, the desk lamp comes on at its
   adaptive level, the lamps settle to warm white, and the TV wakes and says "Welcome home, Sid" in a British voice.
+- **On the TV.** An Android TV app with its own launcher tile opens the Hub full screen, driven by the remote's
+  arrow keys.
 - **Talking to it.** Claude can control everything through Home Assistant's MCP server, so "turn the TV lamps
   blue" or "lights out" just works.
 - **Away mode.** If my phone hasn't been on the Wi-Fi for a while and the Mac is idle, everything turns off.
@@ -265,6 +267,29 @@ what reaches `say`.
 </details>
 
 <details>
+<summary><b>The TV app</b></summary>
+<br>
+
+`tv-app/` is a small Android TV app: a full-screen WebView of the Hub with a launcher banner, which keeps the screen
+awake while it's open. The Hub recognises it (its user agent includes `HomeHubTV`) and switches to TV mode: a
+1280-wide canvas scaled to the screen, the remote's arrows moving a focus ring to the nearest control in that
+direction (sliders take left/right), OK to press, Back closing an open panel before leaving the app, and the
+on-screen remote hidden since you're holding the real one. On Home Assistant's one-off sign-in page the arrows step
+between fields like Tab. `?tv=1` shows TV mode in any browser.
+
+```sh
+tv-app/deploy           # build with Gradle, install over adb and open it (TV_HOST in .env)
+tv-app/deploy --build   # just the APK
+```
+
+The TV needs developer options with USB debugging on; the first connection asks you to allow it on the TV. The
+Hub's address is this Mac's, baked in at build time, so redeploy if the Mac's address changes. Building needs JDK
+17 and the Android SDK (`brew install openjdk@17` and `brew install --cask android-commandlinetools`, then the
+platform and build tools via `sdkmanager`).
+
+</details>
+
+<details>
 <summary><b>iPhone widget</b></summary>
 <br>
 
@@ -375,6 +400,7 @@ music_sync/         audio capture, analysis, light show, now playing
 investments/        Hargreaves Lansdown client
 netflix/            export parser (not currently run; it fed a card I removed)
 widget/             the iPhone widget script and the feed behind it
+tv-app/             the Android TV app (a full-screen Hub) and its deploy script
 announce/           speaks home_say events on the Mac
 presence/           phone on Wi-Fi -> home/away
 stack/              the supervisor behind ./home

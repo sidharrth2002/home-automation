@@ -29,6 +29,13 @@ const TV_AUTO = "automation.tv_bias_lighting";
 const TV_REMOTE = "remote.smart_tv_pro";
 const HEALTH = "sensor.system_health";
 const INVEST = "sensor.investments";
+// TV mode: inside the Android TV app (its user agent says HomeHubTV), or ?tv=1 to try it in a browser.
+const TV_MODE = /HomeHubTV/.test(navigator.userAgent) || new URLSearchParams(location.search).has("tv");
+if (TV_MODE) {
+  document.documentElement.classList.add("tv-mode");
+  // A desktop-sized canvas scaled up to the screen, so the full layout fits and reads from the sofa.
+  document.querySelector('meta[name="viewport"]')?.setAttribute("content", "width=1280");
+}
 const T212 = "sensor.trading212";
 
 const APPS = {
@@ -144,6 +151,7 @@ function section(sel, deps, render) {
   sections.push({ sel, deps, render });
 }
 function renderAll(force = false) {
+  const keep = TV_MODE ? focusKey(document.activeElement) : null; // live updates replace buttons; keep the focus
   for (const { sel, deps, render } of sections) {
     if (busy.has(sel)) continue;
     const sig = JSON.stringify(deps().map((id) => (S[id] ? [S[id].state, S[id].attributes] : null)));
@@ -151,6 +159,9 @@ function renderAll(force = false) {
     lastSig[sel] = sig;
     $(sel).innerHTML = render();
     if (sel === "#invest") renderHolding(); // keep an open holding in step with fresh data
+  }
+  if (keep && (!document.activeElement || document.activeElement === document.body)) {
+    focusables().find((el) => focusKey(el) === keep)?.focus({ preventScroll: true });
   }
   ambient();
   tick();
@@ -910,6 +921,62 @@ document.addEventListener("pointerup", () => {
   if (!busy.size) return;
   setTimeout(() => { busy.clear(); renderAll(); }, 900);
 });
+
+// ── TV mode: the remote's arrows move a focus ring to the nearest control in that direction ──
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), summary, a[href]';
+function focusables() {
+  const scope = document.querySelector("dialog[open]") || document; // an open panel keeps the focus inside it
+  return [...scope.querySelectorAll(FOCUSABLE)].filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+  });
+}
+// Identifies "the same control" across a re-render, which builds new elements.
+function focusKey(el) {
+  if (!el || el === document.body || !el.dataset) return null;
+  return [el.tagName, el.dataset.act, el.dataset.id, el.dataset.v, el.dataset.i, el.getAttribute("aria-label")].join("|");
+}
+function moveFocus(dir) {
+  const items = focusables();
+  const cur = document.activeElement;
+  if (!items.length) return;
+  if (!items.includes(cur)) {
+    (items.find((el) => el.classList.contains("hero")) || items[0]).focus();
+    return;
+  }
+  const a = cur.getBoundingClientRect();
+  const ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+  let best = null, bestScore = Infinity;
+  for (const el of items) {
+    if (el === cur) continue;
+    const b = el.getBoundingClientRect();
+    const dx = b.left + b.width / 2 - ax, dy = b.top + b.height / 2 - ay;
+    const along = { right: dx, left: -dx, down: dy, up: -dy }[dir];
+    if (along <= 4) continue; // only things that are actually that way
+    const across = dir === "left" || dir === "right" ? Math.abs(dy) : Math.abs(dx);
+    const score = along + across * 2.5; // prefer straight ahead over diagonal
+    if (score < bestScore) { bestScore = score; best = el; }
+  }
+  if (best) {
+    best.focus({ preventScroll: true });
+    best.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }
+}
+document.addEventListener("keydown", (ev) => {
+  if (!TV_MODE) return;
+  const dir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[ev.key];
+  if (!dir) return;
+  if (document.activeElement?.matches?.('input[type="range"]') && (dir === "left" || dir === "right")) return; // sliders slide
+  ev.preventDefault();
+  moveFocus(dir);
+}, true);
+// Called by the TV app's Back button: close an open panel and say so, or let the app go back.
+window.hubBack = () => {
+  const open = document.querySelector("dialog[open]");
+  if (!open) return false;
+  open.close();
+  return true;
+};
 
 // ── boot ──────────────────────────────────────────────────────────
 async function connect() {

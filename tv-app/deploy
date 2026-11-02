@@ -1,0 +1,48 @@
+#!/bin/bash
+# Build the Android TV app and install it on the TV over the home network.
+#   tv-app/deploy            build, install and open it
+#   tv-app/deploy --build    just build the APK
+# The TV needs developer options with USB debugging on (the first connection asks you to allow it on the TV).
+# TV_HOST in ../.env is the TV's address; the Hub address is this Mac's, baked into the app at build time.
+set -euo pipefail
+cd "$(dirname "$0")"
+TV_HOST=$(sed -n 's/^TV_HOST=//p' ../.env 2>/dev/null | tr -d "\"'")
+export JAVA_HOME="${JAVA_HOME:-$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home}"
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+MAC=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1)
+HUB="http://$MAC:8123/local/hub/index.html"
+
+./gradlew -q assembleDebug -PhubUrl="$HUB"
+APK=app/build/outputs/apk/debug/app-debug.apk
+echo "built $APK (Hub at $HUB)"
+[[ ${1:-} == --build ]] && exit 0
+
+[[ -n $TV_HOST ]] || { echo "set TV_HOST=<the TV's address> in .env" >&2; exit 1; }
+ADB="$ANDROID_HOME/platform-tools/adb"
+
+# Google TV's wireless debugging listens on a random port that changes when it restarts, and announces it over
+# Bonjour. Reuse a live connection if there is one, otherwise look the port up (adb's own discovery is unreliable on
+# macOS, so ask dns-sd), and fall back to the classic 5555.
+bonjour_port() {
+  local out name
+  out=$(mktemp)
+  dns-sd -B _adb-tls-connect._tcp local. > "$out" 2>&1 & sleep 3; kill $! 2>/dev/null
+  name=$(awk '/ Add / {print $NF; exit}' "$out")
+  [[ -n $name ]] || return 1
+  dns-sd -L "$name" _adb-tls-connect._tcp local. > "$out" 2>&1 & sleep 3; kill $! 2>/dev/null
+  grep -o "reached at [^ ]*" "$out" | sed -E 's/.*:([0-9]+).*/\1/' | head -1
+}
+SERIAL=$("$ADB" devices | awk -v h="$TV_HOST" 'index($1, h ":") == 1 && $2 == "device" {print $1; exit}')
+if [[ -z $SERIAL ]]; then
+  PORT=$(bonjour_port || true)
+  SERIAL="$TV_HOST:${PORT:-5555}"
+  "$ADB" connect "$SERIAL" >/dev/null || true
+  "$ADB" -s "$SERIAL" get-state >/dev/null 2>&1 || {
+    echo "can't reach the TV. Turn on Developer options > Wireless debugging; the first time, pair with" >&2
+    echo "  $ADB pair $TV_HOST:<pairing port> <6-digit code>   (Wireless debugging > Pair device with pairing code)" >&2
+    exit 1
+  }
+fi
+"$ADB" -s "$SERIAL" install -r "$APK"
+"$ADB" -s "$SERIAL" shell am start -n com.sid.home/.MainActivity >/dev/null
+echo "installed and opened on the TV"

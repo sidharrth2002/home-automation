@@ -7,7 +7,7 @@
 cd "$(git rev-parse --show-toplevel)" || exit 1
 bad=0
 
-paths=$(git diff --cached --name-only --diff-filter=AM | grep -E '(\.log$|^data/|\.csv$|(^|/)\.env$|^homeassistant/config/|cookie|HALTED|\.music_sync_saved_state)' || true)
+paths=$(git diff --cached --name-only --diff-filter=AM | grep -E '(\.log$|^data/|\.csv$|(^|/)\.env$|^homeassistant/config/|cookie|HALTED|\.music_sync_saved_state|\.(heic|HEIC)$|^tv-app/app/src/debug/|\.apk$|\.shortcut$)' || true)
 if [ -n "$paths" ]; then
   echo "check-commit: these files must not be committed (public repo):"; echo "$paths" | sed 's/^/  /'; bad=1
 fi
