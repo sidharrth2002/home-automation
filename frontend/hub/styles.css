@@ -610,21 +610,27 @@ dialog.event h3 { margin: 10px 40px 20px 0; font: 400 32px/1.08 var(--serif); le
 .ambient-screen { display: none; }
 .ambient-mode .hub, .ambient-mode .toast, .ambient-mode dialog { display: none; }
 .ambient-mode .ambient-screen { display: grid; place-items: center; position: fixed; inset: 0; z-index: 5; overflow: hidden; }
-/* everything drifts slowly around the screen, so nothing sits in one place long enough to burn in */
-.amb { text-align: center; animation: amb-drift 300s ease-in-out infinite alternate; }
-@keyframes amb-drift {
-  0% { transform: translate(-7vw, -6vh); } 20% { transform: translate(6vw, -3vh); } 40% { transform: translate(-3vw, 6vh); }
-  60% { transform: translate(7vw, 4vh); } 80% { transform: translate(-6vw, 2vh); } 100% { transform: translate(3vw, -5vh); }
+/* The content stays centred: it only shifts by a few pixels over ten minutes, which is enough to stop burn-in. */
+.amb { text-align: center; animation: amb-shift 600s ease-in-out infinite alternate; }
+@keyframes amb-shift { 0% { transform: translate(-10px, -8px); } 50% { transform: translate(12px, 6px); } 100% { transform: translate(-6px, 10px); } }
+/* ...and the light moves instead: the colour blobs travel and swell much more than on the dashboard. */
+.ambient-mode .blob { animation-name: amb-blob; animation-duration: 26s; opacity: .7; }
+.ambient-mode .b2 { animation-duration: 31s; }
+.ambient-mode .b3 { animation-duration: 37s; opacity: .55; }
+@keyframes amb-blob {
+  0% { transform: translate(0, 0) scale(1); } 33% { transform: translate(14vmax, 8vmax) scale(1.18); }
+  66% { transform: translate(-10vmax, 12vmax) scale(.9); } 100% { transform: translate(8vmax, -9vmax) scale(1.1); }
 }
 .amb-time { font: 400 210px/.9 var(--serif); letter-spacing: -.035em; color: rgba(255,255,255,.93); text-shadow: 0 0 60px rgba(var(--a1), .25); }
-.amb-date { margin-top: 14px; font: 600 18px/1 var(--sans); letter-spacing: .32em; text-transform: uppercase; color: var(--ink-2); }
+.amb-date { margin-top: 14px; padding-left: .32em; /* letter-spacing trails the last letter; this re-centres it */
+  font: 600 18px/1 var(--sans); letter-spacing: .32em; text-transform: uppercase; color: var(--ink-2); }
 .amb-music { display: inline-flex; align-items: center; gap: 18px; margin-top: 48px; padding: 12px 26px 12px 12px; border-radius: 24px;
   background: rgba(255,255,255,.06); border: 1px solid var(--line); text-align: left; max-width: 760px; }
 .amb-art { flex: none; width: 84px; height: 84px; border-radius: 14px; background: #15151d center/cover; box-shadow: 0 14px 30px -12px rgba(0,0,0,.8); }
 .amb-music b { display: block; font: 400 28px/1.15 var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
 .amb-music span { display: block; margin-top: 4px; color: var(--ink-2); font-size: 16px; }
 .amb-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px 26px; margin-top: 40px; color: var(--ink-2); font-size: 16px; }
-.amb-bulb { display: inline-flex; align-items: center; gap: 9px; font: 600 12px/1 var(--mono); letter-spacing: .12em; }
+.amb-bulb { display: inline-flex; align-items: center; gap: 9px; font: 600 12px/1 var(--mono); letter-spacing: .12em; margin-right: -.12em; }
 .aorb { width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,.12); }
 .aorb.on { background: radial-gradient(circle at 40% 35%, #fff, rgb(var(--c)) 45%, rgba(var(--c), .55) 72%);
   box-shadow: 0 0 calc(8px + 28px * var(--b)) rgba(var(--c), .85); }

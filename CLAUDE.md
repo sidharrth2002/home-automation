@@ -105,6 +105,11 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   ignored, so `test` idles into it by briefly shortening `system screen_off_timeout`, always restoring it. A dream can
   start a little after the timeout; check `dumpsys dreams` for `mCurrentDream`. FLAG_KEEP_SCREEN_ON in an app blocks
   the screensaver, which is why the Hub app doesn't use it. The ambient screen must never show finances.
+- Hub sections rebuild their HTML whenever an entity they depend on changes. Don't list fast-changing entities (e.g.
+  `sensor.music_sync_tempo`, every ~2s during sync) as dependencies of a card with animated parts; update those bits
+  in place (as `ambient()` does for the BPM), or animations restart (the progress bar used to redraw from zero).
+- TV-mode arrow navigation scrolls just enough to show the focused control, except near either end of the page, where
+  it scrolls all the way (the header has nothing focusable, so it was left cut off).
 - The TV app adds `?app=<timestamp>` when it loads the Hub, because HA caches `/local/` pages for a long time.
 - `tv-app/app/src/debug/res/` is a git-ignored overlay for personal resources (the launcher banner with the user's
   photo). The committed banner in `src/main` must stay generic. Personal photos (`*.heic`) are git-ignored and blocked

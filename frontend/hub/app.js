@@ -232,15 +232,15 @@ section("#scenes", () => [SYNC, MODE, ...LIGHTS.map((l) => l.id)], () => {
 
 // music sync + now playing
 let tuneOpen = false;
-section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, TEMPO, NOW, TV], () => {
+// TEMPO isn't a dependency: it updates every couple of seconds during sync, and rebuilding the card that often
+// restarted the progress bar. ambient() keeps the BPM readout current in place instead.
+section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
   const sync = is(SYNC, "on");
   const mode = st(MODE);
   const [title, artist] = String(st(NOW) ?? "").split(" — ");
   const playing = at(NOW, "player_state") === "playing";
   const art = at(NOW, "entity_picture");
   const palette = at(NOW, "palette") ?? [];
-  const bpm = parseFloat(st(TEMPO));
-  const locked = at(TEMPO, "locked");
   const modes = at(MODE, "options") ?? ["auto", "calm", "party", "tv", "classic"];
   const colours = at(COLOURS, "options") ?? ["Album art", "Music key"];
   const nothing = !title || title === "Nothing playing";
@@ -248,13 +248,16 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, TEMPO, NOW, TV], () => 
   const lat = num(LAT, 60);
   const sub = nothing ? "Spotify isn't playing" : `${esc(artist ?? "")}${playing ? "" : " · paused"}`;
   const dur = Number(at(NOW, "media_duration")) || 0;
+  // Start a rebuilt bar where the song actually is, so it only ever glides forward rather than redrawing from zero.
+  const pos0 = clamp((Number(at(NOW, "media_position")) || 0)
+    + (playing ? Date.now() / 1000 - (Number(at(NOW, "media_position_updated_at")) || 0) : 0), 0, dur || 1);
   // Transport goes to the Mac's Spotify, or the TV when Spotify isn't open (see the music_command script).
   const controls = !nothing || is(TV, "on");
   const progress = !nothing && dur > 0 ? `
     <div class="progress" data-pos="${Number(at(NOW, "media_position")) || 0}" data-at="${Number(at(NOW, "media_position_updated_at")) || 0}"
-         data-dur="${dur}" data-playing="${playing}">
+         data-dur="${dur}" data-playing="${playing}" style="--p:${dur ? (pos0 / dur) * 100 : 0}%">
       <div class="bar"><i></i></div>
-      <div class="times"><span class="t-pos">0:00</span><span class="t-left">-${fmtTime(dur)}</span></div></div>` : "";
+      <div class="times"><span class="t-pos">${fmtTime(pos0)}</span><span class="t-left">-${fmtTime(dur)}</span></div></div>` : "";
   const transport = controls ? `
     <div class="transport">
       <button data-act="music" data-v="previous" aria-label="Previous track">${I.prev}</button>
@@ -271,7 +274,7 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, TEMPO, NOW, TV], () => 
       <div class="swatches">${palette.map((h) => `<i style="background:${esc(h)};color:${esc(h)}" title="${esc(h)}"></i>`).join("")}</div></div>
     ${progress}${transport}
     <div class="row"><span class="kicker">Mode</span>
-      <span class="bpm">${Number.isFinite(bpm) ? `<b>${Math.round(bpm)}</b> BPM${locked ? " · locked" : ""}` : sync ? "finding the beat…" : "idle"}</span></div>
+      <span class="bpm" id="music-bpm"></span></div>
     <div class="seg">${modes.map((m) => `<button data-act="select" data-id="${MODE}" data-v="${esc(m)}" aria-pressed="${m === mode}">${m === "tv" ? "TV" : esc(m)}</button>`).join("")}</div>
     <div class="row"><span class="kicker">Colours</span>
       <div class="seg" style="flex:1;max-width:260px">${colours.map((c) => `<button data-act="select" data-id="${COLOURS}" data-v="${esc(c)}" aria-pressed="${c === st(COLOURS)}">${esc(c)}</button>`).join("")}</div></div>
@@ -817,6 +820,11 @@ function ambient() {
   const beat = Number.isFinite(bpm) && is(SYNC, "on") ? `${(60 / bpm).toFixed(3)}s` : "0.5s";
   $("#hub").style.setProperty("--beat", beat);
   $("#music")?.classList.toggle("live", is(SYNC, "on") && Number.isFinite(bpm));
+  const bpmEl = $("#music-bpm");
+  if (bpmEl) {
+    bpmEl.innerHTML = Number.isFinite(bpm) && is(SYNC, "on") ? `<b>${Math.round(bpm)}</b> BPM${at(TEMPO, "locked") ? " · locked" : ""}`
+      : is(SYNC, "on") ? "finding the beat…" : "idle";
+  }
 }
 
 // ── clock, greeting, countdowns ──────────────────────────────────
@@ -992,8 +1000,18 @@ function moveFocus(dir) {
   }
   if (best) {
     best.focus({ preventScroll: true });
-    best.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    revealFocused(best);
   }
+}
+// Scroll just enough to show the focused control, except near either end of the page: the header has nothing to
+// focus, so "just enough" would leave it cut off when you come back up. There, go all the way.
+function revealFocused(el) {
+  const r = el.getBoundingClientRect();
+  const top = r.top + scrollY;
+  const pageEnd = document.documentElement.scrollHeight;
+  if (top < innerHeight * 0.5) scrollTo({ top: 0, behavior: "smooth" });
+  else if (top + r.height > pageEnd - innerHeight * 0.5) scrollTo({ top: pageEnd, behavior: "smooth" });
+  else el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
 }
 document.addEventListener("keydown", (ev) => {
   if (!TV_MODE) return;
