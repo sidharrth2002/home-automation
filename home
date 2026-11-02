@@ -6,13 +6,13 @@
 #   ./home restart
 #   ./home reload    restart just the Mac-side services (e.g. after adding credentials); HA keeps running
 #   ./home status
-#   ./home logs [music_sync|presence|investments|widget|home]
+#   ./home logs [music_sync|presence|investments|widget|announce|home]
 set -euo pipefail
 cd "$(dirname "$0")"
 
 PIDFILE=.home.pid
 PY=.venv/bin/python
-SERVICES='python -m (music_sync|netflix|presence|investments|widget|stack)( |$)'
+SERVICES='python -m (music_sync|netflix|presence|investments|widget|announce|stack)( |$)'
 
 supervisor_pid() {
   [[ -f $PIDFILE ]] && kill -0 "$(cat $PIDFILE)" 2>/dev/null && cat $PIDFILE

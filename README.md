@@ -39,6 +39,9 @@ and the background picks up colour from the lights and the album art.
 - **iPhone widget.** A Scriptable widget in the same neon style: the three bulbs as glowing orbs, what's
   playing with its album art, the TV, home/away and the weather, in small, medium, large and lock screen sizes.
   Tapping a bulb on it toggles that lamp.
+- **Welcome home.** One button on the Hub: the TV lamps power up in arc-reactor blue, the Mac says "Welcome home,
+  Sid" in a British voice, the desk lamp comes on at its adaptive level, then the lamps settle to warm white and the
+  TV wakes.
 - **Talking to it.** Claude can control everything through Home Assistant's MCP server, so "turn the TV lamps
   blue" or "lights out" just works.
 - **Away mode.** If my phone hasn't been on the Wi-Fi for a while and the Mac is idle, everything turns off.
@@ -235,6 +238,28 @@ git-ignored. It refreshes every 30 minutes during the day. `tests/test_t212.py` 
 </details>
 
 <details>
+<summary><b>Welcome home and the voice</b></summary>
+<br>
+
+`homeassistant/scripts/welcome_home.json` is the sequence. WiZ bulbs can't do transitions, so the power-up is a quick
+ramp of brightness steps in blue before they settle to 2700K. The desk lamp takes the adaptive targets, so it comes
+on at the right level for the time of day, and the TV is only switched on if it's off.
+
+The voice is `announce/`, a small service started by `./home up` that speaks on the Mac with macOS's own text to
+speech whenever Home Assistant fires a `home_say` event, so any script or automation can say something:
+
+```json
+{"event": "home_say", "event_data": {"text": "Goodnight, Sid.", "voice": "Daniel", "rate": 170}}
+```
+
+Daniel (British English) is the default; `ANNOUNCE_VOICE` in `.env` picks another installed voice (`say -v '?'`).
+Text is passed to `say` as a plain argument after `--`, never through a shell, and announcements queue instead of
+talking over each other. Claude knows the script as "Welcome home" or "I'm home". `tests/test_announce.py` covers
+what reaches `say`.
+
+</details>
+
+<details>
 <summary><b>iPhone widget</b></summary>
 <br>
 
@@ -345,6 +370,7 @@ music_sync/         audio capture, analysis, light show, now playing
 investments/        Hargreaves Lansdown client
 netflix/            export parser (not currently run; it fed a card I removed)
 widget/             the iPhone widget script and the feed behind it
+announce/           speaks home_say events on the Mac
 presence/           phone on Wi-Fi -> home/away
 stack/              the supervisor behind ./home
 homeassistant/      HA config + apply.py
@@ -354,4 +380,4 @@ tests/
 ```
 
 Tests: `python -m tests.test_analysis` (a synthetic 128 BPM track: tempo, beat timing, drops, TV mode,
-palettes), `tests.test_investments`, `tests.test_t212` and `tests.test_widget`, plus `node tests/widget_smoke.js`.
+palettes), `tests.test_investments`, `tests.test_t212`, `tests.test_widget` and `tests.test_announce`, plus `node tests/widget_smoke.js`.

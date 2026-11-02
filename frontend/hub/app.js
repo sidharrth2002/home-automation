@@ -80,6 +80,7 @@ const I = {
   mute: svg(`<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l5 6M21 9l-5 6"/>`),
   speaker: svg(`<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>`),
   pulse: svg(`<path d="M3 12h4l2-6 4 12 2-6h6"/>`),
+  reactor: svg(`<circle cx="12" cy="12" r="9.2"/><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><path d="M12 2.8v3.2M12 18v3.2M4 7.4l2.8 1.6M17.2 15l2.8 1.6M4 16.6l2.8-1.6M17.2 9l2.8-1.6"/>`),
   piggy: svg(`<path d="M19 11c0-3.3-3.1-6-7-6S5 7.7 5 11c0 1.6.7 3 1.9 4.1V18h3v-1.2c.7.1 1.4.2 2.1.2s1.4-.1 2.1-.2V18h3v-2.9c.6-.5 1.1-1 1.5-1.6H21v-3h-2z"/><circle cx="15.5" cy="10.5" r=".6" fill="currentColor"/><path d="M9 7.5c.8-.9 2-1.2 3.2-1"/>`),
   chart: svg(`<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/>`),
   eye: svg(`<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`),
@@ -204,12 +205,13 @@ section("#scenes", () => [SYNC, MODE, ...LIGHTS.map((l) => l.id)], () => {
   const mode = st(MODE);
   const dark = LIGHTS.every((l) => !is(l.id, "on"));
   return [
+    ["welcome_home", "Welcome home", "Lights, TV, hello", I.reactor, "linear-gradient(135deg,#00e5ff,#0077ff 55%,#001b4d)", "#00d4ff", false, "hero"],
     ["party_mode", "Party", "Beat-locked colour", I.party, "linear-gradient(135deg,#ff3cac,#784ba0 55%,#2b86c5)", "#ff3cac", sync && mode === "party"],
     ["chill_mode", "Chill", "Gentle music glow", I.chill, "linear-gradient(135deg,#2af598,#009efd)", "#2af598", sync && mode === "calm"],
     ["movie_mode", "Movie", "Subtle TV glow", I.film, "linear-gradient(135deg,#f6d365,#fda085)", "#fda085", sync && mode === "tv"],
     ["all_off", "All off", "Everything dark", I.power, "linear-gradient(135deg,#3a3a48,#08080c)", "#9a9ab0", dark],
-  ].map(([id, name, sub, icon, g, glow, active]) => `
-    <button class="scene" data-act="script" data-id="script.${id}" aria-pressed="${active}" style="--g:${g};--glow:${glow}">
+  ].map(([id, name, sub, icon, g, glow, active, cls = ""]) => `
+    <button class="scene ${cls}" data-act="script" data-id="script.${id}" aria-pressed="${active}" style="--g:${g};--glow:${glow}">
       ${icon}<div><b>${name}</b><small>${sub}</small></div>
     </button>`).join("");
 });
@@ -740,6 +742,7 @@ section("#health", () => [HEALTH, INVEST, T212, SYNC, MODE, HOME, WEATHER, TV, .
     conn?.connected ? ["ok", "Home Assistant", `Connected${conn.haVersion ? ` · ${esc(conn.haVersion)}` : ""}`] : ["bad", "Home Assistant", "Reconnecting…"],
     sup,
     svcTile("music_sync", "Music sync", () => is(SYNC, "on") ? `Following the music · ${esc(st(MODE))}` : "Idle, ready", "Not running"),
+    svcTile("announce", "Voice", () => "Ready to speak", "Not running"),
     svcTile("presence", "Presence", () => is(HOME, "on") ? "Home" : is(HOME, "off") ? "Away · lights off" : "Running"),
     feedTile("Hargreaves Lansdown", INVEST, "investments", 180, 540),
     feedTile("Trading 212", T212, "investments", 90, 300),
@@ -803,6 +806,19 @@ function tick() {
   });
 }
 
+// The welcome button sends a ring of arc-reactor light out across the Hub.
+function welcomeBurst(el) {
+  const r = el.getBoundingClientRect();
+  const burst = document.createElement("i");
+  burst.className = "arc-burst";
+  burst.style.left = `${r.left + 34}px`;
+  burst.style.top = `${r.top + 34}px`;
+  document.body.append(burst);
+  burst.addEventListener("animationend", () => burst.remove());
+  setTimeout(() => burst.remove(), 2000);
+  toast("Welcome home, Sid");
+}
+
 // ── interaction ───────────────────────────────────────────────────
 document.addEventListener("click", (ev) => {
   const el = ev.target.closest("[data-act]");
@@ -836,7 +852,10 @@ document.addEventListener("click", (ev) => {
   const domain = id.split(".")[0];
   if (act === "light") call("light", "toggle", { entity_id: id });
   else if (act === "toggle") call(domain, "toggle", { entity_id: id });
-  else if (act === "script") call("script", "turn_on", { entity_id: id });
+  else if (act === "script") {
+    if (id === "script.welcome_home") welcomeBurst(el);
+    call("script", "turn_on", { entity_id: id });
+  }
   else if (act === "select") call(domain, "select_option", { entity_id: id, option: v });
 });
 document.addEventListener("toggle", (ev) => {

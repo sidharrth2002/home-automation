@@ -213,8 +213,8 @@ h1 em { font-style: italic; color: rgb(var(--a1)); transition: color 2s var(--ea
 .value { font: 500 13px/1 var(--mono); color: var(--ink); }
 
 /* ── scenes ────────────────────────────────────────────────────── */
-.scenes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
-@media (max-width: 520px) { .scenes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.scenes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--gap); }
+@media (max-width: 520px) { .scenes { grid-template-columns: repeat(2, minmax(0, 1fr)); } .scene.hero { grid-column: span 2; } }
 .scene {
   position: relative; overflow: hidden; height: 112px; border-radius: 24px; padding: 18px;
   display: flex; flex-direction: column; justify-content: space-between; text-align: left;
@@ -229,6 +229,17 @@ h1 em { font-style: italic; color: rgb(var(--a1)); transition: color 2s var(--ea
 .scene[aria-pressed="true"] { border-color: rgba(255,255,255,.35); box-shadow: 0 20px 50px -20px var(--glow); }
 .scene[aria-pressed="true"]::before { opacity: .75; }
 .scene > * { position: relative; }
+/* Welcome home: the arc reactor */
+.scene.hero { border-color: rgba(0,212,255,.35); box-shadow: 0 18px 50px -24px rgba(0,190,255,.8); }
+.scene.hero::before { opacity: .45; }
+.scene.hero:hover::before { opacity: .62; }
+.scene.hero svg { color: #bff4ff; filter: drop-shadow(0 0 6px rgba(0,212,255,.95)); animation: reactor 3.2s ease-in-out infinite; }
+@keyframes reactor { 50% { filter: drop-shadow(0 0 12px rgba(0,212,255,1)); opacity: .82; } }
+.arc-burst { position: fixed; z-index: 60; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(120,235,255,.95), 0 0 50px 12px rgba(0,180,255,.55), inset 0 0 20px rgba(0,212,255,.6);
+  animation: arc-burst 1.5s cubic-bezier(.15,.75,.25,1) forwards; }
+@keyframes arc-burst { to { transform: scale(70); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .arc-burst { display: none; } .scene.hero svg { animation: none; } }
 .scene svg { width: 26px; height: 26px; }
 .scene b { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
 .scene small { display: block; color: var(--ink-2); font-size: 12px; margin-top: 2px; }

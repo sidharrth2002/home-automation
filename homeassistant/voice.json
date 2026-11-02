@@ -90,6 +90,13 @@
         "play pause",
         "skip track"
       ]
+    },
+    "script.welcome_home": {
+      "aliases": [
+        "Welcome home",
+        "I'm home",
+        "welcome home sequence"
+      ]
     }
   },
   "expose": [

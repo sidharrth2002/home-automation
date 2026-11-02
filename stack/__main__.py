@@ -39,7 +39,8 @@ def load_env():
 
 def services():
     """name -> argv. Presence only runs once it knows which phone to look for."""
-    out = {"music_sync": [PY, "-m", "music_sync"], "widget": [PY, "-m", "widget", "--watch"]}
+    out = {"music_sync": [PY, "-m", "music_sync"], "widget": [PY, "-m", "widget", "--watch"],
+           "announce": [PY, "-m", "announce"]}
     if os.environ.get("PRESENCE_PHONE_MAC"):
         out["presence"] = [PY, "-m", "presence"]
     from investments.__main__ import any_configured  # Keychain lookup; only run once credentials are stored
