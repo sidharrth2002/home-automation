@@ -1,51 +1,72 @@
-<p align="center"><img src="docs/icon.png" width="112" alt=""></p>
+<p align="center"><img src="docs/icon.png" width="96" alt=""></p>
 
 <h1 align="center">home-automation</h1>
 
 <p align="center">
 The setup that runs my room in London: three WiZ bulbs, a TCL Google TV and a Mac, glued together with Home
-Assistant and a few Python services.
+Assistant, a handful of Python services and a dashboard I built for it.
 </p>
 
 <p align="center">
 <img src="https://img.shields.io/badge/home%20assistant-docker-18BCF2?logo=homeassistant&logoColor=white" alt="">
 <img src="https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white" alt="">
+<img src="https://img.shields.io/badge/android%20tv-app-3DDC84?logo=android&logoColor=white" alt="">
 <img src="https://img.shields.io/badge/macOS-14.2%2B-111?logo=apple&logoColor=white" alt="">
 </p>
 
-<p align="center"><img src="docs/hub.png" width="880" alt="The Hub dashboard"></p>
+<p align="center"><img src="docs/hero.jpg" width="900" alt="The Hub's screensaver on the TV, and the Hub on a phone"></p>
 
-That's the Hub, the dashboard I actually use. The orbs are the bulbs in whatever colour they are right now,
-and the background picks up colour from the lights and the album art.
+## An evening with it
+
+- I get in and tap **Welcome home**. The lamps by the TV come up in blue, settle to warm white, and the TV wakes
+  up and says "Welcome home, Sid."
+- I put Spotify on and the two TV lamps follow the beat, in colours taken from the album cover.
+- I switch to Netflix and they drop to a dim warm glow that barely moves, so I stop noticing them.
+- The desk lamp has been following the sky all day. By half ten it's down to candle colour.
+- If I leave the TV alone for a minute it turns into a clock showing what's playing and which lamps are on.
+
+## Three screens
+
+<p align="center"><img src="docs/hub.png" width="880" alt="The Hub on a laptop"></p>
+
+**The Hub** is the dashboard: plain HTML and JavaScript on Home Assistant's websocket API, with no build step.
+The orbs are the bulbs in whatever colour they are right now, and the background takes its colour from the lights
+and the album art. Around them: now playing with controls, the week's calendar, my investments and the cash at
+Trading 212 (blurred until I tap the eye), the desk lamp's view of the sky, a remote for the TV, and a health card
+that says what's running and how fresh everything is.
+
+<p align="center"><img src="docs/tv-app.jpg" width="820" alt="The Hub as an app on the TV"></p>
+
+**On the TV** it's an Android TV app with its own tile in the launcher. The Hub notices it's on a TV and lays itself
+out for the sofa: the remote's arrows move a glowing ring to whatever is nearest in that direction, OK presses it,
+and Back closes things. The same app is the TV's **screensaver**, which is the clock at the top of this page.
+
+<img src="docs/hub-phone.png" width="230" align="right" alt="The Hub on a phone">
+
+**On the phone** the Hub is a home-screen web app. There's also an iPhone widget in the same style (glowing orbs,
+what's playing, the TV and the weather) and a set of Shortcuts, so I can flip a lamp without opening anything.
+Neither holds a Home Assistant password: they read a small feed and call single-purpose webhooks that only work
+on my home network.
+
+And I can just ask Claude. Home Assistant's MCP server gives it the lights, the TV, the scenes and the calendar,
+so "turn the TV lamps blue" or "lights out" just works.
+
+<br clear="right">
 
 ## What's in here
 
-- **Music sync.** The two lamps by the TV follow whatever is playing. It does proper beat tracking (onsets,
-  tempo, a beat grid it can predict ahead of time), so the lights land on the kick instead of lagging behind
-  it. Colours come from the album cover, or from the key of the song if the cover is black and white. It
-  listens to the Mac directly, or through the mic when the music is coming out of the TV.
-- **TV mode.** When the TV comes on, the same lamps switch to dim warm light that drifts a little with loud
-  scenes. I wanted something I wouldn't notice while watching, so there's no colour and nothing flashes. If
-  the TV is playing Spotify it goes back to the music show.
-- **Desk lamp.** The third bulb sets its own colour temperature and brightness from the sun, cloud cover and
-  rain, and gets warmer and dimmer in the evening. These lamps are the only lights in the room, so it stays
-  fairly low. If I change it by hand it leaves it alone for two hours.
-- **The Hub.** Plain HTML/JS on Home Assistant's websocket API, no build step. Lights, now playing with
-  controls, the week's calendar (iCloud), my investments, the desk lamp, a remote for the TV and a health
-  card that shows what's running and how fresh the data is.
-- **Investments.** Holdings from Hargreaves Lansdown, which has no API, so it logs in like the website does
-  (written so it can't lock the account, more on that below), plus the interest on my cash at Trading 212
-  through its official API. Values are blurred on the dashboard until I tap to show them.
-- **iPhone widget.** A Scriptable widget in the same neon style: the three bulbs as glowing orbs, what's
-  playing with its album art, the TV, home/away and the weather, in small, medium, large and lock screen sizes.
-  Tapping a bulb on it toggles that lamp.
-- **Welcome home.** One button on the Hub: the TV lamps power up in arc-reactor blue, the desk lamp comes on at its
-  adaptive level, the lamps settle to warm white, and the TV wakes and says "Welcome home, Sid" in a British voice.
-- **On the TV.** An Android TV app with its own launcher tile opens the Hub full screen, driven by the remote's
-  arrow keys.
-- **Talking to it.** Claude can control everything through Home Assistant's MCP server, so "turn the TV lamps
-  blue" or "lights out" just works.
-- **Away mode.** If my phone hasn't been on the Wi-Fi for a while and the Mac is idle, everything turns off.
+- **Music sync.** Real beat tracking (onsets, tempo, and a beat grid it can predict ahead of time), so the lights
+  land on the kick instead of lagging behind it. It listens to the Mac directly, or through the mic when the music
+  is coming out of the TV.
+- **TV mode.** Bias lighting for watching things: warm white, very dim, no colour, nothing flashes. If the TV is
+  playing music instead, it goes back to the show.
+- **Desk lamp.** Sets its own colour temperature and brightness from the sun, cloud cover and rain, and stays low,
+  because these three lamps are the only lights in the room. If I change it by hand it leaves it alone for two hours.
+- **Welcome home.** One button: lights, the TV, and a spoken hello through the TV in a British voice.
+- **Investments.** Holdings from Hargreaves Lansdown, which has no API (so it logs in like the website does, written
+  so it can't lock the account), price history from the FT, and the daily interest on my cash at Trading 212.
+- **One switch.** `./home up` and `./home down` start and stop everything, and a supervisor restarts anything that
+  falls over.
 
 ## How it fits together
 
@@ -55,43 +76,43 @@ flowchart LR
         direction TB
         audio["system audio<br/>(audiotee)"]
         mic["microphone"]
-        spotify["Spotify app<br/>(AppleScript)"]
+        spotify["Spotify app"]
         sync["music_sync"]
-        side["presence,<br/>investments"]
+        voice["announce<br/>(macOS voice)"]
+        side["investments,<br/>widget feed"]
         sup(["./home"])
         audio --> sync
         mic --> sync
         spotify --> sync
-        sup -.-> sync & side
+        sup -.-> sync & voice & side
     end
 
     ha["Home Assistant<br/>(Docker)"]
     bulbs(("WiZ bulbs"))
-    tv["TCL TV"]
+    tv["TCL Google TV<br/>app + screensaver"]
     hub["Hub"]
-    phone["iPhone widget"]
+    phone["iPhone widget<br/>+ Shortcuts"]
     claude["Claude"]
     icloud["iCloud"]
-    hl["Hargreaves<br/>Lansdown"]
-    t212["Trading 212<br/>(official API)"]
-    ft["FT<br/>(fund prices)"]
+    money["Hargreaves Lansdown,<br/>Trading 212, FT"]
 
     sync -- UDP --> bulbs
     sync <-- websocket --> ha
     side -- REST --> ha
-    hl -. read-only .-> side
-    t212 -. read-only .-> side
-    ft -.-> side
+    money -. read-only .-> side
+    voice -- cast --> tv
     ha -- desk lamp --> bulbs
-    ha <--> tv
-    icloud -- CalDAV --> ha
+    ha <-- remote --> tv
+    tv <-- websocket --> ha
     hub <-- websocket --> ha
-    ha -. JSON feed .-> phone
+    ha -. feed .-> phone
+    phone -. webhooks .-> ha
+    icloud -- CalDAV --> ha
     claude -- MCP --> ha
 ```
 
-Home Assistant runs in Docker. The audio side can't, because it needs Core Audio and the mic, so those
-services run natively on the Mac under a small supervisor, and `./home` starts and stops the lot together.
+Home Assistant runs in Docker. The audio side can't, because it needs Core Audio and the mic, so those services run
+natively on the Mac under a small supervisor, and `./home` starts and stops the lot together.
 
 ## Running it
 
@@ -102,18 +123,16 @@ cp .env.example .env                       # TOKEN = a Home Assistant long-lived
 .venv/bin/python -m homeassistant.apply    # pushes helpers, automations, dashboards and the Hub
 ```
 
-The Hub is at `http://localhost:8123/hub-live`, or full screen at `/local/hub/index.html` (it has a manifest
-and icon, so it can go on a phone's home screen). Turn on *Allow local communication* in the WiZ app first.
-The first run will ask for system audio, microphone and Spotify automation permissions.
+The Hub is at `http://localhost:8123/hub-live`, or full screen at `/local/hub/index.html`. Turn on *Allow local
+communication* in the WiZ app first. The first run asks for system audio, microphone and Spotify permissions.
 
 ```sh
-./home up | down | restart | status       # down restores the bulbs before stopping anything
+./home up | down | restart | reload | status     # down puts the bulbs back before stopping anything
 ./home logs music_sync
-bin/ha states light                       # quick look at anything in HA
-bin/ha call script.turn_on script.party_mode
+bin/ha states light                              # quick look at anything in Home Assistant
+bin/ha call script.turn_on script.welcome_home
+tv-app/deploy                                    # build the TV app and install it on the TV
 ```
-
-<p align="center"><img src="docs/hub-phone.png" width="280" alt="The Hub on a phone"></p>
 
 ## Notes
 
@@ -133,108 +152,48 @@ bin/ha call script.turn_on script.party_mode
 | `sensor.music_sync_tempo` | Detected BPM and whether the beat grid is locked. |
 | `sensor.music_sync_now_playing` | Track, cover, palette and playback position. |
 
-The analysis (`analysis.py`, `show.py`) works on 23 ms STFT hops: spectral-flux onsets in three bands with
-adaptive thresholds, tempo from autocorrelation, beat phase from a comb filter plus a PLL that nudges the
-grid towards detected kicks. Once it's locked, beats are predicted and sent early. Hue comes from a chroma
-vector mapped onto the circle of fifths, so it follows the key. There's per-band AGC and a simple
-breakdown-then-drop detector. Each bulb is rate limited and identical updates are skipped.
+The analysis (`analysis.py`, `show.py`) works on 23 ms STFT hops: spectral-flux onsets in three bands with adaptive
+thresholds, tempo from autocorrelation, beat phase from a comb filter plus a PLL that nudges the grid towards
+detected kicks. Once it's locked, beats are predicted and sent early. Hue comes from a chroma vector mapped onto the
+circle of fifths, so it follows the key. There's per-band AGC and a simple breakdown-then-drop detector. Each bulb
+is rate limited and identical updates are skipped.
 
-Where it listens: `tv` mode always uses the mic. The other modes use the Mac's audio, but if that's silent for
-3s while the TV is on they switch to the mic (with a slow gain stage, since a laptop across the room hears
-the TV at about -55 dBFS) and switch back after 1.5s of sustained Mac audio. I couldn't use Spotify's own
-state for this because the Mac app reports "playing" while it's acting as a remote for the TV.
+Where it listens: `tv` mode always uses the mic. The other modes use the Mac's audio, but if that's silent for 3s
+while the TV is on they switch to the mic (with a slow gain stage, since a laptop across the room hears the TV at
+about -55 dBFS) and switch back after 1.5s of sustained Mac audio. Spotify's own state can't decide this, because the
+Mac app says "playing" while it's acting as a remote for the TV.
 
-Album colours: `nowplaying.py` asks Spotify over AppleScript what's playing (no developer account, and it
-won't launch Spotify if it's closed). `palette.py` runs k-means on the cover, merges near-duplicate hues,
-throws out black/grey/white and keeps up to four colours. Bulbs rotate through them every bar, two bars or
-beat depending on the mode.
+Album colours: `nowplaying.py` asks Spotify over AppleScript what's playing (no developer account, and it won't
+launch Spotify if it's closed). `palette.py` runs k-means on the cover, merges near-duplicate hues, throws out
+black, grey and white and keeps up to four colours. `script.music_command` does play/pause/next/previous on the
+Mac's Spotify if it's open, otherwise on the TV.
 
-`script.music_command` does play/pause/next/previous on the Mac's Spotify if it's open, otherwise on the TV.
-
-System audio comes from the bundled [audiotee](https://github.com/makeusabrew/audiotee) binary (MIT, macOS
-14.2+). Nothing is recorded; audio only lives in memory.
+System audio comes from the bundled [audiotee](https://github.com/makeusabrew/audiotee) binary (MIT, macOS 14.2+).
+Nothing is recorded; audio only lives in memory.
 
 </details>
 
 <details>
-<summary><b>TV mode</b></summary>
+<summary><b>TV mode and the desk lamp</b></summary>
 <br>
 
-Warm white between 2200 and 2700K at 15%. Loud scenes can push it up by at most 8 points over about 3
-seconds, and it settles back over about 8. No RGB, no beats. It listens to the room, so it works with every
-app, and it never times out on quiet scenes.
+**TV mode** is warm white between 2200 and 2700K at 15%. Loud scenes can push it up by at most 8 points over about 3
+seconds, and it settles back over about 8. It listens to the room, so it works with every app, and it never times out
+on quiet scenes. The *TV bias lighting* automation starts it when the TV turns on (unless music sync is already
+running) and stops it when the TV turns off, and only on a real off-to-on change, otherwise every Home Assistant
+restart would trigger it.
 
-The TV is paired through HA's Android TV Remote integration (`media_player.smart_tv_pro`). The *TV bias
-lighting* automation starts it when the TV turns on, unless music sync is already running or I'm out, and
-stops it when the TV turns off. It only fires on a real off→on change, otherwise every HA restart would
-trigger it.
+The **desk lamp** lives entirely in Home Assistant (`homeassistant/templates/`, `automations/desk_lamp_*.json`):
 
-</details>
+- `sensor.outdoor_daylight` estimates the light through the window from the sun's elevation (0 at -4°, full at 30°),
+  cloud cover (up to -70%) and rain, fog or snow (another -20%).
+- `sensor.desk_lamp_target_colour` is 4000-5200K during the day (cooler when it's overcast, to match the light
+  outside), 2700K around sunset, and 2200K from the 21:00-22:30 wind-down until 05:00.
+- `sensor.desk_lamp_target_brightness` scales to `input_number.desk_lamp_max_brightness`: the full value in the dark,
+  less on bright days, 45% of it late at night, and at most 35% of it while the TV is on.
 
-<details>
-<summary><b>Desk lamp</b></summary>
-<br>
-
-This one lives entirely in Home Assistant (`homeassistant/templates/`, `automations/desk_lamp_*.json`).
-
-- `sensor.outdoor_daylight` estimates the light coming through the window from the sun's elevation (0 at
-  -4°, full at 30°), cloud cover (up to -70%) and rain, fog or snow (another -20%).
-- `sensor.desk_lamp_target_colour` is 4000-5200K during the day (cooler when it's overcast, to match the
-  light outside), 2700K around sunset, and 2200K from the 21:00-22:30 wind-down until 05:00.
-- `sensor.desk_lamp_target_brightness` scales everything to `input_number.desk_lamp_max_brightness`: the full
-  value in the dark, less on bright days, 45% of it late at night, and at most 35% of it while the TV is on.
-
-It only adjusts the lamp when it's already on. A manual change that's clearly off target starts
-`timer.desk_lamp_manual`, which pauses it for 2 hours. Music sync skips this bulb (`WIZ_EXCLUDE_MACS`).
-
-</details>
-
-<details>
-<summary><b>Investments (Hargreaves Lansdown)</b></summary>
-<br>
-
-HL doesn't have an API, so `investments/hl.py` logs in the same way the website does and reads the portfolio
-pages. It's a port of [hl-api-client-net](https://github.com/jonathanmadeley/hl-api-client-net). HL locks
-the account after a few failed logins, so I was careful with this one:
-
-- Credentials are checked locally first: the secure number has to be 6 digits and the date of birth has to
-  be unambiguous.
-- The password is only submitted if the page asks for exactly three secure-number digits it can identify.
-- Any failed, interrupted or unexpected login stops automatic logins completely. Nothing retries. It stays
-  stopped until `python -m investments login` works when run by hand.
-- At most 8 automatic logins a day, and the session cookie is reused so most refreshes don't log in.
-
-```sh
-.venv/bin/python -m investments setup   # prompts for the details and stores them in the macOS Keychain
-.venv/bin/python -m investments login   # one login by hand, then fetch and publish
-```
-
-After that it refreshes hourly between 07:00 and 22:00 as part of `./home up` and publishes
-`sensor.investments`, which isn't exposed to Claude.
-
-Price history for each fund comes from the FT's public fund pages (`investments/prices.py`), looked up by ISIN
-(worked out from the SEDOL for UK funds) and fetched once a day into `sensor.investment_<sedol>`. Only fund
-identifiers are sent to FT. In the Hub, clicking a holding opens its price chart (1M to 5Y) with my average
-cost marked, returns over each period and the position itself. The main chart shows what my current holdings
-would have been worth over time, so it ignores deposits. `tests/test_investments.py` runs each of those rules
-against a fake HL.
-
-### Trading 212 cash
-
-Trading 212 has an official API, so this one doesn't log in to anything. `investments/t212.py` uses an API
-key with read-only permissions (created in the app under Settings > API) and only ever makes GET requests. It
-reads the cash balance and the interest paid on uninvested cash, which shows up in the Hub as a card with the
-balance, the latest daily payment, an estimated yearly rate and a chart of interest earned.
-
-```sh
-.venv/bin/python -m investments setup-t212   # key + secret go into the macOS Keychain
-.venv/bin/python -m investments t212         # one supervised connection by hand
-```
-
-If Trading 212 ever refuses the key it stops and doesn't retry, the same as the HL side, until `t212` works by
-hand. Requests are spaced to stay under its rate limits, and after the first run only new interest payments
-are fetched. The key is never written to a file, and `data/` (including the cached interest history) is
-git-ignored. It refreshes every 30 minutes during the day. `tests/test_t212.py` runs against a fake API.
+It only adjusts the lamp when it's already on. A manual change that's clearly off target pauses it for 2 hours.
+Music sync never touches this bulb.
 
 </details>
 
@@ -242,146 +201,141 @@ git-ignored. It refreshes every 30 minutes during the day. `tests/test_t212.py` 
 <summary><b>Welcome home and the voice</b></summary>
 <br>
 
-`homeassistant/scripts/welcome_home.json` is the sequence. WiZ bulbs can't do transitions, so the power-up is a quick
-ramp of brightness steps in blue before they settle to 2700K. The desk lamp takes the adaptive targets, so it comes
-on at the right level for the time of day. If the TV was off, it's switched on and the greeting plays through it
-(about 15 seconds after the press, most of it the TV booting). If it was already on, the greeting comes from the Mac
-straight away instead, so it doesn't cut off whatever's playing.
+`homeassistant/scripts/welcome_home.json` is the sequence. WiZ bulbs can't do transitions, so the power-up is a
+quick ramp of brightness steps in blue before they settle to 2700K, and the desk lamp comes on at its adaptive level.
+If the TV was off it's switched on and the greeting plays through it, about 15 seconds after the press, most of
+that the TV booting. If it was already on, the greeting comes from the Mac straight away, so it doesn't cut off
+whatever's playing.
 
-The voice is `announce/`, a small service started by `./home up` that speaks with macOS's own text to speech whenever
-Home Assistant fires a `home_say` event, so any script or automation can say something. With `"target": "tv"` it
-renders the speech to a WAV file under a random name in `/local/announce/`, waits for the TV to wake, casts it, and
-closes the cast player afterwards; if the TV doesn't come up it says it on the Mac.
+The voice is `announce/`. It speaks with macOS's own text to speech whenever Home Assistant fires a `home_say`
+event, so any script or automation can say something. With `"target": "tv"` it renders the speech to a WAV under a
+random name in `/local/announce/`, waits for the TV to wake, casts it, then closes the cast player. If the TV
+doesn't come up, it says it on the Mac instead.
 
 ```json
-{"event": "home_say", "event_data": {"text": "Goodnight, Sid.", "target": "tv", "rate": 170}}
+{"event": "home_say", "event_data": {"text": "Goodnight, Sid.", "target": "tv"}}
 ```
 
-It uses the most natural British voice installed. The built-in compact Daniel sounds robotic; Apple's Premium voices
-(System Settings > Accessibility > Spoken Content > System voice > Manage Voices, e.g. Jamie (Premium)) sound far
-more human and are picked up automatically once downloaded. `ANNOUNCE_VOICE` in `.env` overrides the choice.
-Text is passed to `say` as a plain argument after `--`, never through a shell, and announcements queue instead of
-talking over each other. Claude knows the script as "Welcome home" or "I'm home". `tests/test_announce.py` covers
-what reaches `say`.
+It picks the most natural British voice installed. The built-in compact voices sound robotic; Apple's Premium
+voices (System Settings > Accessibility > Spoken Content > Manage Voices, e.g. Jamie) sound far more human and are
+picked up as soon as they're downloaded. Text goes to `say` as a plain argument, never through a shell.
 
 </details>
 
 <details>
-<summary><b>The TV app</b></summary>
+<summary><b>The TV app and the screensaver</b></summary>
 <br>
 
-`tv-app/` is a small Android TV app: a full-screen WebView of the Hub with a launcher banner, which keeps the screen
-awake while it's open. The Hub recognises it (its user agent includes `HomeHubTV`) and switches to TV mode: a
-1280-wide canvas scaled to the screen, the remote's arrows moving a focus ring to the nearest control in that
-direction (sliders take left/right), OK to press, Back closing an open panel before leaving the app, and the
-on-screen remote hidden since you're holding the real one. On Home Assistant's one-off sign-in page the arrows step
-between fields like Tab. `?tv=1` shows TV mode in any browser.
+`tv-app/` is a small Android TV app: a full-screen WebView of the Hub with a launcher banner. The Hub recognises it
+(its user agent includes `HomeHubTV`) and switches to TV mode: a 1280-wide canvas scaled to the screen, arrow-key
+navigation to the nearest control in that direction (sliders take left and right), Back closing an open panel
+before leaving the app, and the Hub's own TV remote hidden, since you're holding the real one. On Home
+Assistant's one-off sign-in page the arrows step between fields. TV GPUs struggle with heavy blur, so TV mode also
+swaps the frosted glass for near-solid cards. `?tv=1` shows TV mode in any browser.
 
-The app is also the TV's **screensaver**: the Hub's ambient screen (a big clock and date, what's playing with its
-cover, the three bulbs in their live colours, the weather and the next event), drifting slowly so nothing burns in.
-Google TV hides third-party screensavers in its settings, but the setting underneath accepts any installed one, so
-it's switched over adb, and the original is recorded first so it can go back. Leaving the Hub app idle also drifts
-into it. `?ambient=1` previews it in a browser.
+The **screensaver** is the Hub's ambient screen: a big clock and the date, what's playing with its cover, the
+three bulbs in their live colours, the weather and the next event. The light behind it drifts, and the content
+shifts a few pixels over ten minutes so nothing burns in. Google TV hides third-party screensavers in its settings,
+but the setting underneath accepts any installed one, so it's switched over adb, with the original recorded first
+so it can go back. `?ambient=1` previews it.
 
 ```sh
+tv-app/deploy                  # build with Gradle, install over adb and open it (TV_HOST in .env)
 tv-app/screensaver on | off | test | status
-tv-app/screensaver delay 1     # start after 1 minute idle (it was 10)
+tv-app/screensaver delay 1     # start it after a minute idle
 ```
 
-```sh
-tv-app/deploy           # build with Gradle, install over adb and open it (TV_HOST in .env)
-tv-app/deploy --build   # just the APK
-```
-
-The TV needs developer options with USB debugging on; the first connection asks you to allow it on the TV. The
-Hub's address is this Mac's, baked in at build time, so redeploy if the Mac's address changes. Building needs JDK
-17 and the Android SDK (`brew install openjdk@17` and `brew install --cask android-commandlinetools`, then the
-platform and build tools via `sdkmanager`).
+The TV needs Developer options with **Wireless debugging** on. Pair once with the code it shows
+(`adb pair <tv>:<port> <code>`); after that `deploy` finds the TV by itself. The Hub's address is baked in at build
+time, so redeploy if the Mac's address changes. Building needs JDK 17 and the Android SDK
+(`brew install openjdk@17` and `brew install --cask android-commandlinetools`, then the platform and build tools
+through `sdkmanager`).
 
 </details>
 
 <details>
-<summary><b>iPhone widget</b></summary>
+<summary><b>Investments</b></summary>
 <br>
 
-`widget/home.js` is a [Scriptable](https://scriptable.app) widget (free app), so there's nothing to build or sign.
-It doesn't talk to Home Assistant and there's no token on the phone. Instead the `widget` service (started by
-`./home up`) writes a small JSON feed every 20 seconds to a file under Home Assistant's `/local/` folder whose
-name is a random secret. The feed has the three lights (on, brightness, colour), what's playing, the TV, home/away
-and the weather, and nothing else: no finances and no calendar. `tests/test_widget.py` checks that nothing outside
-that list can get into it.
+HL doesn't have an API, so `investments/hl.py` logs in the way the website does and reads the portfolio pages. It's
+a port of [hl-api-client-net](https://github.com/jonathanmadeley/hl-api-client-net). HL locks the account after a
+few failed logins, so I was careful with this one:
 
-**Setting it up on the phone.** Run the script once inside Scriptable (the play button): a "Home widget check" says which
-script version you pasted, whether it can read the feed and whether the tap actions work. Taps on bulbs need a medium or
-large widget. For a guaranteed-simple version, add small Scriptable widgets and set each one's *Parameter* to `tv1`,
-`desk`, `tv2` or `off`: each is one big bulb (or an "All off" button) and tapping it toggles it.
+- Credentials are checked locally first: the secure number has to be 6 digits and the date of birth has to be
+  unambiguous.
+- The password is only submitted if the page asks for exactly three secure-number digits it can identify.
+- Any failed, interrupted or unexpected login stops automatic logins completely. Nothing retries. It stays stopped
+  until `python -m investments login` works when run by hand.
+- At most 8 automatic logins a day, and the session cookie is reused so most refreshes don't log in at all.
 
-**Tapping a bulb** (medium and large widgets; a large one also has an "All lights off" button) toggles it. iOS
-opens the script, which POSTs to a Home Assistant webhook and stops. The webhooks are one automation,
-`widget_actions`, that `homeassistant.apply` builds from the same local key rather than storing in the repo: five
-secret addresses, LAN-only and POST-only, each doing exactly one thing (toggle a lamp, run `script.all_off`, or a
-"ping" that does nothing, used for testing). A leaked address can flip a lamp from your home network and nothing
-more, and deleting `data/widget/key` revokes all of them. Two limits, both iOS's: a tap flashes the Scriptable app
-open for a moment, and the widget's picture of the bulb catches up only when iOS next redraws it. For buttons that
-don't open any app, `python -m widget shortcuts` makes four signed Shortcuts (TV lamp 1, Desk lamp, TV lamp 2, All
-lights off), each a single POST to its webhook. AirDrop them to the phone and add them to a Shortcuts widget, a Lock
-Screen widget or a Control Center control: iOS runs those in the background. They contain the secret addresses, so they
-live in the git-ignored `data/widget/shortcuts/` and should be deleted after importing. They point at the Mac's IP address;
-if that changes, regenerate them (`--host` takes a different one).
+Price history for each fund comes from the FT's public fund pages (`investments/prices.py`), looked up by ISIN and
+fetched once a day; only fund identifiers are sent to the FT. Clicking a holding opens its price chart with my
+average cost marked, returns over each period and the position itself.
+
+Trading 212 has an official API, so `investments/t212.py` just uses a read-only key and GET requests to read the cash
+balance and the interest paid on it. If it ever refuses the key, it stops and doesn't retry, the same as the HL side.
+
+```sh
+.venv/bin/python -m investments setup        # HL details into the macOS Keychain
+.venv/bin/python -m investments login        # one login by hand, then it refreshes hourly
+.venv/bin/python -m investments setup-t212   # Trading 212 key and secret into the Keychain
+```
+
+None of it is exposed to Claude or shown on the screensaver or the widget. `tests/test_investments.py` and
+`tests/test_t212.py` run every safety rule against fakes.
+
+</details>
+
+<details>
+<summary><b>iPhone widget and Shortcuts</b></summary>
+<br>
+
+`widget/home.js` is a [Scriptable](https://scriptable.app) widget, so there's nothing to build or sign, in small,
+medium, large and lock screen sizes. The `widget` service writes a small JSON feed every 20 seconds to a file under
+Home Assistant's `/local/` folder whose name is a random secret: the three lights, what's playing, the TV, home or
+away and the weather, and nothing else. `tests/test_widget.py` checks nothing outside that list can get in.
+
+Tapping a bulb toggles it through a Home Assistant webhook. The webhooks are one automation, built from the same
+local key rather than stored in the repo: secret, LAN-only, POST-only, each doing exactly one thing. A leaked address
+can flip a lamp from my home network and nothing more, and deleting `data/widget/key` revokes all of them. iOS opens
+Scriptable for a moment on every tap, so `python -m widget shortcuts` also makes signed Shortcuts for the lamps,
+which run from the Shortcuts widget, the lock screen or Control Center without opening anything.
 
 ```sh
 .venv/bin/python -m widget install --copy   # fills in the private address and copies the script to the clipboard
+.venv/bin/python -m widget shortcuts        # signed Shortcuts, to AirDrop to the phone
 ```
 
-Then paste it into a new script in Scriptable on the phone (the clipboard carries across with Universal
-Clipboard), and add a Scriptable widget to the home or lock screen. Tapping it opens the Hub. Away from home
-Wi-Fi it shows the last data it saw, marked with how old it is. The installed script contains the secret address,
-so it's written to `data/widget/` (git-ignored) and the copy in the repo only has placeholders. If the address
-ever leaks, delete `data/widget/key` and run the install again.
-
-`node tests/widget_smoke.js` runs the script against a strict stand-in for Scriptable's API in every size and a
-set of awkward cases (offline, nothing playing, stale data), which catches typos but isn't the same as looking at
-it on a phone.
+Run the script once inside Scriptable for a check of what works. `node tests/widget_smoke.js` runs it against a
+strict stand-in for Scriptable's API in every size, which catches typos but isn't the same as a real phone.
 
 </details>
 
 <details>
-<summary><b>Claude</b></summary>
+<summary><b>Claude, the calendar, the TV remote and the health card</b></summary>
 <br>
 
-Home Assistant's MCP server (`/api/mcp`) gives Claude the usual Assist tools: on/off, light colour and
-brightness, media controls, scripts and the calendar. `homeassistant/voice.json` controls which entities it
-can see and what they're called ("TV lamp 1", "desk light", "lights out" and so on).
+**Claude.** Home Assistant's MCP server (`/api/mcp`) gives Claude the usual Assist tools. `homeassistant/voice.json`
+decides which entities it can see and what they're called ("TV lamp 1", "desk light", "I'm home", "lights out").
 
 ```sh
 claude mcp add-json -s user home-assistant \
   '{"type":"http","url":"http://localhost:8123/api/mcp","headersHelper":"'"$PWD"'/bin/ha-mcp-headers"}'
 ```
 
-`bin/ha-mcp-headers` reads the token from `.env` when it's needed, so it isn't stored in Claude's config.
+**Calendar.** iCloud over CalDAV, added by `homeassistant.apply` once `ICLOUD_USERNAME` and `ICLOUD_APP_PASSWORD` (an
+app-specific password) are in `.env`. Clicking an event shows its details, with a map link and a join button for
+video calls.
 
-</details>
+**TV remote.** The Hub's TV card has a D-pad, back and home, play/pause, mute, volume (hold to repeat), power and
+buttons that open Netflix, YouTube, Spotify and the rest.
 
-<details>
-<summary><b>Calendar, presence, the TV remote and the health card</b></summary>
-<br>
+**Health card.** The supervisor publishes `sensor.system_health` every minute and whenever a service changes state.
+The Hub combines it with how recently each feed refreshed and whether the bulbs, TV, weather and calendar are
+reachable, and flags anything stale or down.
 
-Calendar: iCloud over CalDAV. `homeassistant.apply` adds it once `ICLOUD_USERNAME` and `ICLOUD_APP_PASSWORD`
-(an app-specific password) are in `.env`.
-
-TV remote: the Hub's TV card has a D-pad, back/home, play/pause, mute, volume (hold to repeat) and buttons that
-launch Netflix, YouTube, Spotify and the other apps. Keys go through `remote.send_command` and apps through
-`media_player.play_media` on the Android TV Remote integration. The TV's volume can only be stepped, not set to a
-level.
-
-Health card: the supervisor publishes `sensor.system_health` every minute and whenever a service changes
-state (per-service state, uptime and restarts, plus load and free disk). The Hub combines that with how recently
-each feed refreshed, whether the bulbs, TV, weather and calendar are reachable, and flags anything stale or down.
-
-Presence: `python -m presence` publishes `binary_sensor.someone_home`. I count as home if my phone has been
-on the Wi-Fi in the last 15 minutes or the Mac has been used in the last 10. When that flips to away,
-everything turns off. If the service isn't running the sensor just doesn't exist, so nothing turns off by
-accident. Needs `PRESENCE_PHONE_MAC` in `.env`.
+**Presence** (`python -m presence`, not running yet) would turn everything off when my phone has been off the Wi-Fi
+for a while and the Mac is idle. It needs `PRESENCE_PHONE_MAC` in `.env`.
 
 </details>
 
@@ -389,16 +343,16 @@ accident. Needs `PRESENCE_PHONE_MAC` in `.env`.
 <summary><b>Home Assistant config</b></summary>
 <br>
 
-The parts of the HA config I care about are JSON files in `homeassistant/`, pushed with
-`.venv/bin/python -m homeassistant.apply`. I edit these rather than using the UI so the repo stays in sync.
+The parts of the config I care about are JSON in `homeassistant/`, pushed with `.venv/bin/python -m homeassistant.apply`.
+I edit these rather than using the UI so the repo stays the source of truth.
 
 | | |
 | --- | --- |
 | `helpers.json` | toggles, timers, sliders |
 | `templates/` | daylight and desk lamp target sensors |
-| `scripts/` | Party, Chill, Movie, All off, `music_command` |
+| `scripts/` | Welcome home, Party, Chill, Movie, All off, `music_command` |
 | `automations/` | TV lighting, desk lamp, manual hold, away |
-| `dashboards/home.json` | the standard HA dashboard (`/home-hub`) |
+| `dashboards/home.json` | the standard Home Assistant dashboard (`/home-hub`) |
 | `voice.json` | what Claude can see and control |
 
 </details>
@@ -406,20 +360,23 @@ The parts of the HA config I care about are JSON files in `homeassistant/`, push
 ## Layout
 
 ```
-home                ./home up | down | status | logs
+home                ./home up | down | reload | status | logs
+stack/              the supervisor behind ./home, and the health it reports
 music_sync/         audio capture, analysis, light show, now playing
-investments/        Hargreaves Lansdown client
-netflix/            export parser (not currently run; it fed a card I removed)
-widget/             the iPhone widget script and the feed behind it
-tv-app/             the Android TV app (a full-screen Hub) and its deploy script
-announce/           speaks home_say events on the Mac
-presence/           phone on Wi-Fi -> home/away
-stack/              the supervisor behind ./home
-homeassistant/      HA config + apply.py
+announce/           the voice: speaks home_say events on the Mac or the TV
+investments/        Hargreaves Lansdown, FT prices, Trading 212
+widget/             the iPhone widget, its feed, webhooks and Shortcuts
+tv-app/             the Android TV app and screensaver, and the scripts that deploy them
+homeassistant/      Home Assistant config as code, and apply.py
 frontend/hub/       the Hub, plus screenshot.py
-bin/                audiotee, ha, ha-mcp-headers
+presence/           phone on the Wi-Fi -> home or away
+netflix/            an export parser that isn't run any more
+bin/                audiotee, ha, check-commit, ha-mcp-headers
 tests/
 ```
 
-Tests: `python -m tests.test_analysis` (a synthetic 128 BPM track: tempo, beat timing, drops, TV mode,
-palettes), `tests.test_investments`, `tests.test_t212`, `tests.test_widget` and `tests.test_announce`, plus `node tests/widget_smoke.js`.
+Tests: `python -m tests.test_analysis` (a synthetic 128 BPM track: tempo, beat timing, drops, TV mode, palettes),
+`tests.test_investments`, `tests.test_t212`, `tests.test_widget` and `tests.test_announce`, and
+`node tests/widget_smoke.js`.
+
+`CLAUDE.md` has the working rules for this repo, the main one being that it's public, so nothing personal goes in.

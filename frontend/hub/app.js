@@ -1007,10 +1007,11 @@ function moveFocus(dir) {
 // focus, so "just enough" would leave it cut off when you come back up. There, go all the way.
 function revealFocused(el) {
   const r = el.getBoundingClientRect();
-  const top = r.top + scrollY;
+  const top = r.top + scrollY, bottom = top + r.height, margin = 90;
   const pageEnd = document.documentElement.scrollHeight;
-  if (top < innerHeight * 0.5) scrollTo({ top: 0, behavior: "smooth" });
-  else if (top + r.height > pageEnd - innerHeight * 0.5) scrollTo({ top: pageEnd, behavior: "smooth" });
+  // If the control would be on screen with the page at the very top (or bottom), go all the way there.
+  if (bottom + margin <= innerHeight) scrollTo({ top: 0, behavior: "smooth" });
+  else if (top - margin >= pageEnd - innerHeight) scrollTo({ top: pageEnd, behavior: "smooth" });
   else el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
 }
 document.addEventListener("keydown", (ev) => {

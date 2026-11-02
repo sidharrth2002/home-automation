@@ -109,8 +109,11 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
 - Hub sections rebuild their HTML whenever an entity they depend on changes. Don't list fast-changing entities (e.g.
   `sensor.music_sync_tempo`, every ~2s during sync) as dependencies of a card with animated parts; update those bits
   in place (as `ambient()` does for the BPM), or animations restart (the progress bar used to redraw from zero).
-- TV-mode arrow navigation scrolls just enough to show the focused control, except near either end of the page, where
-  it scrolls all the way (the header has nothing focusable, so it was left cut off).
+- TV-mode arrow navigation scrolls just enough to show the focused control, except when the control would fit on
+  screen with the page at the very top or bottom, where it scrolls all the way (the header has nothing focusable, so
+  it was left cut off).
+- README images are public. Take them with `HUB_REDACT=1` (blurs calendar text, including the calendar's "Next"
+  line), keep money blurred (the default), never use the user's photo, and look at every image before committing.
 - The TV app adds `?app=<timestamp>` when it loads the Hub, because HA caches `/local/` pages for a long time.
 - `tv-app/app/src/debug/res/` is a git-ignored overlay for personal resources (the launcher banner with the user's
   photo). The committed banner in `src/main` must stay generic. Personal photos (`*.heic`) are git-ignored and blocked
