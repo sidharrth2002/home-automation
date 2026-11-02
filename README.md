@@ -257,8 +257,11 @@ secret addresses, LAN-only and POST-only, each doing exactly one thing (toggle a
 "ping" that does nothing, used for testing). A leaked address can flip a lamp from your home network and nothing
 more, and deleting `data/widget/key` revokes all of them. Two limits, both iOS's: a tap flashes the Scriptable app
 open for a moment, and the widget's picture of the bulb catches up only when iOS next redraws it. For buttons that
-don't leave the home screen, the Home Assistant Companion app has interactive widgets, or `python -m widget hooks`
-prints the addresses so a one-step Shortcut can call each of them from the Shortcuts widget.
+don't open any app, `python -m widget shortcuts` makes four signed Shortcuts (TV lamp 1, Desk lamp, TV lamp 2, All
+lights off), each a single POST to its webhook. AirDrop them to the phone and add them to a Shortcuts widget, a Lock
+Screen widget or a Control Center control: iOS runs those in the background. They contain the secret addresses, so they
+live in the git-ignored `data/widget/shortcuts/` and should be deleted after importing. They point at the Mac's IP address;
+if that changes, regenerate them (`--host` takes a different one).
 
 ```sh
 .venv/bin/python -m widget install --copy   # fills in the private address and copies the script to the clipboard

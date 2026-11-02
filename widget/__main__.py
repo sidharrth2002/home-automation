@@ -2,7 +2,8 @@
 
   python -m widget --watch    the service (run by ./home up): every 20s write the feed the widget reads
   python -m widget url        print the feed URLs
-  python -m widget hooks      print the tap-target (webhook) URLs, e.g. for building Shortcuts buttons
+  python -m widget hooks      print the tap-target (webhook) URLs
+  python -m widget shortcuts  make signed Shortcuts (one per lamp, plus all off) that call them without opening an app
   python -m widget install    write the ready-to-paste widget script to data/widget/Home.js (--copy: also to the clipboard)
 
 Tapping a light on the widget calls a Home Assistant webhook: a secret, LAN-only address (derived from the same
@@ -18,11 +19,13 @@ which is git-ignored).
 import hashlib
 import hmac
 import json
+import plistlib
 import os
 import secrets
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from datetime import datetime, timezone
@@ -121,6 +124,50 @@ def automation_config() -> dict:
     }
 
 
+# Shortcuts that call the same webhooks. Tapped from the Shortcuts widget, a Lock Screen widget or Control Center, iOS
+# runs them in the background, so (unlike a Scriptable widget tap) no app opens.
+SHORTCUTS = {"tv1": "TV lamp 1", "desk": "Desk lamp", "tv2": "TV lamp 2", "off": "All lights off"}
+SHORTCUT_OUT = DATA / "shortcuts"
+
+
+def shortcut_plist(action: str, base: str) -> dict:
+    """A one-step shortcut: Get Contents of URL, POST, to the action's webhook."""
+    return {
+        "WFWorkflowActions": [{
+            "WFWorkflowActionIdentifier": "is.workflow.actions.downloadurl",
+            "WFWorkflowActionParameters": {"WFURL": f"{base}/api/webhook/{action_id(action)}", "WFHTTPMethod": "POST",
+                                           "Advanced": True, "ShowHeaders": False},
+        }],
+        "WFWorkflowClientVersion": "2700.0.1",
+        "WFWorkflowMinimumClientVersion": 900,
+        "WFWorkflowMinimumClientVersionString": "900",
+        "WFWorkflowIcon": {"WFWorkflowIconStartColor": {"tv1": 463140863, "desk": 4271458815, "tv2": 4274264319, "off": 255}[action],
+                           "WFWorkflowIconGlyphNumber": 59771},
+        "WFWorkflowImportQuestions": [],
+        "WFWorkflowInputContentItemClasses": [],
+        "WFWorkflowTypes": ["NCWidget", "WatchKit"],
+    }
+
+
+def make_shortcuts(host: str | None = None) -> list[Path]:
+    """Write and sign the shortcuts into data/widget/shortcuts/. They contain the secret addresses, so they stay in the
+    git-ignored data folder."""
+    base = f"http://{host}:8123" if host else action_bases()[0]
+    SHORTCUT_OUT.mkdir(parents=True, exist_ok=True)
+    made = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for action, name in SHORTCUTS.items():
+            raw, signed = Path(tmp) / f"{name}.shortcut", SHORTCUT_OUT / f"{name}.shortcut"
+            raw.write_bytes(plistlib.dumps(shortcut_plist(action, base), fmt=plistlib.FMT_BINARY))
+            done = subprocess.run(["shortcuts", "sign", "--mode", "anyone", "--input", str(raw), "--output", str(signed)],
+                                  capture_output=True, text=True)
+            if done.returncode:
+                raise SystemExit(f"couldn't sign {name}: {(done.stderr or done.stdout).strip()}")
+            signed.chmod(0o600)
+            made.append(signed)
+    return made
+
+
 def action_bases() -> list[str]:
     name = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True).stdout.strip()
     return [f"http://{h}:8123" for h in [lan_ip()] + ([f"{name}.local"] if name else [])]
@@ -192,6 +239,12 @@ def main():
     elif cmd == "hooks":
         for a in ACTIONS:
             print(f"{a:5} POST {action_bases()[0]}/api/webhook/{action_id(a)}")
+    elif cmd == "shortcuts":
+        host = sys.argv[sys.argv.index("--host") + 1] if "--host" in sys.argv else None
+        for path in make_shortcuts(host):
+            print(f"made {path.name}")
+        print(f"\nIn {SHORTCUT_OUT}: AirDrop these to the iPhone (select all four, Share > AirDrop) and tap Add for each.")
+        subprocess.run(["open", "-R", str(SHORTCUT_OUT)])
     elif cmd == "install":
         path = install(copy="--copy" in sys.argv)
         print(f"Wrote {path}" + ("\nCopied to the clipboard; paste it into a new Scriptable script." if "--copy" in sys.argv else ""))

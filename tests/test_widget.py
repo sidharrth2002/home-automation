@@ -1,5 +1,6 @@
 """The iPhone widget's feed: right shape, and nothing outside its whitelist can leak into it."""
 import json
+import plistlib
 import tempfile
 from pathlib import Path
 
@@ -74,6 +75,19 @@ def run():
         old = ids
         w.KEY_FILE.unlink()
         assert not set(old) & {t["webhook_id"] for t in w.automation_config()["triggers"]}
+
+    # the Shortcuts that call the same webhooks: one POST each, to that action's address, and nothing else
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        w.DATA, w.KEY_FILE = tmp / "data", tmp / "data" / "key"
+        assert set(w.SHORTCUTS) == {"tv1", "desk", "tv2", "off"}, "the shortcuts cover the lamps and all off, not the test ping"
+        for action in w.SHORTCUTS:
+            plist = plistlib.loads(plistlib.dumps(w.shortcut_plist(action, "http://192.0.2.1:8123"), fmt=plistlib.FMT_BINARY))
+            steps = plist["WFWorkflowActions"]
+            assert len(steps) == 1 and steps[0]["WFWorkflowActionIdentifier"] == "is.workflow.actions.downloadurl", steps
+            params = steps[0]["WFWorkflowActionParameters"]
+            assert params["WFHTTPMethod"] == "POST" and params["WFURL"] == f"http://192.0.2.1:8123/api/webhook/{w.action_id(action)}", params
+            assert "NCWidget" in plist["WFWorkflowTypes"], "must be allowed in widgets"
 
     # the feed file is written atomically under a secret name, and the key is private
     with tempfile.TemporaryDirectory() as d:
