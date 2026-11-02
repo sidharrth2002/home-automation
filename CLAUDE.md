@@ -39,6 +39,7 @@ stack/                supervisor run by ./home: starts, restarts and stops the M
 music_sync/           audio capture -> beat/tempo analysis -> light show; Spotify now-playing and album palettes
 announce/             speaks `home_say` events with macOS `say`, on the Mac or cast to the TV
 investments/          Hargreaves Lansdown client (hl.py, lockout-safe), FT price history (prices.py), Trading 212 (t212.py)
+photos/               OneDrive photos via Microsoft Graph: picks a few good ones (faces, people, you) for the Hub
 widget/               iPhone Scriptable widget (home.js) + its feed, webhook actions and signed Shortcuts (__main__.py)
 presence/             phone-on-Wi-Fi home/away (needs PRESENCE_PHONE_MAC; not currently running)
 netflix/              export parser, no longer run
@@ -61,6 +62,7 @@ node tests/widget_smoke.js                    # widget script against a strict S
 HARNESS_FEED=<feed.json> WIDGET_JS=data/widget/Home.js node tests/widget_smoke.js   # which taps a fresh draw gets
 .venv/bin/python -m widget install --copy     # widget script with the private addresses filled in, to the clipboard
 .venv/bin/python -m widget shortcuts          # signed Shortcuts for the lamps (into data/widget/shortcuts/)
+.venv/bin/python -m photos status | once | learn-me <photo>   # the photo frame (runs as a service, every 4h)
 tv-app/deploy                                 # build the TV app and install it over adb (TV_HOST in .env)
 .venv/bin/python frontend/screenshot.py <out> [selector]   # headless screenshots; HUB_REDACT=1 blurs calendar
 ```
@@ -78,7 +80,8 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
 - Scripts: party/chill/movie/all_off, `music_command` (play/pause/skip), `welcome_home`.
 - Events: `home_say` {text, target: mac|tv, voice?, rate?}; `music_sync_command` {command}; `widget_ping`.
 - Feeds published by services (REST states, gone after an HA restart until republished): `sensor.investments`,
-  `sensor.investment_<sedol>`, `sensor.trading212`, `sensor.system_health`.
+  `sensor.investment_<sedol>`, `sensor.trading212`, `sensor.system_health`, `sensor.photo_frame` (photos: src, bg, label,
+  portrait, people; shown in the Hub's Memories card and the screensaver).
 
 ## Gotchas
 
@@ -106,6 +109,16 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   ignored, so `test` idles into it by briefly shortening `system screen_off_timeout`, always restoring it. A dream can
   start a little after the timeout; check `dumpsys dreams` for `mCurrentDream`. FLAG_KEEP_SCREEN_ON in an app blocks
   the screensaver, which is why the Hub app doesn't use it. The ambient screen must never show finances.
+- Photos: OneDrive sign-in is the rclone remote `onedrive` (read-only scopes; `rclone config reconnect onedrive:` if it
+  lapses), so no Azure app is needed and it runs on a Pi. Only metadata is listed (Graph delta, cached in
+  `data/photos/index.json`) and only thumbnails are fetched: ~800px to judge (150 new photos per run), 1920x1080 to
+  show. Never download originals. Judging is local (OpenCV YuNet + SFace; models and the user's face embedding
+  `me.npy` live in git-ignored `data/photos/`). The user wants photos of them *with people*: solo selfies (front
+  camera, focal length < 3.5mm, one face) and single-face close-ups score 0, and so does anything portrait (the user wants landscape only). Shown copies are re-encoded without
+  metadata under random names in `homeassistant/config/www/photos/`. Never commit or screenshot personal photos into
+  the repo; for README images use HUB_REDACT or hide `#photos`.
+- The screensaver shows a random quote (a curated list in app.js, `QUOTES`; keep attributions accurate), changed
+  every ten minutes.
 - Hub sections rebuild their HTML whenever an entity they depend on changes. Don't list fast-changing entities (e.g.
   `sensor.music_sync_tempo`, every ~2s during sync) as dependencies of a card with animated parts; update those bits
   in place (as `ambient()` does for the BPM), or animations restart (the progress bar used to redraw from zero).

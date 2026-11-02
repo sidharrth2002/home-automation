@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 
 PIDFILE=.home.pid
 PY=.venv/bin/python
-SERVICES='python -m (music_sync|netflix|presence|investments|widget|announce|stack)( |$)'
+SERVICES='python -m (music_sync|netflix|presence|investments|widget|announce|photos|stack)( |$)'
 
 supervisor_pid() {
   [[ -f $PIDFILE ]] && kill -0 "$(cat $PIDFILE)" 2>/dev/null && cat $PIDFILE

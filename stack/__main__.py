@@ -13,6 +13,7 @@ import os
 import platform
 import shutil
 import signal
+import subprocess
 import sys
 import time
 import urllib.request
@@ -46,7 +47,16 @@ def services():
     from investments.__main__ import any_configured  # Keychain lookup; only run once credentials are stored
     if any_configured():
         out["investments"] = [PY, "-m", "investments", "--watch"]
+    if shutil.which("rclone") and "[onedrive]" in rclone_config():  # photos, once OneDrive is signed in
+        out["photos"] = [PY, "-m", "photos", "--watch"]
     return out
+
+
+def rclone_config() -> str:
+    try:
+        return subprocess.run(["rclone", "config", "show"], capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 class Child:

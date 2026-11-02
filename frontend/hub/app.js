@@ -29,6 +29,7 @@ const TV_AUTO = "automation.tv_bias_lighting";
 const TV_REMOTE = "remote.smart_tv_pro";
 const HEALTH = "sensor.system_health";
 const INVEST = "sensor.investments";
+const PHOTOS = "sensor.photo_frame";
 // TV mode: inside the Android TV app (its user agent says HomeHubTV), or ?tv=1 to try it in a browser.
 const TV_MODE = /HomeHubTV/.test(navigator.userAgent) || new URLSearchParams(location.search).has("tv");
 // Ambient mode: the TV's screensaver (?ambient=1). A quiet, glanceable screen, never finances.
@@ -716,8 +717,77 @@ section("#ambient", () => (AMBIENT ? [NOW, WEATHER, ...LIGHTS.map((l) => l.id), 
       ${S[WEATHER] ? `<span class="amb-chip">${wIcon}${Math.round(at(WEATHER, "temperature"))}° ${esc(wLabel)}</span>` : ""}
       ${next ? `<span class="amb-chip">${I.cal}${hm(evStart(next))} · ${esc(next.summary || "Busy")}</span>` : ""}
     </div>
+    <blockquote class="amb-quote">“${esc(quote[0])}”<cite>${esc(quote[1])}</cite></blockquote>
   </div>`;
 });
+
+// Photos (sensor.photo_frame, picked by the photos service): a slideshow in the Hub's Memories card and in the
+// screensaver. Two layers cross-fade; landscape photos fill the frame with a slow zoom, portrait ones sit whole over a
+// blurred fill that the service made in advance (so the TV never has to blur anything).
+const photoList = () => at(PHOTOS, "photos") ?? [];
+function slideshow(root, every) {
+  let i = Math.floor(Math.random() * 1000), front = 0, timer = null;
+  function next() {
+    const list = photoList();
+    if (!list.length) return;
+    i = (i + 1) % list.length;
+    const p = list[i];
+    const img = new Image();
+    img.onload = () => {
+      const layers = root.querySelectorAll(".pf-layer");
+      const incoming = layers[1 - front];
+      incoming.innerHTML = `<i class="pf-bg" style="background-image:url('${esc(p.bg)}')"></i>
+        <img class="pf-img ${p.portrait ? "portrait" : ""}" src="${esc(p.src)}" alt="">${p.label ? `<span class="pf-label">${esc(p.label)}</span>` : ""}`;
+      incoming.classList.add("on");
+      layers[front].classList.remove("on");
+      front = 1 - front;
+    };
+    img.onerror = () => setTimeout(next, 1000); // the set was just replaced; move on
+    img.src = p.src;
+  }
+  return { start() { if (!timer) { next(); timer = setInterval(next, every); } } };
+}
+const frameShow = slideshow($("#photoframe"), 15_000);
+const cardShow = slideshow($("#photos"), 10_000);
+function startPhotos() {
+  const any = photoList().length > 0;
+  document.documentElement.classList.toggle("has-photos", any);
+  $("#photos").hidden = !any || AMBIENT;
+  if (!any) return;
+  if (AMBIENT) frameShow.start();
+  else cardShow.start();
+}
+
+// A quote on the screensaver, a different one every ten minutes. Only well-sourced attributions.
+const QUOTES = [
+  ["We suffer more often in imagination than in reality.", "Seneca"],
+  ["Waste no more time arguing what a good man should be. Be one.", "Marcus Aurelius"],
+  ["The journey of a thousand miles begins with a single step.", "Lao Tzu"],
+  ["Not all those who wander are lost.", "J. R. R. Tolkien"],
+  ["Fortune favours the bold.", "Virgil"],
+  ["Well done is better than well said.", "Benjamin Franklin"],
+  ["Energy and persistence conquer all things.", "Benjamin Franklin"],
+  ["Do what you can, with what you have, where you are.", "Theodore Roosevelt"],
+  ["Start where you are. Use what you have. Do what you can.", "Arthur Ashe"],
+  ["The best way out is always through.", "Robert Frost"],
+  ["You miss 100% of the shots you don't take.", "Wayne Gretzky"],
+  ["The only way to do great work is to love what you do.", "Steve Jobs"],
+  ["Stay hungry. Stay foolish.", "Whole Earth Catalog"],
+  ["Imagination is more important than knowledge.", "Albert Einstein"],
+  ["Nothing in life is to be feared, it is only to be understood.", "Marie Curie"],
+  ["Courage is grace under pressure.", "Ernest Hemingway"],
+  ["Life is what happens to us while we are making other plans.", "Allen Saunders"],
+  ["Hope is a good thing, maybe the best of things.", "Stephen King"],
+  ["The best time to plant a tree was twenty years ago. The second best time is now.", "Proverb"],
+  ["Dream big and dare to fail.", "Norman Vaughan"],
+  ["Act as if what you do makes a difference. It does.", "William James"],
+  ["The best way to predict the future is to invent it.", "Alan Kay"],
+  ["Simple things should be simple, complex things should be possible.", "Alan Kay"],
+  ["Talk is cheap. Show me the code.", "Linus Torvalds"],
+  ["Make it work, make it right, make it fast.", "Kent Beck"],
+];
+let quote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+if (AMBIENT) setInterval(() => { quote = QUOTES[Math.floor(Math.random() * QUOTES.length)]; lastSig["#ambient"] = null; renderAll(); }, 10 * 60_000);
 
 // System health: what's running, what's fresh and what's reachable, at a glance
 const ago = (ms) => { const m = Math.round(ms / 60000); return !Number.isFinite(m) ? "no refresh yet" : m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
@@ -1068,6 +1138,7 @@ function setLive(ok) {
   subscribeEntities(conn, (entities) => {
     S = entities;
     renderAll();
+    startPhotos();
     const key = calIds().join();
     if (key !== calKey) { calKey = key; loadCalendars(); }
   });

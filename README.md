@@ -65,6 +65,8 @@ so "turn the TV lamps blue" or "lights out" just works.
 - **Welcome home.** One button: lights, the TV, and a spoken hello through the TV in a British voice.
 - **Investments.** Holdings from Hargreaves Lansdown, which has no API (so it logs in like the website does, written
   so it can't lock the account), price history from the FT, and the daily interest on my cash at Trading 212.
+- **Photos.** A few good ones from the thousands in my OneDrive, chosen on the Mac by looking at faces: me with
+  other people first, no lone selfies. They go round in the Hub and on the TV's screensaver.
 - **One switch.** `./home up` and `./home down` start and stop everything, and a supervisor restarts anything that
   falls over.
 
@@ -234,7 +236,8 @@ Assistant's one-off sign-in page the arrows step between fields. TV GPUs struggl
 swaps the frosted glass for near-solid cards. `?tv=1` shows TV mode in any browser.
 
 The **screensaver** is the Hub's ambient screen: a big clock and the date, what's playing with its cover, the
-three bulbs in their live colours, the weather and the next event. The light behind it drifts, and the content
+three bulbs in their live colours, the weather, the next event and a quote that changes every ten minutes. When there are photos, it becomes a photo
+frame with the clock in the corner. The light behind it drifts, and the content
 shifts a few pixels over ten minutes so nothing burns in. Google TV hides third-party screensavers in its settings,
 but the setting underneath accepts any installed one, so it's switched over adb, with the original recorded first
 so it can go back. `?ambient=1` previews it.
@@ -283,6 +286,34 @@ balance and the interest paid on it. If it ever refuses the key, it stops and do
 
 None of it is exposed to Claude or shown on the screensaver or the widget. `tests/test_investments.py` and
 `tests/test_t212.py` run every safety rule against fakes.
+
+</details>
+
+<details>
+<summary><b>Photos</b></summary>
+<br>
+
+There are about 18,000 photos in my OneDrive camera roll, and almost all of them are screenshots, receipts and
+fifteen copies of the same sunset. `photos/` finds the few worth putting on a wall without downloading the library:
+
+1. **List, don't download.** Microsoft Graph's delta query returns every photo's metadata (date, camera, size, lens)
+   once, then only what changed. Screenshots, small images and anything without a camera are dropped here.
+2. **Look at thumbnails.** For 150 new candidates per run it fetches the ~800px thumbnail and runs face detection
+   and recognition locally with OpenCV (YuNet and SFace). The thumbnail is thrown away; only the numbers are kept.
+3. **Score.** Photos of me with other people come first, then other group photos, then everything else. A selfie
+   only counts if someone's in it with me, and so does a single big face. Blurry, very dark and blown-out shots are out, and so is anything portrait.
+4. **Pick.** About 40, at most two from any day, with a share from this month in past years, chosen at random by
+   score so the set changes every few hours.
+
+The copies the Hub shows are 1080p thumbnails, re-encoded so they carry no location or camera data, under random
+file names. Sign-in reuses an [rclone](https://rclone.org) remote with read-only scopes, so there's no Azure app to
+register and it'll run the same on a Raspberry Pi.
+
+```sh
+rclone config                                   # add a OneDrive remote called "onedrive"
+.venv/bin/python -m photos learn-me <photo>     # a photo of you, to recognise you
+.venv/bin/python -m photos once                 # or let ./home run it every four hours
+```
 
 </details>
 
@@ -365,6 +396,7 @@ stack/              the supervisor behind ./home, and the health it reports
 music_sync/         audio capture, analysis, light show, now playing
 announce/           the voice: speaks home_say events on the Mac or the TV
 investments/        Hargreaves Lansdown, FT prices, Trading 212
+photos/             OneDrive photos: pick, judge, show
 widget/             the iPhone widget, its feed, webhooks and Shortcuts
 tv-app/             the Android TV app and screensaver, and the scripts that deploy them
 homeassistant/      Home Assistant config as code, and apply.py
