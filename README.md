@@ -305,8 +305,8 @@ fifteen copies of the same sunset. `photos/` finds the few worth putting on a wa
 4. **Pick.** About 40, at most two from any day, with a share from this month in past years, chosen at random by
    score so the set changes every few hours.
 
-The copies the Hub shows are 1080p thumbnails, re-encoded so they carry no location or camera data, under random
-file names. Sign-in reuses an [rclone](https://rclone.org) remote with read-only scopes, so there's no Azure app to
+Only the photos in the current set are downloaded, at full resolution, and each new set avoids the one before.
+They're converted from HEIC to JPEG with no location or camera data, and saved under random file names. Sign-in reuses an [rclone](https://rclone.org) remote with read-only scopes, so there's no Azure app to
 register and it'll run the same on a Raspberry Pi.
 
 ```sh

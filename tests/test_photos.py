@@ -47,6 +47,11 @@ def run():
     assert len(chosen) == 12
     assert sum(1 for c in chosen if c.startswith("party")) <= ph.MAX_PER_DAY, "one event mustn't take over the frame"
     assert not any(c.startswith("selfie") for c in chosen), "solo selfies are never picked"
+    index["shown"] = chosen
+    again = ph.pick(index, today, n=12, rng=random.Random(2))
+    fresh = [c for c in again if c not in chosen]
+    assert len(fresh) >= min(12, sum(1 for i in index["items"] if ph.score(index["items"][i]) > 0) - 12), \
+        "a new set prefers photos that weren't just showing"
 
     assert ph.label(date(2024, 11, 3), today) == "November 2024 · 2 years ago"
     assert ph.label(date(2023, 5, 1), today) == "May 2023"

@@ -111,8 +111,10 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   the screensaver, which is why the Hub app doesn't use it. The ambient screen must never show finances.
 - Photos: OneDrive sign-in is the rclone remote `onedrive` (read-only scopes; `rclone config reconnect onedrive:` if it
   lapses), so no Azure app is needed and it runs on a Pi. Only metadata is listed (Graph delta, cached in
-  `data/photos/index.json`) and only thumbnails are fetched: ~800px to judge (150 new photos per run), 1920x1080 to
-  show. Never download originals. Judging is local (OpenCV YuNet + SFace; models and the user's face embedding
+  `data/photos/index.json`). Judging uses ~800px thumbnails (150 new photos per run). Showing uses the originals
+  at full resolution (the user asked for that), but only for the 40 in each set (`Graph.original`, via the
+  pre-signed downloadUrl, which rejects a bearer token); never clone the library. HEIC is decoded with pillow-heif
+  and saved as JPEG (browsers can't show HEIC). Each set avoids the previous one (`index["shown"]`). Judging is local (OpenCV YuNet + SFace; models and the user's face embedding
   `me.npy` live in git-ignored `data/photos/`). The user wants photos of them *with people*: solo selfies (front
   camera, focal length < 3.5mm, one face) and single-face close-ups score 0, and so does anything portrait (the user wants landscape only). Shown copies are re-encoded without
   metadata under random names in `homeassistant/config/www/photos/`. Never commit or screenshot personal photos into

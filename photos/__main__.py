@@ -15,8 +15,9 @@ How it picks without downloading the library:
    highest. Results are cached, so the whole library gets looked at once, over a few days.
 4. Pick about PHOTOS_PER_SET: people first, you highest, at most two from any one day, a share from this month in
    past years.
-5. Show: fetch a 1080p-sized version of just those, strip all metadata (no location leaves the Mac), add a
-   pre-blurred background, and serve them under random names. sensor.photo_frame lists them for the Hub.
+5. Show: download the original of just those (full resolution), re-encode as JPEG with no metadata (no location
+   leaves the Mac; browsers can't show HEIC anyway), add a pre-blurred background, and serve them under random
+   names. sensor.photo_frame lists them for the Hub. Each set avoids the photos in the one before.
 
 PHOTOS_DIRS in .env: OneDrive folders to use, separated by ";" (default "Pictures/Camera Roll").
 Everything it keeps (index, models, your face embedding, the served copies) is git-ignored.
@@ -36,10 +37,12 @@ from datetime import date, datetime
 from pathlib import Path
 
 from PIL import Image, ImageFilter, ImageOps
+from pillow_heif import register_heif_opener
 
 from .faces import Faces
 from .graph import Graph
 
+register_heif_opener()  # iPhone originals are HEIC
 log = logging.getLogger("photos")
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "photos"
@@ -49,9 +52,7 @@ SENSOR = "sensor.photo_frame"
 HA_HTTP = os.environ.get("HA_HTTP", "http://localhost:8123")
 EXTENSIONS = (".jpg", ".jpeg", ".heic", ".png")
 PHOTOS_PER_SET = 40
-SOURCE_SIZE = "c3840x2160"  # Graph thumbnail to show from: big, and compressed far less than the 1080p one
-COVER = (2208, 1242)  # 1920x1080 plus room for the slow zoom (scale 1.15)
-FETCHERS = 6  # thumbnails downloaded at once; Graph is happy with a handful
+FETCHERS = 6  # downloads at once; Graph is happy with a handful
 ANALYSE_PER_RUN = 150  # thumbnails looked at per refresh (~150 KB each)
 SAME_MONTH_SHARE = 0.4
 MAX_PER_DAY = 2
@@ -188,6 +189,8 @@ def pick(index: dict, today: date, n: int = PHOTOS_PER_SET, rng=random) -> list[
     scored = [x for x in scored if x[2] > 0]
     # weighted random, so the set changes each time but good photos come round more often
     order = sorted(scored, key=lambda x: rng.random() ** (1 / x[2]), reverse=True)
+    last = set(index.get("shown", []))  # the set on screen now goes to the back, so each set is fresh
+    order = [x for x in order if x[0] not in last] + [x for x in order if x[0] in last]
     same_month = [x for x in order if (d := taken(x[1])) and d.month == today.month and d.year < today.year]
     chosen, per_day = [], {}
 
@@ -225,10 +228,6 @@ def prepare(jpeg: bytes) -> tuple[Image.Image, Image.Image] | None:
         im = ImageOps.exif_transpose(im).convert("RGB")
     if min(im.size) < 400:
         return None
-    # Scale down (never up) so it still covers a 1080p screen during the slow zoom: sharper than letting the TV do it
-    scale = min(1.0, max(COVER[0] / im.width, COVER[1] / im.height))
-    if scale < 1.0:
-        im = im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS)
     bg = im.copy()
     bg.thumbnail((480, 480))
     return im, bg.filter(ImageFilter.GaussianBlur(18))
@@ -246,27 +245,27 @@ def publish(entries: list[dict]):
 def show(graph: Graph, index: dict, chosen: list[str], today: date) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     old = set(OUT.glob("*.jpg"))
-    def fetch(item_id):
-        try:
-            return prepare(graph.thumbnail(item_id, SOURCE_SIZE))
-        except Exception as e:
-            log.debug("couldn't fetch %s: %s", item_id, e)
-            return None
-
-    entries = []
-    with ThreadPoolExecutor(FETCHERS) as pool:
-        made_all = list(pool.map(fetch, chosen))
-    for item_id, made in zip(chosen, made_all):
+    def make(item_id):  # download, convert and save in the worker, so only a few full-size images are in memory
         rec = index["items"][item_id]
-        if not made or made[0].height > made[0].width:  # landscape only (in case the thumbnail disagrees)
-            continue
+        try:
+            made = prepare(graph.original(item_id))
+        except Exception as e:
+            log.debug("couldn't fetch %s: %s", rec["name"], e)
+            return None
+        if not made or made[0].height > made[0].width:  # landscape only (in case the metadata disagreed)
+            return None
         im, bg = made
         name = secrets.token_urlsafe(18)
-        im.save(OUT / f"{name}.jpg", quality=90, optimize=True, progressive=True, subsampling=0)
+        im.save(OUT / f"{name}.jpg", quality=92, optimize=True, progressive=True, subsampling=0)
         bg.save(OUT / f"{name}-bg.jpg", quality=70)
-        entries.append({"src": f"/local/photos/{name}.jpg", "bg": f"/local/photos/{name}-bg.jpg",
-                        "label": label(taken(rec), today), "portrait": im.height > im.width,
-                        "people": (rec.get("look") or {}).get("faces", 0) >= 2})
+        return {"src": f"/local/photos/{name}.jpg", "bg": f"/local/photos/{name}-bg.jpg",
+                "label": label(taken(rec), today), "portrait": False,
+                "people": (rec.get("look") or {}).get("faces", 0) >= 2}
+
+    with ThreadPoolExecutor(FETCHERS) as pool:
+        made = list(pool.map(make, chosen))
+    entries = [e for e in made if e]
+    index["shown"] = [i for i, e in zip(chosen, made) if e]
     if entries:
         publish(entries)
         time.sleep(120)  # let a slideshow that's mid-photo finish with the old set
@@ -283,6 +282,7 @@ def refresh(graph: Graph, faces: Faces):
     looked = look_at_batch(graph, faces, index, today)
     save_index(index)
     shown = show(graph, index, pick(index, today), today)
+    save_index(index)  # remembers what's on screen, for the next set
     log.info("index: %d photos (%d changed); looked at %d; showing %d", len(index["items"]), changed, looked, shown)
 
 

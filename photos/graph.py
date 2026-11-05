@@ -2,7 +2,8 @@
 
 Sign-in is the rclone remote "onedrive" (read-only scopes), because registering an app of our own needs an Azure
 account. rclone keeps its token fresh whenever it runs, so before a token is due to expire this runs a cheap rclone
-command and reads the renewed token back from rclone's config. Only GET requests are made.
+command and reads the renewed token back from rclone's config. Only GET requests are made, and originals are only
+fetched one at a time for the few photos being shown, never the library.
 """
 import json
 import logging
@@ -50,10 +51,10 @@ class Graph:
                 self._read_token()
         return self._token
 
-    def _open(self, url: str, timeout=60):
+    def _open(self, url: str, timeout=60, auth=True):
         for attempt in range(4):
             req = urllib.request.Request(url if url.startswith("http") else API + url,
-                                         headers={"Authorization": f"Bearer {self.token()}"})
+                                         headers={"Authorization": f"Bearer {self.token()}"} if auth else {})
             try:
                 return urllib.request.urlopen(req, timeout=timeout)
             except urllib.error.HTTPError as e:
@@ -74,8 +75,8 @@ class Graph:
         with self._open(url) as r:
             return json.load(r)
 
-    def content(self, url: str) -> bytes:
-        with self._open(url, timeout=90) as r:
+    def content(self, url: str, auth=True) -> bytes:
+        with self._open(url, timeout=90, auth=auth) as r:
             return r.read()
 
     def delta(self, folder: str, link: str | None = None):
@@ -91,6 +92,10 @@ class Graph:
             url = page.get("@odata.nextLink")
 
     def thumbnail(self, item_id: str, size: str = "large") -> bytes:
-        """`large` is about 800px (for looking at faces); `c3840x2160` (fits within 4K, much less
-        compressed than the small sizes) to scale down ourselves for showing."""
+        """`large` is about 800px, for looking at faces. Bigger sizes are recompressed, so showing uses `original`."""
         return self.content(f"/me/drive/items/{item_id}/thumbnails/0/{size}/content")
+
+    def original(self, item_id: str) -> bytes:
+        """The photo file itself. Graph hands out a short-lived pre-signed link for it, which refuses a bearer token."""
+        link = self.get(f"/me/drive/items/{item_id}")["@microsoft.graph.downloadUrl"]
+        return self.content(link, auth=False)
