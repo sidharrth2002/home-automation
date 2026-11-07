@@ -52,6 +52,7 @@ SENSOR = "sensor.photo_frame"
 HA_HTTP = os.environ.get("HA_HTTP", "http://localhost:8123")
 EXTENSIONS = (".jpg", ".jpeg", ".heic", ".png")
 PHOTOS_PER_SET = 40
+TV_COVER = (2080, 1170)  # the TV's copy: covers 1920x1080 through the slow zoom (the TV can't decode 24 MP smoothly)
 FETCHERS = 6  # downloads at once; Graph is happy with a handful
 ANALYSE_PER_RUN = 150  # thumbnails looked at per refresh (~150 KB each)
 SAME_MONTH_SHARE = 0.4
@@ -257,8 +258,11 @@ def show(graph: Graph, index: dict, chosen: list[str], today: date) -> int:
         im, bg = made
         name = secrets.token_urlsafe(18)
         im.save(OUT / f"{name}.jpg", quality=92, optimize=True, progressive=True, subsampling=0)
+        scale = max(TV_COVER[0] / im.width, TV_COVER[1] / im.height)
+        im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS).save(
+            OUT / f"{name}-tv.jpg", quality=90, optimize=True, progressive=True, subsampling=0)
         bg.save(OUT / f"{name}-bg.jpg", quality=70)
-        return {"src": f"/local/photos/{name}.jpg", "bg": f"/local/photos/{name}-bg.jpg",
+        return {"src": f"/local/photos/{name}.jpg", "tv": f"/local/photos/{name}-tv.jpg", "bg": f"/local/photos/{name}-bg.jpg",
                 "label": label(taken(rec), today), "portrait": False,
                 "people": (rec.get("look") or {}).get("faces", 0) >= 2}
 

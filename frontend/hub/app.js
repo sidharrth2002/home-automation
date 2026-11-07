@@ -732,18 +732,19 @@ function slideshow(root, every) {
     if (!list.length) return;
     i = (i + 1) % list.length;
     const p = list[i];
+    const url = TV_MODE && p.tv ? p.tv : p.src; // the TV gets a screen-sized copy: decoding full size stalls its audio
     const img = new Image();
     img.onload = () => {
       const layers = root.querySelectorAll(".pf-layer");
       const incoming = layers[1 - front];
       incoming.innerHTML = `<i class="pf-bg" style="background-image:url('${esc(p.bg)}')"></i>
-        <img class="pf-img ${p.portrait ? "portrait" : ""}" src="${esc(p.src)}" alt="">${p.label ? `<span class="pf-label">${esc(p.label)}</span>` : ""}`;
+        <img class="pf-img ${p.portrait ? "portrait" : ""}" src="${esc(url)}" alt="">${p.label ? `<span class="pf-label">${esc(p.label)}</span>` : ""}`;
       incoming.classList.add("on");
       layers[front].classList.remove("on");
       front = 1 - front;
     };
     img.onerror = () => setTimeout(next, 1000); // the set was just replaced; move on
-    img.src = p.src;
+    img.src = url;
   }
   return { start() { if (!timer) { next(); timer = setInterval(next, every); } } };
 }

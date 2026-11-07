@@ -114,7 +114,8 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   `data/photos/index.json`). Judging uses ~800px thumbnails (150 new photos per run). Showing uses the originals
   at full resolution (the user asked for that), but only for the 40 in each set (`Graph.original`, via the
   pre-signed downloadUrl, which rejects a bearer token); never clone the library. HEIC is decoded with pillow-heif
-  and saved as JPEG (browsers can't show HEIC). Each set avoids the previous one (`index["shown"]`). Judging is local (OpenCV YuNet + SFace; models and the user's face embedding
+  and saved as JPEG (browsers can't show HEIC). The TV gets its own ~2080px copy (`tv` in each entry, used in TV mode):
+  decoding 24 MP images every few seconds made Spotify (cast to the TV) stall. Each set avoids the previous one (`index["shown"]`). Judging is local (OpenCV YuNet + SFace; models and the user's face embedding
   `me.npy` live in git-ignored `data/photos/`). The user wants photos of them *with people*: solo selfies (front
   camera, focal length < 3.5mm, one face) and single-face close-ups score 0, and so does anything portrait (the user wants landscape only). Shown copies are re-encoded without
   metadata under random names in `homeassistant/config/www/photos/`. Never commit or screenshot personal photos into
