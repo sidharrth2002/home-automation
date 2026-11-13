@@ -1,0 +1,76 @@
+{
+  "_comment": "The Bluetooth strip behind the TV. Its state lives in the tv_backlight helpers; the backlight service (Mac) watches them and drives the strip.",
+  "kind": "light",
+  "name": "TV backlight",
+  "state": "{{ is_state('input_boolean.tv_backlight', 'on') }}",
+  "level": "{{ states('input_number.tv_backlight_level') | int(0) }}",
+  "hs": "({{ states('input_number.tv_backlight_hue') | float(0) }}, {{ states('input_number.tv_backlight_saturation') | float(0) }})",
+  "turn_on": [
+    {
+      "action": "input_boolean.turn_on",
+      "target": {
+        "entity_id": "input_boolean.tv_backlight"
+      }
+    }
+  ],
+  "turn_off": [
+    {
+      "action": "input_boolean.turn_off",
+      "target": {
+        "entity_id": "input_boolean.tv_backlight"
+      }
+    }
+  ],
+  "set_level": [
+    {
+      "action": "input_number.set_value",
+      "target": {
+        "entity_id": "input_number.tv_backlight_level"
+      },
+      "data": {
+        "value": "{{ brightness }}"
+      }
+    },
+    {
+      "action": "input_boolean.turn_on",
+      "target": {
+        "entity_id": "input_boolean.tv_backlight"
+      }
+    }
+  ],
+  "set_hs": [
+    {
+      "action": "input_number.set_value",
+      "target": {
+        "entity_id": "input_number.tv_backlight_level"
+      },
+      "data": {
+        "value": "{{ brightness | default(states('input_number.tv_backlight_level')) }}"
+      }
+    },
+    {
+      "action": "input_number.set_value",
+      "target": {
+        "entity_id": "input_number.tv_backlight_hue"
+      },
+      "data": {
+        "value": "{{ h }}"
+      }
+    },
+    {
+      "action": "input_number.set_value",
+      "target": {
+        "entity_id": "input_number.tv_backlight_saturation"
+      },
+      "data": {
+        "value": "{{ s }}"
+      }
+    },
+    {
+      "action": "input_boolean.turn_on",
+      "target": {
+        "entity_id": "input_boolean.tv_backlight"
+      }
+    }
+  ]
+}

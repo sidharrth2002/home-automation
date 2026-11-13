@@ -27,5 +27,48 @@
       "unit_of_measurement": "%",
       "initial": 55
     }
+  },
+  {
+    "entity_id": "input_boolean.tv_backlight",
+    "create": {
+      "name": "TV backlight",
+      "icon": "mdi:led-strip-variant"
+    }
+  },
+  {
+    "entity_id": "input_number.tv_backlight_level",
+    "create": {
+      "name": "TV backlight level",
+      "icon": "mdi:brightness-percent",
+      "min": 0,
+      "max": 255,
+      "step": 1,
+      "mode": "slider",
+      "initial": 64
+    }
+  },
+  {
+    "entity_id": "input_number.tv_backlight_hue",
+    "create": {
+      "name": "TV backlight hue",
+      "icon": "mdi:palette",
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "mode": "slider",
+      "initial": 28
+    }
+  },
+  {
+    "entity_id": "input_number.tv_backlight_saturation",
+    "create": {
+      "name": "TV backlight saturation",
+      "icon": "mdi:palette",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "mode": "slider",
+      "initial": 75
+    }
   }
 ]

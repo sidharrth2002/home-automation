@@ -194,7 +194,7 @@ class Controller:
         lights = Lights()
         try:
             await lights.start()
-            analyzer, show = Analyzer(), Show(len(lights.bulbs))
+            analyzer, show = Analyzer(), Show(lights.outputs)
             classic, classic_buf = BeatEngine(), []
             last_status = time.monotonic()
             log.info("music sync started with %d bulbs", len(lights.bulbs))

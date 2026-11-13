@@ -97,6 +97,16 @@
         "I'm home",
         "welcome home sequence"
       ]
+    },
+    "light.tv_backlight": {
+      "name": "TV backlight",
+      "aliases": [
+        "TV backlight",
+        "backlight",
+        "LED strip",
+        "light strip",
+        "TV strip"
+      ]
     }
   },
   "expose": [

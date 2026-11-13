@@ -65,6 +65,9 @@ so "turn the TV lamps blue" or "lights out" just works.
 - **Welcome home.** One button: lights, the TV, and a spoken hello through the TV in a British voice.
 - **Investments.** Holdings from Hargreaves Lansdown, which has no API (so it logs in like the website does, written
   so it can't lock the account), price history from the FT, and the daily interest on my cash at Trading 212.
+- **TV backlight.** A Bluetooth LED strip behind the TV, which only came with a phone app. The Mac holds the
+  Bluetooth connection, so to everything else it's just another light, and it joins the music shows with a part of
+  its own.
 - **Photos.** A few good ones from the thousands in my OneDrive, chosen on the Mac by looking at faces: me with
   other people first, no lone selfies. They go round in the Hub and on the TV's screensaver.
 - **One switch.** `./home up` and `./home down` start and stop everything, and a supervisor restarts anything that
@@ -396,6 +399,7 @@ stack/              the supervisor behind ./home, and the health it reports
 music_sync/         audio capture, analysis, light show, now playing
 announce/           the voice: speaks home_say events on the Mac or the TV
 investments/        Hargreaves Lansdown, FT prices, Trading 212
+backlight/          the Bluetooth LED strip behind the TV
 photos/             OneDrive photos: pick, judge, show
 widget/             the iPhone widget, its feed, webhooks and Shortcuts
 tv-app/             the Android TV app and screensaver, and the scripts that deploy them

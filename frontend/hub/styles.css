@@ -137,12 +137,12 @@ h1 em { font-style: italic; color: rgb(var(--a1)); transition: color 2s var(--ea
 
 /* ── room: light orbs ──────────────────────────────────────────── */
 .room { min-height: 360px; display: flex; flex-direction: column; }
-.orbs { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(8px, 2vw, 28px); align-items: center; align-content: center; }
-@media (max-width: 520px) { .orbs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } }
+.orbs { flex: 1; display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: clamp(8px, 2vw, 28px); align-items: center; align-content: center; }
+@media (max-width: 520px) { .orbs { grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 6px; } }
 .light { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0; }
 .light { --c: 255, 255, 255; --b: 0; }
 .orb {
-  position: relative; width: clamp(92px, 12vw, 168px); aspect-ratio: 1; border-radius: 50%;
+  position: relative; width: clamp(92px, 12vw, 168px); max-width: 100%; aspect-ratio: 1; border-radius: 50%;
   display: grid; place-items: center; transition: transform .5s var(--ease);
 }
 .orb:hover { transform: translateY(-3px) scale(1.02); }

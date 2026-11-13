@@ -39,6 +39,7 @@ stack/                supervisor run by ./home: starts, restarts and stops the M
 music_sync/           audio capture -> beat/tempo analysis -> light show; Spotify now-playing and album palettes
 announce/             speaks `home_say` events with macOS `say`, on the Mac or cast to the TV
 investments/          Hargreaves Lansdown client (hl.py, lockout-safe), FT price history (prices.py), Trading 212 (t212.py)
+backlight/            the Bluetooth LED strip behind the TV (MELK/ELK-BLEDOM), as light.tv_backlight
 photos/               OneDrive photos via Microsoft Graph: picks a few good ones (faces, people, you) for the Hub
 widget/               iPhone Scriptable widget (home.js) + its feed, webhook actions and signed Shortcuts (__main__.py)
 presence/             phone-on-Wi-Fi home/away (needs PRESENCE_PHONE_MAC; not currently running)
@@ -57,7 +58,8 @@ tests/                python -m tests.<name>; node tests/widget_smoke.js
 .venv/bin/python -m homeassistant.apply       # push helpers, templates, scripts, automations, dashboards, the Hub
 bin/ha states <filter>                        # look at entities
 bin/ha call light.turn_on light.desk_lamp brightness_pct=30
-.venv/bin/python -m tests.test_analysis       # also: test_investments, test_t212, test_widget, test_announce
+.venv/bin/python -m tests.test_analysis       # also: test_investments, test_t212, test_widget, test_announce,
+                                              #   test_photos, test_backlight
 node tests/widget_smoke.js                    # widget script against a strict Scriptable stand-in
 HARNESS_FEED=<feed.json> WIDGET_JS=data/widget/Home.js node tests/widget_smoke.js   # which taps a fresh draw gets
 .venv/bin/python -m widget install --copy     # widget script with the private addresses filled in, to the clipboard
@@ -72,7 +74,8 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
 
 ## Entities and events worth knowing
 
-- Lights: `light.wiz_rgbw_tunable_624d4e` (TV lamp 1), `light.wiz_rgbw_tunable_4b472c` (TV lamp 2), `light.desk_lamp`.
+- Lights: `light.wiz_rgbw_tunable_624d4e` (TV lamp 1), `light.wiz_rgbw_tunable_4b472c` (TV lamp 2), `light.desk_lamp`,
+  `light.tv_backlight` (the strip: a template light over the `tv_backlight` helpers, driven by the backlight service).
   WiZ can't do transitions; fades are steps. Music sync never touches the desk lamp (`WIZ_EXCLUDE_MACS`).
 - TV: `media_player.smart_tv_pro` (Android TV Remote: power, keys, apps, volume steps only) and
   `media_player.sid_london_room_tv` (Google Cast: playing media, e.g. speech).
@@ -109,6 +112,12 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   ignored, so `test` idles into it by briefly shortening `system screen_off_timeout`, always restoring it. A dream can
   start a little after the timeout; check `dumpsys dreams` for `mCurrentDream`. FLAG_KEEP_SCREEN_ON in an app blocks
   the screensaver, which is why the Hub app doesn't use it. The ambient screen must never show finances.
+- The TV backlight strip is Bluetooth only (MELK-OC21, an ELK-BLEDOM-style controller: 9-byte commands to FFF3,
+  no replies, one colour for the whole strip). HA in Docker can't reach the Mac's Bluetooth, so `backlight/` holds the
+  connection and mirrors the helpers; the controller takes one connection at a time, so its phone app can't connect
+  while the service runs. Music sync gives it its own frame in the show (`Lights.outputs`) over UDP 127.0.0.1:38998;
+  live frames win, and after 2 s without one it goes back to the helpers. The template light only gets `brightness`
+  in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set.
 - Photos: OneDrive sign-in is the rclone remote `onedrive` (read-only scopes; `rclone config reconnect onedrive:` if it
   lapses), so no Azure app is needed and it runs on a Pi. Only metadata is listed (Graph delta, cached in
   `data/photos/index.json`). Judging uses ~800px thumbnails (150 new photos per run). Showing uses the originals

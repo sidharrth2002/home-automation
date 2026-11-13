@@ -8,3 +8,4 @@ beautifulsoup4
 keyring
 opencv-python-headless
 pillow-heif
+bleak

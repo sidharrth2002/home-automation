@@ -5,6 +5,8 @@
   MAX_HZ per bulb, always latest-wins so a slow bulb never builds a backlog.
 - A heartbeat marks bulbs unhealthy/healthy and re-resolves their IP when they stop answering.
 - The pre-sync state of every bulb is saved to disk, so it can be restored even after a crash.
+- The TV backlight strip (Bluetooth, held by the backlight service) gets one more frame of its own, sent over
+  localhost; when the show ends it's handed back to Home Assistant.
 """
 import asyncio
 import json
@@ -15,6 +17,8 @@ import time
 from pathlib import Path
 
 from pywizlight import PilotBuilder, discovery, wizlight
+
+import backlight
 
 from .engine import Beat
 
@@ -90,6 +94,7 @@ class Lights:
         await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks = []
         await self.restore()
+        backlight.live(None)
         if self._transport:
             self._transport.close()
 
@@ -123,18 +128,26 @@ class Lights:
         """Same colour on every bulb (used by the classic engine)."""
         frame = {"state": True, "r": beat.rgb[0], "g": beat.rgb[1], "b": beat.rgb[2],
                  "dimming": max(10, round(beat.brightness * 100 / 255))}
-        self.render([frame] * len(self.bulbs))
+        self.render([frame] * (len(self.bulbs) + 1))
 
     @property
     def ordered(self) -> list[Bulb]:
         """Stable bulb order (by MAC), so show roles don't shuffle between runs."""
         return [self.bulbs[m] for m in sorted(self.bulbs)]
 
+    @property
+    def outputs(self) -> int:
+        """Frames a show should make: one per bulb, plus the backlight strip."""
+        return len(self.bulbs) + 1
+
     def render(self, frames: list[dict]):
         """Non-blocking: set each bulb's next setPilot params, skipping no-op changes.
 
-        Unchanged bulbs are still re-sent once a second, since UDP gives no delivery guarantee.
+        Unchanged bulbs are still re-sent once a second, since UDP gives no delivery guarantee. A frame past the
+        bulbs goes to the backlight strip (the backlight service rate-limits it).
         """
+        if len(frames) > len(self.bulbs):
+            backlight.live(frames[len(self.bulbs)])
         now = time.monotonic()
         for bulb, params in zip(self.ordered, frames):
             if _similar(params, bulb.last_params) and now - bulb.last_sent < 1.0:

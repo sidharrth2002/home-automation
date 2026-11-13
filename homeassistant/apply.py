@@ -19,7 +19,6 @@ HUB = "hub"  # folder under /local/
 HUB_DASH = "hub-live"  # sidebar URL (HA requires a hyphen)
 HUB_SRC = ROOT.parent / "frontend" / "hub"
 WWW = ROOT / "config" / "www"  # served by HA at /local/
-TEMPLATE_FIELDS = ("state", "unit_of_measurement", "device_class", "state_class")
 
 
 def deploy_hub():
@@ -52,8 +51,10 @@ def rest(token, path, body=None, method="POST"):
 
 
 def apply_template(token, spec, existing_entries):
-    """Create a template sensor helper, or update its options if one with this name exists."""
-    fields = {k: spec[k] for k in TEMPLATE_FIELDS if k in spec}
+    """Create a template helper (a sensor, or another `kind` such as a light), or update its options if one with this
+    name exists."""
+    kind = spec.get("kind", "sensor")
+    fields = {k: v for k, v in spec.items() if k not in ("name", "kind") and not k.startswith("_")}
     entry = existing_entries.get(spec["name"])
     if entry:
         flow = rest(token, "/api/config/config_entries/options/flow", {"handler": entry["entry_id"]})
@@ -61,7 +62,7 @@ def apply_template(token, spec, existing_entries):
         action = "updated"
     else:
         flow = rest(token, "/api/config/config_entries/flow", {"handler": "template"})
-        flow = rest(token, f"/api/config/config_entries/flow/{flow['flow_id']}", {"next_step_id": "sensor"})
+        flow = rest(token, f"/api/config/config_entries/flow/{flow['flow_id']}", {"next_step_id": kind})
         result = rest(token, f"/api/config/config_entries/flow/{flow['flow_id']}", {"name": spec["name"], **fields})
         action = "created"
     if result.get("type") != "create_entry":

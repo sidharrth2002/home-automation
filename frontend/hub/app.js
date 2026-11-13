@@ -6,6 +6,7 @@ const LIGHTS = [
   { id: "light.wiz_rgbw_tunable_624d4e", name: "TV lamp", tag: "TV · 1" },
   { id: "light.desk_lamp", name: "Desk lamp", tag: "Desk" },
   { id: "light.wiz_rgbw_tunable_4b472c", name: "TV lamp", tag: "TV · 2" },
+  { id: "light.tv_backlight", name: "Backlight", tag: "TV · strip" },
 ];
 const DESK = "light.desk_lamp";
 const SYNC = "input_boolean.music_sync";
@@ -211,7 +212,7 @@ section("#room", () => [...LIGHTS.map((l) => l.id), SYNC, MODE], () => {
   return `
     <div class="card-head"><div class="card-title">${I.bulb} Room</div>
       <span class="kicker">${on ? `${on} of ${LIGHTS.length} on` : "All dark"}${sync ? ` · ${esc(st(MODE))} sync` : ""}</span></div>
-    <div class="orbs">${orbs}</div>`;
+    <div class="orbs" style="--n:${LIGHTS.length}">${orbs}</div>`;
 });
 
 // scenes
