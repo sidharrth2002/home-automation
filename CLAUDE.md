@@ -39,7 +39,7 @@ stack/                supervisor run by ./home: starts, restarts and stops the M
 music_sync/           audio capture -> beat/tempo analysis -> light show; Spotify now-playing and album palettes
 announce/             speaks `home_say` events with macOS `say`, on the Mac or cast to the TV
 investments/          Hargreaves Lansdown client (hl.py, lockout-safe), FT price history (prices.py), Trading 212 (t212.py)
-backlight/            the Bluetooth LED strip behind the TV (MELK/ELK-BLEDOM), as light.tv_backlight
+backlight/            the Bluetooth LED strip behind the cabinet (MELK/ELK-BLEDOM), as light.tv_backlight
 photos/               OneDrive photos via Microsoft Graph: picks a few good ones (faces, people, you) for the Hub
 widget/               iPhone Scriptable widget (home.js) + its feed, webhook actions and signed Shortcuts (__main__.py)
 presence/             phone-on-Wi-Fi home/away (needs PRESENCE_PHONE_MAC; not currently running)
@@ -75,7 +75,7 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
 ## Entities and events worth knowing
 
 - Lights: `light.wiz_rgbw_tunable_624d4e` (TV lamp 1), `light.wiz_rgbw_tunable_4b472c` (TV lamp 2), `light.desk_lamp`,
-  `light.tv_backlight` (the strip: a template light over the `tv_backlight` helpers, driven by the backlight service).
+  `light.tv_backlight` ("Cabinet light", the strip behind the cabinet; ids say tv_ because it started behind the TV; a template light over the `tv_backlight` helpers, driven by the backlight service).
   WiZ can't do transitions; fades are steps. Music sync never touches the desk lamp (`WIZ_EXCLUDE_MACS`).
 - TV: `media_player.smart_tv_pro` (Android TV Remote: power, keys, apps, volume steps only) and
   `media_player.sid_london_room_tv` (Google Cast: playing media, e.g. speech).
@@ -112,7 +112,7 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   ignored, so `test` idles into it by briefly shortening `system screen_off_timeout`, always restoring it. A dream can
   start a little after the timeout; check `dumpsys dreams` for `mCurrentDream`. FLAG_KEEP_SCREEN_ON in an app blocks
   the screensaver, which is why the Hub app doesn't use it. The ambient screen must never show finances.
-- The TV backlight strip is Bluetooth only (MELK-OC21, an ELK-BLEDOM-style controller: 9-byte commands to FFF3,
+- The cabinet strip (`light.tv_backlight`; apply doesn't rename existing helpers, so they're still "TV backlight …") is Bluetooth only (MELK-OC21, an ELK-BLEDOM-style controller: 9-byte commands to FFF3,
   no replies, one colour for the whole strip). HA in Docker can't reach the Mac's Bluetooth, so `backlight/` holds the
   connection and mirrors the helpers; the controller takes one connection at a time, so its phone app can't connect
   while the service runs. Music sync gives it its own frame in the show (`Lights.outputs`) over UDP 127.0.0.1:38998;

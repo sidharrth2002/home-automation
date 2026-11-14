@@ -1,4 +1,4 @@
-"""The TV backlight service: makes the Bluetooth strip behind the TV a normal light in Home Assistant.
+"""The backlight service: makes the Bluetooth strip behind the cabinet a normal light in Home Assistant.
 
 Home Assistant runs in Docker, which can't reach the Mac's Bluetooth, so this holds the connection instead. The
 light, `light.tv_backlight`, is a template light (homeassistant/templates/tv_backlight.json) whose state lives in four

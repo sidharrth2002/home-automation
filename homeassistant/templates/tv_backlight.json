@@ -1,7 +1,7 @@
 {
-  "_comment": "The Bluetooth strip behind the TV. Its state lives in the tv_backlight helpers; the backlight service (Mac) watches them and drives the strip.",
+  "_comment": "The Bluetooth strip behind the cabinet (entity ids still say tv_backlight, from where it started). Its state lives in the tv_backlight helpers; the backlight service (Mac) watches them and drives the strip.",
   "kind": "light",
-  "name": "TV backlight",
+  "name": "Cabinet light",
   "state": "{{ is_state('input_boolean.tv_backlight', 'on') }}",
   "level": "{{ states('input_number.tv_backlight_level') | int(0) }}",
   "hs": "({{ states('input_number.tv_backlight_hue') | float(0) }}, {{ states('input_number.tv_backlight_saturation') | float(0) }})",

@@ -1,4 +1,4 @@
-"""The TV backlight strip: a Bluetooth LED controller of the MELK / ELK-BLEDOM family (sold with "Lotus Lamp X" and
+"""The cabinet LED strip: a Bluetooth LED controller of the MELK / ELK-BLEDOM family (sold with "Lotus Lamp X" and
 similar apps). One colour for the whole strip.
 
 Its protocol is 9-byte commands written to characteristic FFF3, `7e .. .. .. .. .. .. .. ef`, with no reply:

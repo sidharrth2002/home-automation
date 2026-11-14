@@ -6,7 +6,7 @@ const LIGHTS = [
   { id: "light.wiz_rgbw_tunable_624d4e", name: "TV lamp", tag: "TV · 1" },
   { id: "light.desk_lamp", name: "Desk lamp", tag: "Desk" },
   { id: "light.wiz_rgbw_tunable_4b472c", name: "TV lamp", tag: "TV · 2" },
-  { id: "light.tv_backlight", name: "Backlight", tag: "TV · strip" },
+  { id: "light.tv_backlight", name: "Cabinet", tag: "Strip" },
 ];
 const DESK = "light.desk_lamp";
 const SYNC = "input_boolean.music_sync";

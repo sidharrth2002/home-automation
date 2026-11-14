@@ -99,13 +99,14 @@
       ]
     },
     "light.tv_backlight": {
-      "name": "TV backlight",
+      "name": "Cabinet light",
       "aliases": [
-        "TV backlight",
-        "backlight",
+        "cabinet light",
+        "cabinet",
+        "cabinet strip",
         "LED strip",
         "light strip",
-        "TV strip"
+        "backlight"
       ]
     }
   },

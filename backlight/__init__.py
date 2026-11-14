@@ -1,4 +1,4 @@
-"""The TV backlight strip (Bluetooth). `live(frame)` lets music sync drive it through the backlight service."""
+"""The cabinet LED strip (Bluetooth). `live(frame)` lets music sync drive it through the backlight service."""
 import json
 import os
 import socket

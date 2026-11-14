@@ -31,14 +31,14 @@
   {
     "entity_id": "input_boolean.tv_backlight",
     "create": {
-      "name": "TV backlight",
+      "name": "Cabinet light",
       "icon": "mdi:led-strip-variant"
     }
   },
   {
     "entity_id": "input_number.tv_backlight_level",
     "create": {
-      "name": "TV backlight level",
+      "name": "Cabinet light level",
       "icon": "mdi:brightness-percent",
       "min": 0,
       "max": 255,
@@ -50,7 +50,7 @@
   {
     "entity_id": "input_number.tv_backlight_hue",
     "create": {
-      "name": "TV backlight hue",
+      "name": "Cabinet light hue",
       "icon": "mdi:palette",
       "min": 0,
       "max": 360,
@@ -62,7 +62,7 @@
   {
     "entity_id": "input_number.tv_backlight_saturation",
     "create": {
-      "name": "TV backlight saturation",
+      "name": "Cabinet light saturation",
       "icon": "mdi:palette",
       "min": 0,
       "max": 100,

@@ -5,7 +5,7 @@
   MAX_HZ per bulb, always latest-wins so a slow bulb never builds a backlog.
 - A heartbeat marks bulbs unhealthy/healthy and re-resolves their IP when they stop answering.
 - The pre-sync state of every bulb is saved to disk, so it can be restored even after a crash.
-- The TV backlight strip (Bluetooth, held by the backlight service) gets one more frame of its own, sent over
+- The cabinet LED strip (Bluetooth, held by the backlight service) gets one more frame of its own, sent over
   localhost; when the show ends it's handed back to Home Assistant.
 """
 import asyncio
