@@ -9,6 +9,9 @@ const LIGHTS = [
   { id: "light.tv_backlight", name: "Cabinet", tag: "Strip" },
 ];
 const DESK = "light.desk_lamp";
+const STRIP = "light.tv_backlight"; // the cabinet LED strip: one colour, so the Room card gets colour controls for it
+const STRIP_COLOURS = [["Warm", 30, 55], ["Amber", 28, 90], ["Red", 0, 100], ["Pink", 330, 70],
+  ["Purple", 275, 85], ["Blue", 220, 100], ["Teal", 175, 90], ["Green", 120, 90]];
 const SYNC = "input_boolean.music_sync";
 const MODE = "input_select.music_sync_mode";
 const COLOURS = "input_select.music_sync_colours";
@@ -209,10 +212,20 @@ section("#room", () => [...LIGHTS.map((l) => l.id), SYNC, MODE], () => {
                style="--p:${pct}%;--fill:rgb(${rgb.join(",")})">
       </div>`;
   }).join("");
+  const [h, s] = at(STRIP, "hs_color") ?? [30, 70];
+  const near = (a, b) => Math.abs(((a - b + 540) % 360) - 180) < 4;
+  const strip = !S[STRIP] ? "" : `
+    <div class="strip-ctl">
+      <span class="label">Cabinet colour</span>
+      <div class="strip-swatches">${STRIP_COLOURS.map(([n, sh, ss]) => `<button class="swatch" data-act="strip-hs" data-v="${sh},${ss}"
+        aria-label="${n}" title="${n}" aria-pressed="${is(STRIP, "on") && near(h, sh) && Math.abs(s - ss) < 6}" style="--h:${sh};--s:${ss}%"></button>`).join("")}</div>
+      <input class="slider hue" type="range" min="0" max="359" value="${Math.round(h)}" data-act="strip-hue" aria-label="Cabinet hue">
+      <input class="slider sat" type="range" min="0" max="100" value="${Math.round(s)}" data-act="strip-sat" aria-label="Cabinet white to colour" style="--h:${Math.round(h)}">
+    </div>`;
   return `
     <div class="card-head"><div class="card-title">${I.bulb} Room</div>
       <span class="kicker">${on ? `${on} of ${LIGHTS.length} on` : "All dark"}${sync ? ` · ${esc(st(MODE))} sync` : ""}</span></div>
-    <div class="orbs" style="--n:${LIGHTS.length}">${orbs}</div>`;
+    <div class="orbs" style="--n:${LIGHTS.length}">${orbs}</div>${strip}`;
 });
 
 // scenes
@@ -949,6 +962,7 @@ document.addEventListener("click", (ev) => {
   if (!el || el.tagName === "INPUT") return;
   const { act, id, v } = el.dataset;
   if (act === "music") return call("script", "music_command", { command: v });
+  if (act === "strip-hs") return call("light", "turn_on", { entity_id: STRIP, hs_color: v.split(",").map(Number) });
   // Mouse/touch presses are handled on pointerdown (so holding repeats); a click with no pointer is the keyboard.
   if (act === "tv-key") return ev.detail === 0 ? tvKey(v) : undefined;
   if (act === "tv-power") return call("media_player", is(TV, "on") ? "turn_off" : "turn_on", { entity_id: TV });
@@ -993,6 +1007,8 @@ document.addEventListener("input", (ev) => {
     const light = el.closest(".light");
     light.style.setProperty("--b", (el.value / 100).toFixed(2));
     light.querySelector(".light-meta").textContent = `${el.value}%`;
+  } else if (el.dataset.act === "strip-hue") {
+    el.closest(".strip-ctl").querySelector(".sat").style.setProperty("--h", el.value);
   } else {
     const out = el.parentElement.querySelector(".value");
     if (out) out.textContent = `${el.dataset.id === SENS ? Number(el.value).toFixed(2) : el.value}${el.dataset.unit ?? ""}`;
@@ -1002,6 +1018,11 @@ document.addEventListener("change", (ev) => {
   const el = ev.target;
   if (!el.matches(".slider")) return;
   if (el.dataset.act === "bri") call("light", "turn_on", { entity_id: el.dataset.id, brightness_pct: Number(el.value) });
+  else if (el.dataset.act?.startsWith("strip-")) {
+    const box = el.closest(".strip-ctl");
+    const hs = [Number(box.querySelector(".hue").value), Number(box.querySelector(".sat").value)];
+    call("light", "turn_on", { entity_id: STRIP, hs_color: hs });
+  }
   else call("input_number", "set_value", { entity_id: el.dataset.id, value: Number(el.value) });
 });
 // Hold a card still while a slider in it is being dragged, then catch up.

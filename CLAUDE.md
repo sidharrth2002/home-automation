@@ -117,7 +117,8 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   connection and mirrors the helpers; the controller takes one connection at a time, so its phone app can't connect
   while the service runs. Music sync gives it its own frame in the show (`Lights.outputs`) over UDP 127.0.0.1:38998;
   live frames win, and after 2 s without one it goes back to the helpers. The template light only gets `brightness`
-  in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set.
+  in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has its colour row (swatches, hue, white-to-colour)
+  under the orbs, sending hs_color; brightness is the orb's slider.
 - Photos: OneDrive sign-in is the rclone remote `onedrive` (read-only scopes; `rclone config reconnect onedrive:` if it
   lapses), so no Azure app is needed and it runs on a Pi. Only metadata is listed (Graph delta, cached in
   `data/photos/index.json`). Judging uses ~800px thumbnails (150 new photos per run). Showing uses the originals
