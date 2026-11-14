@@ -80,7 +80,9 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
 - TV: `media_player.smart_tv_pro` (Android TV Remote: power, keys, apps, volume steps only) and
   `media_player.sid_london_room_tv` (Google Cast: playing media, e.g. speech).
 - Music sync: `input_boolean.music_sync`, `input_select.music_sync_mode`, `sensor.music_sync_now_playing`.
-- Scripts: party/chill/movie/all_off, `music_command` (play/pause/skip), `welcome_home`.
+- Scripts: party/chill/movie/all_off, `music_command` (play/pause/skip), `welcome_home`, `sleep_mode` (music, TV and
+  desk lamp off, then the TV lamps and strip step from a warm glow to dark over ~12 min; mode restart; every other
+  scene starts with `script.turn_off script.sleep_mode` so it can't dim them later).
 - Events: `home_say` {text, target: mac|tv, voice?, rate?}; `music_sync_command` {command}; `widget_ping`.
 - Feeds published by services (REST states, gone after an HA restart until republished): `sensor.investments`,
   `sensor.investment_<sedol>`, `sensor.trading212`, `sensor.system_health`, `sensor.photo_frame` (photos: src, bg, label,

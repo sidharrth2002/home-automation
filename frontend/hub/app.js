@@ -229,7 +229,8 @@ section("#room", () => [...LIGHTS.map((l) => l.id), SYNC, MODE], () => {
 });
 
 // scenes
-section("#scenes", () => [SYNC, MODE, ...LIGHTS.map((l) => l.id)], () => {
+const SLEEP = "script.sleep_mode";
+section("#scenes", () => [SYNC, MODE, SLEEP, ...LIGHTS.map((l) => l.id)], () => {
   const sync = is(SYNC, "on");
   const mode = st(MODE);
   const dark = LIGHTS.every((l) => !is(l.id, "on"));
@@ -238,7 +239,8 @@ section("#scenes", () => [SYNC, MODE, ...LIGHTS.map((l) => l.id)], () => {
     ["party_mode", "Party", "Beat-locked colour", I.party, "linear-gradient(135deg,#ff3cac,#784ba0 55%,#2b86c5)", "#ff3cac", sync && mode === "party"],
     ["chill_mode", "Chill", "Gentle music glow", I.chill, "linear-gradient(135deg,#2af598,#009efd)", "#2af598", sync && mode === "calm"],
     ["movie_mode", "Movie", "Subtle TV glow", I.film, "linear-gradient(135deg,#f6d365,#fda085)", "#fda085", sync && mode === "tv"],
-    ["all_off", "All off", "Everything dark", I.power, "linear-gradient(135deg,#3a3a48,#08080c)", "#9a9ab0", dark],
+    ["sleep_mode", "Sleep", is(SLEEP, "on") ? "Winding down…" : "Glow, then dark", I.moon, "linear-gradient(135deg,#ff9a5a,#6a3093 55%,#120a2a)", "#b07cff", is(SLEEP, "on")],
+    ["all_off", "All off", "Everything dark", I.power, "linear-gradient(135deg,#3a3a48,#08080c)", "#9a9ab0", dark && !is(SLEEP, "on")],
   ].map(([id, name, sub, icon, g, glow, active, cls = ""]) => `
     <button class="scene ${cls}" data-act="script" data-id="script.${id}" aria-pressed="${active}" style="--g:${g};--glow:${glow}">
       ${icon}<div><b>${name}</b><small>${sub}</small></div>

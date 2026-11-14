@@ -5,6 +5,12 @@
   "mode": "single",
   "sequence": [
     {
+      "action": "script.turn_off",
+      "target": {
+        "entity_id": "script.sleep_mode"
+      }
+    },
+    {
       "action": "input_boolean.turn_off",
       "target": {
         "entity_id": "input_boolean.music_sync"
