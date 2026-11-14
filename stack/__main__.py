@@ -47,7 +47,7 @@ def services():
     from investments.__main__ import any_configured  # Keychain lookup; only run once credentials are stored
     if any_configured():
         out["investments"] = [PY, "-m", "investments", "--watch"]
-    if os.environ.get("BACKLIGHT_NAME"):  # the Bluetooth strip behind the TV
+    if os.environ.get("BACKLIGHT_NAME"):  # the Bluetooth strip behind the cabinet
         out["backlight"] = [PY, "-m", "backlight"]
     if shutil.which("rclone") and "[onedrive]" in rclone_config():  # photos, once OneDrive is signed in
         out["photos"] = [PY, "-m", "photos", "--watch"]

@@ -83,27 +83,36 @@ flowchart LR
         mic["microphone"]
         spotify["Spotify app"]
         sync["music_sync"]
+        strip_svc["backlight<br/>(Bluetooth)"]
+        photos["photos<br/>(picks by faces)"]
         voice["announce<br/>(macOS voice)"]
         side["investments,<br/>widget feed"]
         sup(["./home"])
         audio --> sync
         mic --> sync
         spotify --> sync
-        sup -.-> sync & voice & side
+        sync -->|"show frames<br/>(local UDP)"| strip_svc
+        sup -.-> sync & strip_svc & photos & voice & side
     end
 
     ha["Home Assistant<br/>(Docker)"]
     bulbs(("WiZ bulbs"))
-    tv["TCL Google TV<br/>app + screensaver"]
+    strip(("cabinet<br/>LED strip"))
+    tv["TCL Google TV<br/>app + screensaver<br/>+ Cast"]
     hub["Hub"]
     phone["iPhone widget<br/>+ Shortcuts"]
     claude["Claude"]
     icloud["iCloud"]
+    onedrive["OneDrive"]
     money["Hargreaves Lansdown,<br/>Trading 212, FT"]
 
     sync -- UDP --> bulbs
-    sync <-- websocket --> ha
+    sync <-->|"websocket<br/>(modes, TV paused)"| ha
+    strip_svc <-- websocket --> ha
+    strip_svc -- BLE --> strip
     side -- REST --> ha
+    photos -->|"REST + image files"| ha
+    onedrive -.->|"Graph API,<br/>read-only"| photos
     money -. read-only .-> side
     voice -- cast --> tv
     ha -- desk lamp --> bulbs
@@ -116,8 +125,10 @@ flowchart LR
     claude -- MCP --> ha
 ```
 
-Home Assistant runs in Docker. The audio side can't, because it needs Core Audio and the mic, so those services run
-natively on the Mac under a small supervisor, and `./home` starts and stops the lot together.
+Home Assistant runs in Docker. The audio side can't, because it needs Core Audio and the mic, and neither can the
+strip, because Docker on a Mac can't reach Bluetooth. So those services run natively on the Mac under a small
+supervisor, and `./home` starts and stops the lot together. The strip is a Home Assistant light like any other: the
+backlight service mirrors its state over Bluetooth, and during a show music sync drives it directly.
 
 ## Running it
 
