@@ -35,10 +35,11 @@ async def hops(hop):
             await proc.wait()
 
 
-async def mic_hops(hop):
+async def mic_hops(hop, hold=lambda: False):
     """Yield float32 mono arrays of `hop` samples from the default microphone (e.g. to hear the TV).
 
-    Audio only ever lives in this process's memory; nothing is recorded or sent anywhere.
+    Audio only ever lives in this process's memory; nothing is recorded or sent anywhere. While `hold()` is true
+    (the TV is paused) the gain stays where it is, so it doesn't climb on room noise and blast the next song.
     """
     import sounddevice as sd
 
@@ -61,7 +62,7 @@ async def mic_hops(hop):
         while True:
             block = await queue.get()
             rms = float(np.sqrt(np.mean(block ** 2)))
-            if rms > MIC_NOISE_RMS:  # don't let true silence pump the gain up
+            if rms > MIC_NOISE_RMS and not hold():  # don't let silence (or a pause) pump the gain up
                 level = rms if level is None else level + alpha * (rms - level)
             gain = 1.0 if level is None else min(MIC_MAX_GAIN, max(1.0, MIC_TARGET_RMS / level))
             yield np.clip(block * gain, -1, 1)

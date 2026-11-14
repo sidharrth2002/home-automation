@@ -162,7 +162,29 @@ def test_palette():
     print("palette OK")
 
 
+def test_pause():
+    """Pausing mid-song: once the tempo is locked the show beats on predictions, which must stop with the music."""
+    audio, _ = synth()
+    a, show = Analyzer(), Show(2)
+    show.mode = "party"
+    now = 0.0
+    for i in range(len(audio) // HOP):
+        now = (i + 1) * HOP / SR
+        show.update(a.process(audio[i * HOP:(i + 1) * HOP], now), a.tempo, now)
+    assert a.tempo.locked
+    dims = []
+    for i in range(int(4 * SR / HOP)):
+        now += HOP / SR
+        out = show.update(a.process(np.zeros(HOP, np.float32), now), a.tempo, now)
+        if i * HOP / SR > 1.5:
+            dims.append(max(p["dimming"] for p in out))
+    print(f"paused: dimming {min(dims)}..{max(dims)}% after 1.5 s")
+    assert max(dims) <= 15, "the lights settle when the music stops"
+    print("pause OK")
+
+
 if __name__ == "__main__":
     main()
     test_tv()
     test_palette()
+    test_pause()

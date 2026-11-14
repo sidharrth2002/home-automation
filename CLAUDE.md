@@ -105,6 +105,10 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
 - TV GPUs mis-draw heavy effects: `backdrop-filter` and large blurred layers left a card's contents drawn shifted
   after scrolling. TV mode turns them off and paints each card with `contain: paint`; keep new effects out of TV mode
   or test them there (scroll down and back up, then `screencap`).
+- Pauses: a locked tempo makes the show fire *predicted* beats, so `Show` stops beating after 0.5 s below
+  SILENT_RMS (otherwise a paused song keeps the lights pulsing). On the mic (Spotify on the TV) room noise never goes
+  silent and the mic gain rides up to 40×, so while the TV's Cast device (`TV_CAST` in .env) says paused, music sync
+  feeds the show zeros and `mic_hops(hold=...)` freezes the gain. `tests.test_analysis` covers the pause.
 - The screensaver (`HubDream`, the Hub with `?ambient=1`) is set with `settings put secure screensaver_components`;
   `tv-app/screensaver on|off|test|status|delay <min>` (the idle delay is `system screen_off_timeout`; the user
   chose 1 minute). The original value is saved once in `data/tv/original-screensaver.txt`

@@ -4,7 +4,8 @@ Bulbs alternate roles: even ones follow the beat/kicks, odd ones also catch snar
 tempo is locked the show fires on *predicted* beats, `latency_ms` early, so the light lands on the beat
 instead of ~100 ms after it; otherwise it reacts to detected kicks/snares. Brightness is a fast-attack,
 tempo-scaled decay over a loudness-following floor, and drops get a white flash, a colour jump and a
-temporary boost. Colour comes from the album-art palette when one is set (bulbs take different swatches
+temporary boost. Predicted beats stop after SILENT_S of silence, so pausing the music doesn't leave
+the lights beating to a song that isn't playing. Colour comes from the album-art palette when one is set (bulbs take different swatches
 and rotate through them on the beat), otherwise from the music's harmony.
 """
 import colorsys
@@ -25,6 +26,8 @@ PROFILES["auto"]["palette_every"] = 4
 PROFILES["party"]["palette_every"] = 1
 PROFILES["tv"] = dict(PROFILES["calm"], hue_tau=5.0)
 FLASH_S = 0.12
+SILENT_RMS = 0.005  # below this for SILENT_S (a pause, not a quiet bar) the show stops beating and settles
+SILENT_S = 0.5
 
 # TV mode is bias lighting, not a show: warm white, dim, and it only ever drifts.
 TV_BASE_DIM = 15  # percent
@@ -52,6 +55,7 @@ class Show:
         self.pending = []  # (fire_time, kind, strength) for negative-latency delays
         self.last_t = None
         self.last_kick = 0.0
+        self.quiet_since = None
         self.tv_since = None
         self.tv_peak = 1e-4
         self.tv_level = 0.0
@@ -78,8 +82,18 @@ class Show:
         if kicks:
             self.last_kick = max(o.strength for o in kicks)
 
+        if f.rms >= SILENT_RMS:
+            self.quiet_since = None
+        elif self.quiet_since is None:
+            self.quiet_since = now
+        silent = self.quiet_since is not None and now - self.quiet_since >= SILENT_S
+        if silent:
+            self.pending.clear()
+
         beat_times = tempo.due(now, max(lead, 0.0))
-        if tempo.locked:
+        if silent:
+            pass
+        elif tempo.locked:
             for bt in beat_times:
                 self.pending.append((bt + delay if delay else now, "beat", max(0.6, self.last_kick)))
         else:

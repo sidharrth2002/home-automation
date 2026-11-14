@@ -3,6 +3,9 @@
 Creates helpers in HA (a toggle, mode and colour-source dropdowns, sensitivity and latency sliders) and
 tempo / now-playing sensors, then watches the helpers over the websocket API. Turning the toggle on starts audio capture + bulb
 output; turning it off (or 30s of silence) stops it and restores the bulbs.
+
+On the microphone, a paused TV (its Cast device, TV_CAST, says "paused") feeds the show silence and holds the mic
+gain, so the lights settle instead of the gain lifting room noise up to look like music.
 """
 import asyncio
 import json
@@ -104,6 +107,8 @@ class Controller:
         self.latency_ms = 60.0
         self.colours = ALBUM_ART
         self.tv_app: str | None = None  # foreground app while the TV is on, else None
+        self.cast = os.environ.get("TV_CAST", "")  # the TV's Cast device; Spotify on the TV plays through it
+        self.cast_state = ""
         self.mac_heard_at = 0.0
         self.now_playing = NowPlaying()
         self.session: asyncio.Task | None = None
@@ -131,7 +136,7 @@ class Controller:
             await self.ha.call(type="input_select/create", name="Music Sync Colours", icon="mdi:palette",
                                options=[ALBUM_ART, MUSIC_KEY], initial=ALBUM_ART)
         states = {s["entity_id"]: s for s in await self.ha.call(type="get_states")}
-        for eid in WATCHED:
+        for eid in (*WATCHED, self.cast):
             if eid in states:
                 self.apply(eid, states[eid]["state"], states[eid]["attributes"])
         self.publish_status()
@@ -140,6 +145,10 @@ class Controller:
     @property
     def tv_on(self):
         return self.tv_app is not None
+
+    @property
+    def tv_paused(self):
+        return self.cast_state == "paused"
 
     @property
     def show_mode(self):
@@ -168,7 +177,9 @@ class Controller:
             await source.aclose()
 
     def apply(self, entity_id, state, attrs=None):
-        if entity_id == TV:
+        if entity_id == self.cast and entity_id:
+            self.cast_state = state
+        elif entity_id == TV:
             self.tv_app = ((attrs or {}).get("app_id") or "") if state not in ("off", "unavailable", "unknown") else None
         elif entity_id == MODE and state in MODES:
             self.mode = state
@@ -203,7 +214,7 @@ class Controller:
             # fall back to the room when the Mac is silent and the TV is on (e.g. Spotify on the TV).
             use_mic = self.mode == "tv"
             while not done:
-                source = capture.mic_hops(HOP) if use_mic else capture.hops(HOP)
+                source = capture.mic_hops(HOP, hold=lambda: self.tv_paused) if use_mic else capture.hops(HOP)
                 log.info("listening to %s", "the microphone" if use_mic else "system audio")
                 last_sound = time.monotonic()
                 watcher = asyncio.create_task(self._watch_mac()) if use_mic and self.mode != "tv" else None
@@ -217,6 +228,8 @@ class Controller:
                         if not use_mic and self.mode == "tv":
                             use_mic = True
                             break
+                        if use_mic and self.tv_paused:
+                            samples = np.zeros_like(samples)  # paused: let the lights settle, not chase room noise
                         if self._step(samples, now, analyzer, show, classic, classic_buf, lights) >= SILENCE_RMS:
                             last_sound = now
                         elif not use_mic and self.tv_on and now - last_sound > TV_FALLBACK_S:
@@ -350,7 +363,7 @@ class Controller:
                 self._background(self.command(data.get("command")))
                 continue
             eid = data.get("entity_id")
-            if eid in WATCHED and data.get("new_state"):
+            if (eid in WATCHED or (eid and eid == self.cast)) and data.get("new_state"):
                 self.apply(eid, data["new_state"]["state"], data["new_state"].get("attributes"))
 
 
