@@ -172,7 +172,7 @@ class HL:
 
         # Stage 1: username + date of birth.
         page = self._get("my-accounts/login-step-one")
-        token = self._token(page.text)
+        token = self._token(page)
         r = self.s.post(BASE + "my-accounts/login-step-one", timeout=30, data={
             "username": creds.username, "date-of-birth": creds.dob, "hl_vt": token})
         if self._path(r) != "/my-accounts/login-step-two":
@@ -190,7 +190,7 @@ class HL:
         if len(cells) != 6 or len(wanted) != 3:
             _halt(f"couldn't tell which secure-number digits HL wants ({len(cells)} boxes, {len(wanted)} asked); "
                   "nothing was sent")
-        token = self._token(r.text)
+        token = self._token(r)
         r = self.s.post(BASE + "my-accounts/login-step-two", timeout=30, data={
             "online-password-verification": creds.password,
             "secure-number[1]": creds.secure_number[wanted[0]],
@@ -203,11 +203,14 @@ class HL:
         HALT.unlink(missing_ok=True)
         self._save()
 
-    @staticmethod
-    def _token(html):
-        tag = BeautifulSoup(html, "html.parser").find("input", attrs={"name": "hl_vt"})
+    @classmethod
+    def _token(cls, r):
+        soup = BeautifulSoup(r.text, "html.parser")
+        tag = soup.find("input", attrs={"name": "hl_vt"})
         if not tag or not tag.get("value"):
-            _halt("login form has no hl_vt token (HL changed the page); nothing was sent")
+            # Say which page came back: a maintenance or error page is temporary, a redesigned form isn't.
+            title = soup.title.get_text(" ", strip=True)[:80] if soup.title else "no title"
+            _halt(f"login form has no hl_vt token (got {r.status_code} {cls._path(r)}, \"{title}\"); nothing was sent")
         return tag["value"]
 
     @staticmethod
