@@ -125,6 +125,10 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   live frames win, and after 2 s without one it goes back to the helpers. The template light only gets `brightness`
   in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has its colour row (swatches, hue, white-to-colour)
   under the orbs, sending hs_color; brightness is the orb's slider.
+- Photos and DNS: originals download from my.microsoftpersonalcontent.com, which macOS's resolver sometimes refuses
+  for hours on this DNS64/NAT64 network while the router answers fine, so `graph.py` falls back to `dig`. A failed
+  set keeps the old one on screen and logs a warning. `sensor.photo_frame` is set over REST, which HA forgets on
+  restart; the watcher re-posts `data/photos/published.json` within a minute when it's gone.
 - Photos: OneDrive sign-in is the rclone remote `onedrive` (read-only scopes; `rclone config reconnect onedrive:` if it
   lapses), so no Azure app is needed and it runs on a Pi. Only metadata is listed (Graph delta, cached in
   `data/photos/index.json`). Judging uses ~800px thumbnails (150 new photos per run). Showing uses the originals

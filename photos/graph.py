@@ -24,8 +24,26 @@ REMOTE = "onedrive"
 _getaddrinfo = socket.getaddrinfo
 
 
-def _ipv4_first(*args, **kwargs):
-    return sorted(_getaddrinfo(*args, **kwargs), key=lambda a: a[0] != socket.AF_INET)
+def _ipv4_first(host, port, *args, **kwargs):
+    try:
+        found = _getaddrinfo(host, port, *args, **kwargs)
+    except socket.gaierror:
+        found = _dig(host, port)
+        if not found:
+            raise
+    return sorted(found, key=lambda a: a[0] != socket.AF_INET)
+
+
+def _dig(host, port):
+    """macOS's resolver sometimes refuses my.microsoftpersonalcontent.com (where originals download from) for hours on
+    a DNS64 network while the router answers it fine; ask the router directly with dig."""
+    try:
+        out = subprocess.run(["dig", "+short", "+time=3", "+tries=2", "A", str(host)],
+                             capture_output=True, text=True, timeout=15).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    ips = [line for line in out.split() if line.count(".") == 3 and line.replace(".", "").isdigit()]
+    return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, int(port or 0))) for ip in ips]
 
 
 socket.getaddrinfo = _ipv4_first

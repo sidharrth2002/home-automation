@@ -31,6 +31,7 @@ import secrets
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
@@ -47,6 +48,7 @@ log = logging.getLogger("photos")
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "photos"
 INDEX = DATA / "index.json"
+PUBLISHED = DATA / "published.json"  # the set on screen, to put back when Home Assistant restarts and forgets it
 OUT = ROOT / "homeassistant" / "config" / "www" / "photos"
 SENSOR = "sensor.photo_frame"
 HA_HTTP = os.environ.get("HA_HTTP", "http://localhost:8123")
@@ -60,6 +62,7 @@ MAX_PER_DAY = 2
 FRONT_CAMERA_MM = 3.5  # phone front cameras are ~2-3 mm; main cameras ~4-7 mm (selfies are fine, but not alone)
 MIN_SIDE = 1200
 REFRESH_S = 4 * 3600
+CHECK_S = 60  # how often to check Home Assistant still has the photos (it forgets them on restart)
 
 
 def load_env():
@@ -235,6 +238,7 @@ def prepare(jpeg: bytes) -> tuple[Image.Image, Image.Image] | None:
 
 
 def publish(entries: list[dict]):
+    PUBLISHED.write_text(json.dumps(entries))
     body = {"state": len(entries), "attributes": {"friendly_name": "Photo frame", "icon": "mdi:image-multiple",
                                                    "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
                                                    "photos": entries}}
@@ -243,15 +247,35 @@ def publish(entries: list[dict]):
     urllib.request.urlopen(req, timeout=10).close()
 
 
+def republish_if_forgotten():
+    """States set over REST don't survive a Home Assistant restart. Put the current set back if it's gone."""
+    if not PUBLISHED.exists():
+        return
+    req = urllib.request.Request(f"{HA_HTTP}/api/states/{SENSOR}", headers={"Authorization": f"Bearer {os.environ['TOKEN']}"})
+    try:
+        urllib.request.urlopen(req, timeout=10).close()
+        return
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            return
+    except OSError:
+        return  # Home Assistant isn't up yet; try again next time
+    entries = [e for e in json.loads(PUBLISHED.read_text()) if (OUT / Path(e["src"]).name).exists()]
+    if entries:
+        publish(entries)
+        log.info("Home Assistant had forgotten the photos; put %d back", len(entries))
+
+
 def show(graph: Graph, index: dict, chosen: list[str], today: date) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     old = set(OUT.glob("*.jpg"))
+    failed = []
     def make(item_id):  # download, convert and save in the worker, so only a few full-size images are in memory
         rec = index["items"][item_id]
         try:
             made = prepare(graph.original(item_id))
         except Exception as e:
-            log.debug("couldn't fetch %s: %s", rec["name"], e)
+            failed.append(e)
             return None
         if not made or made[0].height > made[0].width:  # landscape only (in case the metadata disagreed)
             return None
@@ -269,12 +293,15 @@ def show(graph: Graph, index: dict, chosen: list[str], today: date) -> int:
     with ThreadPoolExecutor(FETCHERS) as pool:
         made = list(pool.map(make, chosen))
     entries = [e for e in made if e]
+    if failed:
+        log.warning("couldn't download %d of %d photos (e.g. %s)", len(failed), len(chosen), failed[0])
+    if not entries:
+        return 0  # keep the set already on screen rather than blank it
     index["shown"] = [i for i, e in zip(chosen, made) if e]
-    if entries:
-        publish(entries)
-        time.sleep(120)  # let a slideshow that's mid-photo finish with the old set
-        for f in old:
-            f.unlink(missing_ok=True)
+    publish(entries)
+    time.sleep(120)  # let a slideshow that's mid-photo finish with the old set
+    for f in old:
+        f.unlink(missing_ok=True)
     return len(entries)
 
 
@@ -326,7 +353,12 @@ def main():
                 refresh(graph, faces)
             except Exception:
                 log.exception("photo refresh failed")
-            time.sleep(REFRESH_S)
+            for _ in range(REFRESH_S // CHECK_S):
+                time.sleep(CHECK_S)
+                try:
+                    republish_if_forgotten()
+                except Exception:
+                    log.exception("couldn't check the photo sensor")
     else:
         raise SystemExit(__doc__)
 
