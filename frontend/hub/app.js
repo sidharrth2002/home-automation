@@ -34,6 +34,7 @@ const TV_REMOTE = "remote.smart_tv_pro";
 const HEALTH = "sensor.system_health";
 const INVEST = "sensor.investments";
 const PHOTOS = "sensor.photo_frame";
+const GUEST = "input_boolean.guest_photos"; // guest mode: landscapes instead of my photos (the photos service swaps the set)
 // TV mode: inside the Android TV app (its user agent says HomeHubTV), or ?tv=1 to try it in a browser.
 const TV_MODE = /HomeHubTV/.test(navigator.userAgent) || new URLSearchParams(location.search).has("tv");
 // Ambient mode: the TV's screensaver (?ambient=1). A quiet, glanceable screen, never finances.
@@ -768,6 +769,8 @@ const frameShow = slideshow($("#photoframe"), 15_000);
 const cardShow = slideshow($("#photos"), 10_000);
 function startPhotos() {
   const any = photoList().length > 0;
+  $("#photos .pc-title").textContent = at(PHOTOS, "guest") ? "Landscapes" : "Memories";
+  $("#photos .pc-guest").setAttribute("aria-pressed", is(GUEST, "on"));
   document.documentElement.classList.toggle("has-photos", any);
   $("#photos").hidden = !any || AMBIENT;
   if (!any) return;

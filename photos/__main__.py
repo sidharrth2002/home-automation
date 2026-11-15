@@ -40,6 +40,7 @@ from pathlib import Path
 from PIL import Image, ImageFilter, ImageOps
 from pillow_heif import register_heif_opener
 
+from . import guest
 from .faces import Faces
 from .graph import Graph
 
@@ -50,6 +51,7 @@ DATA = ROOT / "data" / "photos"
 INDEX = DATA / "index.json"
 PUBLISHED = DATA / "published.json"  # the set on screen, to put back when Home Assistant restarts and forgets it
 OUT = ROOT / "homeassistant" / "config" / "www" / "photos"
+GUEST_OUT = ROOT / "homeassistant" / "config" / "www" / "photos-guest"
 SENSOR = "sensor.photo_frame"
 HA_HTTP = os.environ.get("HA_HTTP", "http://localhost:8123")
 EXTENSIONS = (".jpg", ".jpeg", ".heic", ".png")
@@ -62,7 +64,7 @@ MAX_PER_DAY = 2
 FRONT_CAMERA_MM = 3.5  # phone front cameras are ~2-3 mm; main cameras ~4-7 mm (selfies are fine, but not alone)
 MIN_SIDE = 1200
 REFRESH_S = 4 * 3600
-CHECK_S = 60  # how often to check Home Assistant still has the photos (it forgets them on restart)
+CHECK_S = 20  # how often to check the frame shows the right set (guest mode, or HA forgot it on restart)
 
 
 def load_env():
@@ -238,32 +240,59 @@ def prepare(jpeg: bytes) -> tuple[Image.Image, Image.Image] | None:
 
 
 def publish(entries: list[dict]):
+    """Remember a new set of mine and put it on screen, unless guest mode is showing landscapes instead."""
     PUBLISHED.write_text(json.dumps(entries))
+    if not guest_on():
+        post(entries, guest=False)
+
+
+def post(entries: list[dict], guest: bool):
     body = {"state": len(entries), "attributes": {"friendly_name": "Photo frame", "icon": "mdi:image-multiple",
                                                    "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
-                                                   "photos": entries}}
+                                                   "guest": guest, "photos": entries}}
     req = urllib.request.Request(f"{HA_HTTP}/api/states/{SENSOR}", method="POST", data=json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {os.environ['TOKEN']}", "Content-Type": "application/json"})
     urllib.request.urlopen(req, timeout=10).close()
 
 
-def republish_if_forgotten():
-    """States set over REST don't survive a Home Assistant restart. Put the current set back if it's gone."""
-    if not PUBLISHED.exists():
-        return
-    req = urllib.request.Request(f"{HA_HTTP}/api/states/{SENSOR}", headers={"Authorization": f"Bearer {os.environ['TOKEN']}"})
+def _state(entity_id: str) -> dict | None:
+    """An entity's state from Home Assistant; None if it doesn't exist. Raises OSError if HA isn't reachable."""
+    req = urllib.request.Request(f"{HA_HTTP}/api/states/{entity_id}", headers={"Authorization": f"Bearer {os.environ['TOKEN']}"})
     try:
-        urllib.request.urlopen(req, timeout=10).close()
-        return
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.load(r)
     except urllib.error.HTTPError as e:
-        if e.code != 404:
-            return
+        if e.code == 404:
+            return None
+        raise
+
+
+def guest_on() -> bool:
+    try:
+        return (_state(guest.SWITCH) or {}).get("state") == "on"
+    except OSError:
+        return False
+
+
+def sync_frame(faces: Faces):
+    """Keep the frame showing the right set: landscapes while guest mode is on, otherwise mine. Also puts the set
+    back after a Home Assistant restart, since states set over REST don't survive one."""
+    try:
+        frame, want_guest = _state(SENSOR), guest_on()
     except OSError:
         return  # Home Assistant isn't up yet; try again next time
-    entries = [e for e in json.loads(PUBLISHED.read_text()) if (OUT / Path(e["src"]).name).exists()]
+    showing_guest = bool(frame and frame["attributes"].get("guest"))
+    if frame and showing_guest == want_guest:
+        return
+    if want_guest:
+        entries = guest.build(GUEST_OUT, faces, prepare, TV_COVER)
+    elif PUBLISHED.exists():
+        entries = [e for e in json.loads(PUBLISHED.read_text()) if (OUT / Path(e["src"]).name).exists()]
+    else:
+        entries = []
     if entries:
-        publish(entries)
-        log.info("Home Assistant had forgotten the photos; put %d back", len(entries))
+        post(entries, guest=want_guest)
+        log.info("photo frame: %d %s", len(entries), "guest landscapes" if want_guest else "of mine")
 
 
 def show(graph: Graph, index: dict, chosen: list[str], today: date) -> int:
@@ -350,15 +379,16 @@ def main():
         graph, faces = Graph(), Faces()
         while True:
             try:
+                sync_frame(faces)  # guest mode first: a refresh takes minutes
                 refresh(graph, faces)
             except Exception:
                 log.exception("photo refresh failed")
             for _ in range(REFRESH_S // CHECK_S):
-                time.sleep(CHECK_S)
                 try:
-                    republish_if_forgotten()
+                    sync_frame(faces)
                 except Exception:
-                    log.exception("couldn't check the photo sensor")
+                    log.exception("couldn't check the photo frame")
+                time.sleep(CHECK_S)
     else:
         raise SystemExit(__doc__)
 

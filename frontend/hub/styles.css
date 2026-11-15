@@ -660,7 +660,11 @@ dialog.event h3 { margin: 10px 40px 20px 0; font: 400 32px/1.08 var(--serif); le
 .photos-card[hidden] { display: none; }
 .pc-head { position: absolute; left: 0; right: 0; top: 0; z-index: 3; padding: 20px 24px 40px;
   background: linear-gradient(rgba(0,0,0,.45), transparent); }
+.pc-head { display: flex; justify-content: space-between; align-items: center; }
 .pc-title { font: 600 14px/1 var(--sans); letter-spacing: .02em; color: rgba(255,255,255,.92); }
+.pc-guest { font: 600 11px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.8);
+  padding: 7px 12px; border-radius: 99px; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.25); cursor: pointer; }
+.pc-guest[aria-pressed="true"] { color: #111; background: rgba(255,255,255,.9); border-color: transparent; }
 .photos-card .pf-label { right: 24px; bottom: 20px; font-size: 12px; }
 .photoframe { display: none; }
 .ambient-mode.has-photos .photoframe { display: block; position: fixed; inset: 0; z-index: 1; background: #000; overflow: hidden; }

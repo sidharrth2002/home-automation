@@ -77,6 +77,14 @@
         "movie lights"
       ]
     },
+    "input_boolean.guest_photos": {
+      "name": "Guest photos",
+      "aliases": [
+        "guest mode",
+        "guest photos",
+        "landscape photos"
+      ]
+    },
     "script.sleep_mode": {
       "aliases": [
         "Sleep",

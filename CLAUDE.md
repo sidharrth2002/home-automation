@@ -125,6 +125,10 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   live frames win, and after 2 s without one it goes back to the helpers. The template light only gets `brightness`
   in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has its colour row (swatches, hue, white-to-colour)
   under the orbs, sending hs_color; brightness is the orb's slider.
+- Guest photos (`input_boolean.guest_photos`, Hub "Guest" button, voice "guest mode"): the frame shows 30 Wikimedia
+  Commons featured landscapes (`photos/guest.py`, face-checked, credited, cached in www/photos-guest) instead of mine,
+  on the Hub and the TV screensaver. `sync_frame` checks every 20 s and runs before the slow refresh; a refresh while
+  it's on saves my new set but doesn't post it. The sensor has a `guest` attribute.
 - Photos and DNS: originals download from my.microsoftpersonalcontent.com, which macOS's resolver sometimes refuses
   for hours on this DNS64/NAT64 network while the router answers fine, so `graph.py` falls back to `dig`. A failed
   set keeps the old one on screen and logs a warning. `sensor.photo_frame` is set over REST, which HA forgets on

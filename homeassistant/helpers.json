@@ -1,5 +1,12 @@
 [
   {
+    "entity_id": "input_boolean.guest_photos",
+    "create": {
+      "name": "Guest photos",
+      "icon": "mdi:image-filter-hdr"
+    }
+  },
+  {
     "entity_id": "input_boolean.desk_lamp_adaptive",
     "create": {
       "name": "Desk lamp adaptive",

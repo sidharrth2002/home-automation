@@ -69,7 +69,8 @@ so "turn the TV lamps blue" or "lights out" just works.
   Bluetooth connection, so to everything else it's just another light, and it joins the music shows with a part of
   its own.
 - **Photos.** A few good ones from the thousands in my OneDrive, chosen on the Mac by looking at faces: me with
-  other people first, no lone selfies. They go round in the Hub and on the TV's screensaver.
+  other people first, no lone selfies. They go round in the Hub and on the TV's screensaver. With visitors, one
+  Guest switch swaps them for generic landscapes from Wikimedia Commons.
 - **One switch.** `./home up` and `./home down` start and stop everything, and a supervisor restarts anything that
   falls over.
 
