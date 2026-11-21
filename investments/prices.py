@@ -49,10 +49,11 @@ class Prices:
         return found[0] if found else None
 
     def resolve(self, sedol, name):
-        """FT's internal id for a holding, cached. Tries the GB ISIN first, then the fund's name."""
+        """FT's internal id for a holding, cached. Takes a SEDOL or an ISIN (12 characters); tries the ISIN first,
+        then the fund's name."""
         if sedol in self.ids:
             return self.ids[sedol]
-        hit = self._search(gb_isin(sedol)) or self._search(name)
+        hit = self._search(sedol if len(sedol) == 12 else gb_isin(sedol)) or self._search(name)
         entry = {"xid": hit["xid"], "symbol": hit["symbol"], "ft_name": hit["name"]} if hit else None
         self.ids[sedol] = entry
         IDS.write_text(json.dumps(self.ids, indent=1))

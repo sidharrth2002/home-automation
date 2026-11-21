@@ -1,4 +1,4 @@
-"""Hargreaves Lansdown holdings -> Home Assistant (`sensor.investments`), for the Hub.
+"""Hargreaves Lansdown and Trading 212 -> the core state service, which publishes `sensor.investments` for the Hub.
 
   python -m investments setup     store HL credentials in the macOS Keychain (asked for interactively)
   python -m investments login     log in once by hand, fetch and publish; also clears a halt after a failure
@@ -23,6 +23,8 @@ from pathlib import Path
 
 import keyring
 
+from core import client as core
+
 from .hl import DATA, HL, Credentials, Halted, NotSent, halted_reason, save_json, _halt
 from .prices import Prices, compact
 from . import t212 as t212mod
@@ -34,7 +36,6 @@ FIELDS = ("username", "dob", "password", "secure_number")
 SENSOR = "sensor.investments"
 T212_KEYCHAIN = "home-automation.trading212"
 T212_SENSOR = "sensor.trading212"
-HISTORY = DATA / "history.json"
 LOGINS = DATA / "auto_logins.json"
 MAX_AUTO_LOGINS = 8
 HA_HTTP = os.environ.get("HA_HTTP", "http://localhost:8123")
@@ -110,38 +111,20 @@ def post(state, attrs, entity=SENSOR):
     urllib.request.urlopen(req, timeout=10).close()
 
 
-BASE_ATTRS = {"friendly_name": "Investments", "icon": "mdi:chart-line", "unit_of_measurement": "GBP"}
+HOLDING_FIELDS = ("name", "value", "cost", "gain", "gain_pct", "units", "price_p", "unit_type", "day_change",
+                  "day_change_pct", "yield_pct", "stock_type")
 
 
 def publish(accounts):
-    total = round(sum(a["total"] or 0 for a in accounts), 2)
-    holdings = sorted((h for a in accounts for h in a["holdings"]), key=lambda h: -(h["value"] or 0))
-    cost = sum(h["cost"] or 0 for h in holdings)
-    gain = sum(h["gain"] or 0 for h in holdings)
-
-    history = json.loads(HISTORY.read_text()) if HISTORY.exists() else {}
-    today = date.today().isoformat()
-    history[today] = total
-    history = dict(sorted(history.items())[-400:])
-    save_json(HISTORY, history)
-    # HL's own day change per holding is better than diffing our snapshots (which miss days the Mac was off).
-    day_changes = [h["day_change"] for h in holdings if h.get("day_change") is not None]
-    previous = [v for d, v in history.items() if d < today]
-    day_change = round(sum(day_changes), 2) if day_changes else (round(total - previous[-1], 2) if previous else None)
-    stock = sum(h["value"] or 0 for h in holdings)
-
-    post(total, {**BASE_ATTRS, "status": "ok", "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
-                 "cash": round(sum(a["cash"] or 0 for a in accounts), 2),
-                 "invested_cost": round(cost, 2), "gain": round(gain, 2),
-                 "gain_pct": round(gain / cost * 100, 2) if cost else None, "day_change": day_change,
-                 "day_change_pct": round(day_change / (stock - day_change) * 100, 2) if day_change and stock else None,
-                 "accounts": [{k: a[k] for k in ("name", "total", "stock", "cash")} for a in accounts],
-                 "holdings": [{**{k: h.get(k) for k in ("name", "account", "value", "cost", "gain", "gain_pct",
-                                                       "units", "price_p", "unit_type", "day_change", "day_change_pct",
-                                                       "yield_pct", "stock_type")}, "sedol": h["id"]}
-                              for h in holdings],
-                 "history": [[d, v] for d, v in list(history.items())[-180:]]})
-    log.info("published £%.2f across %d accounts, %d holdings", total, len(accounts), len(holdings))
+    """The HL snapshot -> the core state service (portfolio/hl), which merges every source into sensor.investments."""
+    doc = {"name": "HL", "kind": "auto", "as_of": date.today().isoformat(), "status": "ok", "accounts": [
+        {"name": a["name"], "type": "isa" if "isa" in a["name"].lower() else "other",
+         **{k: a[k] for k in ("cash", "stock", "total") if a.get(k) is not None},
+         "holdings": [{**{k: h[k] for k in HOLDING_FIELDS if h.get(k) is not None}, "id": h["id"].lower()}
+                      for h in a["holdings"]]} for a in accounts]}
+    result = core.put_source("hl", doc)
+    log.info("sent HL to core: %d accounts, %d holdings (%s)", len(accounts),  # no amounts in logs
+             sum(len(a["holdings"]) for a in accounts), "new snapshot" if result.get("changed") else "unchanged")
 
 
 _published_series = {}  # sedol -> date last published, so each fund's history is posted once a day
@@ -184,6 +167,10 @@ def refresh_t212():
                            "status": "ok", "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
                            "currency": summary["currency"], "summary": summary, "interest": interest},
          entity=T212_SENSOR)
+    # The balance also goes into the central portfolio, as a cash account (sensor.trading212 keeps the interest).
+    core.put_source("t212", {"name": "Trading 212", "kind": "auto", "as_of": date.today().isoformat(),
+                             "accounts": [{"name": "Cash", "type": "cash", "cash": summary["cash"],
+                                           "total": summary["total"]}]})
     log.info("published Trading 212 (%d interest payments)", interest["count"])  # no amounts in logs
 
 
@@ -198,15 +185,39 @@ def publish_t212_paused(reason):
     post(state, {**attrs, "status": "paused", "paused_reason": reason}, entity=T212_SENSOR)
 
 
-def publish_paused(reason):
+def publish_paused(reason) -> bool:
     try:
-        last = json.loads(urllib.request.urlopen(urllib.request.Request(
-            f"{HA_HTTP}/api/states/{SENSOR}", headers={"Authorization": f"Bearer {os.environ['TOKEN']}"}),
-            timeout=10).read())
-        state, attrs = last["state"], last["attributes"]
-    except Exception:
-        state, attrs = "unknown", dict(BASE_ATTRS)
-    post(state, {**attrs, "status": "paused", "paused_reason": reason})
+        core.call("PATCH", "/v1/portfolio/hl", {"status": "paused", "paused_reason": reason})
+        return True
+    except core.CoreError as e:
+        log.warning("couldn't mark HL paused in core: %s", e)
+        return e.status == 404  # no HL snapshot yet: nothing to mark
+    except OSError as e:  # core not up yet: try again next round
+        log.warning("couldn't reach core to mark HL paused: %s", e)
+        return False
+
+
+def revalue(prices: Prices):
+    """Today's price for each manual holding core can revalue (units + an ISIN), from FT. Only public fund ids are
+    sent to FT. FT quotes some funds in pence: the price implied by what was written tells which."""
+    for h in core.call("GET", "/v1/portfolio/priceable")["items"]:
+        if len(h["key"]) != 12:  # only ISINs can be looked up reliably
+            continue
+        try:
+            series = prices.history(h["key"].upper(), h["name"])
+        except Exception as e:
+            log.warning("no price for %s: %s", h["name"], e)
+            continue
+        if not series:
+            continue
+        day, price = series[-1]
+        ratio = price / h["implied_gbp"]
+        gbp = price / 100 if 50 < ratio < 200 else price if 0.5 < ratio < 2 else None
+        if gbp is None:  # neither pounds nor pence: wrong fund, or a typo in what was written
+            log.warning("price for %s doesn't match what was written (x%.2f); skipped", h["name"], ratio)
+            continue
+        core.call("PUT", f"/v1/prices/{h['key']}", {"day": day.isoformat(), "price_gbp": gbp, "source": "FT",
+                                                     "name": h["name"]})
 
 
 # ── running ──────────────────────────────────────────────────────
@@ -250,8 +261,8 @@ def t212_delay():
 
 def watch():
     """Two independent sources on their own timers: a problem with one never delays or unblocks the other."""
-    hl = HL()
-    due = {"hl": 0.0, "t212": 0.0}
+    hl, prices = HL(), Prices()
+    due = {"hl": 0.0, "t212": 0.0, "revalue": 0.0}
     paused = {}  # source -> halt reason already published, so a halt is announced once, not every tick
     while True:
         now = time.time()
@@ -261,8 +272,8 @@ def watch():
                 due["hl"] = now + 60
                 if paused.get("hl") != reason:
                     log.warning("Hargreaves Lansdown paused: %s", reason)
-                    publish_paused(reason)
-                    paused["hl"] = reason
+                    if publish_paused(reason):
+                        paused["hl"] = reason
             else:
                 paused.pop("hl", None)
                 due["hl"] = now + next_delay()
@@ -293,6 +304,12 @@ def watch():
                     due["t212"] = now + 60
                 except Exception as e:
                     log.warning("Trading 212 refresh failed: %s", e)
+        if now >= due["revalue"]:  # manual holdings (e.g. HSBC funds) at today's price, hourly
+            due["revalue"] = now + 3600
+            try:
+                revalue(prices)
+            except Exception as e:
+                log.warning("revaluing manual holdings failed: %s", e)
         time.sleep(15)
 
 

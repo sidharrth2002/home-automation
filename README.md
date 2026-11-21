@@ -71,6 +71,9 @@ so "turn the TV lamps blue" or "lights out" just works.
 - **Photos.** A few good ones from the thousands in my OneDrive, chosen on the Mac by looking at faces: me with
   other people first, no lone selfies. They go round in the Hub and on the TV's screensaver. With visitors, one
   Guest switch swaps them for generic landscapes from Wikimedia Commons.
+- **Central state.** One local database behind an API (`core/`) holds the app's state: my portfolio from every
+  source (HL and Trading 212 fetched automatically, the rest written by another Claude session over the API), plus
+  any other app data. It keeps every version, tells Home Assistant when something changes, and backs itself up.
 - **One switch.** `./home up` and `./home down` start and stop everything, and a supervisor restarts anything that
   falls over.
 
@@ -87,13 +90,16 @@ flowchart LR
         strip_svc["backlight<br/>(Bluetooth)"]
         photos["photos<br/>(picks by faces)"]
         voice["announce<br/>(macOS voice)"]
-        side["investments,<br/>widget feed"]
+        core["core<br/>(state DB + API)"]
+        inv["investments"]
+        widget["widget feed"]
         sup(["./home"])
         audio --> sync
         mic --> sync
         spotify --> sync
         sync -->|"show frames<br/>(local UDP)"| strip_svc
-        sup -.-> sync & strip_svc & photos & voice & side
+        inv -->|"snapshots"| core
+        sup -.-> sync & strip_svc & photos & voice & core & inv & widget
     end
 
     ha["Home Assistant<br/>(Docker)"]
@@ -103,6 +109,7 @@ flowchart LR
     hub["Hub"]
     phone["iPhone widget<br/>+ Shortcuts"]
     claude["Claude"]
+    agents["other Claude sessions<br/>(home-state skill)"]
     icloud["iCloud"]
     onedrive["OneDrive"]
     money["Hargreaves Lansdown,<br/>Trading 212, FT"]
@@ -111,10 +118,12 @@ flowchart LR
     sync <-->|"websocket<br/>(modes, TV paused)"| ha
     strip_svc <-- websocket --> ha
     strip_svc -- BLE --> strip
-    side -- REST --> ha
+    core -- REST --> ha
+    widget -- REST --> ha
+    agents -->|"API, scoped token"| core
     photos -->|"REST + image files"| ha
     onedrive -.->|"Graph API,<br/>read-only"| photos
-    money -. read-only .-> side
+    money -. read-only .-> inv
     voice -- cast --> tv
     ha -- desk lamp --> bulbs
     ha <-- remote --> tv
@@ -130,6 +139,9 @@ Home Assistant runs in Docker. The audio side can't, because it needs Core Audio
 strip, because Docker on a Mac can't reach Bluetooth. So those services run natively on the Mac under a small
 supervisor, and `./home` starts and stops the lot together. The strip is a Home Assistant light like any other: the
 backlight service mirrors its state over Bluetooth, and during a show music sync drives it directly.
+
+Shared state goes through `core`: services and other clients write to its API, it keeps the data in SQLite, and it
+pushes what the screens need into Home Assistant. [docs/core.md](docs/core.md) has the design.
 
 ## Running it
 
@@ -300,7 +312,11 @@ balance and the interest paid on it. If it ever refuses the key, it stops and do
 .venv/bin/python -m investments setup-t212   # Trading 212 key and secret into the Keychain
 ```
 
-None of it is exposed to Claude or shown on the screensaver or the widget. `tests/test_investments.py` and
+The fetched holdings go to the central state service as snapshots (`portfolio/hl`, `portfolio/t212`), next to the
+sources I keep up to date by hand, and core merges them into what the Hub shows. Hourly, holdings written by hand
+with units and an ISIN are revalued from FT prices.
+
+None of it is exposed to Home Assistant's Claude or shown on the screensaver or the widget. `tests/test_investments.py` and
 `tests/test_t212.py` run every safety rule against fakes.
 
 </details>
@@ -411,7 +427,9 @@ home                ./home up | down | reload | status | logs
 stack/              the supervisor behind ./home, and the health it reports
 music_sync/         audio capture, analysis, light show, now playing
 announce/           the voice: speaks home_say events on the Mac or the TV
+core/               the central state service: SQLite, the API, publishing to Home Assistant
 investments/        Hargreaves Lansdown, FT prices, Trading 212
+skills/home-state/  the Claude Code skill other sessions use to read and write the state
 backlight/          the Bluetooth LED strip behind the cabinet
 photos/             OneDrive photos: pick, judge, show
 widget/             the iPhone widget, its feed, webhooks and Shortcuts
@@ -425,7 +443,7 @@ tests/
 ```
 
 Tests: `python -m tests.test_analysis` (a synthetic 128 BPM track: tempo, beat timing, drops, TV mode, palettes),
-`tests.test_investments`, `tests.test_t212`, `tests.test_widget` and `tests.test_announce`, and
+`tests.test_core`, `tests.test_investments`, `tests.test_t212`, `tests.test_widget` and `tests.test_announce`, and
 `node tests/widget_smoke.js`.
 
 `CLAUDE.md` has the working rules for this repo, the main one being that it's public, so nothing personal goes in.

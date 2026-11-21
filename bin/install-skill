@@ -1,0 +1,17 @@
+#!/bin/sh
+# Install the home-state Claude Code skill for every project (~/.claude/skills), and optionally a token for it.
+#   bin/install-skill                 copy the skill
+#   bin/install-skill <name> <scope>...   also make a scoped token and save it to ~/.config/home-core/token
+set -e
+here="$(cd "$(dirname "$0")/.." && pwd)"
+dest="$HOME/.claude/skills/home-state"
+mkdir -p "$dest"
+cp "$here/skills/home-state/SKILL.md" "$here/skills/home-state/home_state.py" "$dest/"
+echo "skill installed in $dest"
+if [ $# -ge 2 ]; then
+  mkdir -p "$HOME/.config/home-core"
+  umask 077
+  (cd "$here" && .venv/bin/python -m core token add "$@") | tail -1 > "$HOME/.config/home-core/token"
+  chmod 600 "$HOME/.config/home-core/token"
+  echo "token '$1' saved to ~/.config/home-core/token (scopes: ${*#"$1"})"
+fi
