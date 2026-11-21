@@ -68,6 +68,30 @@ DEFAULT_SCHEDULES = [  # name, kind, title, every_s; created once, then edited o
 ]
 
 
+REACTIONS = {  # a change to (audit entity, key) queues a task (kind, title) right away
+    ("doc", "finance/premium_bonds_holder"): ("premium-bonds", "Check Premium Bonds prizes"),
+}
+
+
+def react_once(db: DB, seq: int, wait: float = 30) -> int:
+    """Queue the tasks the changes after `seq` call for. Returns the last seq seen."""
+    for c in db.changes_since(seq, wait=wait):
+        seq = c["seq"]
+        if (kind := REACTIONS.get((c["entity"], c["key"]))) and c["action"] != "delete":
+            tasks.create(db, kind[0], kind[1], by="core", dedupe=f"react:{kind[0]}")
+    return seq
+
+
+def reactions(db: DB):
+    seq = db.last_seq()
+    while True:
+        try:
+            seq = react_once(db, seq)
+        except Exception:
+            log.exception("reactions failed")
+            time.sleep(5)
+
+
 def scheduler(db: DB):
     """Queue scheduled tasks when they're due."""
     for name, kind, title, every in DEFAULT_SCHEDULES:
@@ -119,7 +143,7 @@ def main():
         migrate_legacy(db)
         publisher, maintenance = Publisher(db), Maintenance(db, DATA / "backups")
         for target, name in ((publisher.run, "publish"), (publisher.follow, "follow"), (maintenance.run, "maintenance"),
-                             (lambda: scheduler(db), "scheduler")):
+                             (lambda: scheduler(db), "scheduler"), (lambda: reactions(db), "reactions")):
             threading.Thread(target=target, daemon=True, name=name).start()
         app = create_app(db, admin, health=lambda: {"maintenance": maintenance.status, "published": publisher.last_ok},
                          on_live=publisher.live_changed)

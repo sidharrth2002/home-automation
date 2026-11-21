@@ -56,6 +56,13 @@ Free-form JSON documents in collections, e.g. `state/finance/plan`, `state/finan
 merges top-level fields (null removes one); each write is a new version (`state/<c>/<k>/versions`). Send
 `If-Match: <version>` (helper: `--if-match N`) when editing something you read, to avoid overwriting a newer edit.
 
+## Premium Bonds
+
+Premium Bonds go in `portfolio/nsandi` as an account named "Premium Bonds" with `"type": "premium_bonds"`. For the
+prize checks, the user's NS&I holder number (theirs, from the NS&I app or a prize letter; not a bond number) goes in
+`state/finance/premium_bonds_holder` as `{"holder": "..."}`: the home system then checks NS&I's public prize
+checker straight away and after every monthly draw, and shows results on the Hub. Only store a number the user gave.
+
 ## Before writing
 
 Show the user what you're about to change (old vs new figures), then write, then confirm with a `get`. Every write

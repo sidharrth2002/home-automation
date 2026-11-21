@@ -608,7 +608,7 @@ function bonds() {
   const a = e?.attributes ?? {};
   if (!e || e.state === "not set up") return `<div class="bonds ${showMoney ? "" : "private"}">
       <div class="bonds-head"><span class="label">${I.trophy} Premium Bonds</span><b class="money">${a.holding != null ? gbp(a.holding) : "—"}</b></div>
-      <p class="empty-note">Not set up yet. Add <b>PREMIUM_BOND_HOLDER=</b>your holder number (NS&amp;I app → Premium Bonds) to <b>.env</b>; prizes are checked after each monthly draw.${a.holding == null ? " Your holding appears once your finance session records it under <b>nsandi</b>." : ""}</p>
+      <p class="empty-note">Not set up yet. Ask your finance Claude to <b>set your Premium Bonds holder number</b> (NS&amp;I app → Premium Bonds). Prizes are then checked after each monthly draw.${a.holding == null ? " Your holding appears once your finance session records it under <b>nsandi</b>." : ""}</p>
     </div>`;
   const next = a.next_check ? new Date(`${a.next_check}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null;
   const result = e.state === "won" ? `<span class="delta up">Won in the ${esc(monthName(a.last_draw))} draw</span>`
@@ -954,7 +954,7 @@ function photosTile(svcTile) {
 }
 function bondsTile() {
   const e = S[BONDS];
-  if (!e || e.state === "not set up") return ["idle", "Premium Bonds", "Not set up · needs PREMIUM_BOND_HOLDER in .env"];
+  if (!e || e.state === "not set up") return ["idle", "Premium Bonds", "Not set up · needs the holder number"];
   const a = e.attributes;
   if (e.state === "error") return ["warn", "Premium Bonds", `Check failed · ${esc(String(a.last_error ?? "").slice(0, 90))}`];
   if (e.state === "waiting") return ["idle", "Premium Bonds", "Waiting for the first draw check"];

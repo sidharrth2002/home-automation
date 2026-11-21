@@ -6,8 +6,9 @@ within a few days, so the daily task does nothing (no request) until REVEAL_DAYS
 checks once and records the month; unclaimed prizes are checked every UNCLAIMED_EVERY_DAYS. A failure is recorded
 and tried again at the next daily run: no retries against NS&I.
 
-PREMIUM_BOND_HOLDER in .env is the holder number. It goes to NS&I and nowhere else: not the logs, the core, the
-sensor or the task result. Results go into the core document finance/premium_bonds and sensor.premium_bonds,
+The holder number lives in the core, document finance/premium_bonds_holder ({"holder"}), which a finance Claude
+session sets through the home-state MCP server or skill (the core then runs a check at once).
+It goes to NS&I and nowhere else: not the logs, the sensor or the task result. Results go into the core document finance/premium_bonds and sensor.premium_bonds,
 alongside the holding the finance session wrote into portfolio/nsandi (read, never changed). Amounts never go in
 the logs; a win also raises a Home Assistant notification (silent, no voice on the TV).
 """
@@ -24,8 +25,8 @@ from core import client as core
 
 log = logging.getLogger("investments.premium_bonds")
 ENDPOINT = "https://www.nsandi.com/premium-bonds-have-i-won-ajax"
-ENV = "PREMIUM_BOND_HOLDER"
 DOC = ("finance", "premium_bonds")
+HOLDER_DOC = ("finance", "premium_bonds_holder")
 SENSOR = "sensor.premium_bonds"
 REVEAL_DAYS = 3
 UNCLAIMED_EVERY_DAYS = 30
@@ -99,7 +100,7 @@ def ask(holder: str, period: str, post=_post) -> dict:
     (each prize {prize, date}; bond numbers are left out)."""
     body = post({"field_premium_bond_period": period, "field_premium_bond_number": holder})
     if body.get("holder_number") == "is invalid":
-        raise InvalidHolder("NS&I says the holder number is invalid: check PREMIUM_BOND_HOLDER in .env")
+        raise InvalidHolder("NS&I says the holder number is invalid: ask the finance session to set it again")
     if "status" not in body:
         raise ValueError(f"unexpected reply from NS&I (keys: {', '.join(sorted(body)) or 'none'})")
     prizes = [{"prize": int(float(e["prize"])), "date": e.get("date")} for e in body.get("history") or []
@@ -115,6 +116,14 @@ def _for_month(result: dict, draw: date) -> bool:
 
 
 # ── the task ─────────────────────────────────────────────────────
+def holder_number() -> str:
+    """From the core, where the finance session puts it ("" if it hasn't yet)."""
+    try:
+        return str(core.get(*HOLDER_DOC)["data"].get("holder") or "").strip()
+    except core.CoreError as e:
+        if e.status == 404:
+            return ""
+        raise
 def holding() -> float | None:
     """The Premium Bonds total in portfolio/nsandi (written by the finance session), if it's there."""
     try:
@@ -167,11 +176,12 @@ def report(doc: dict, today: date):
 def check(today: date | None = None, ask=ask, notify=notify) -> dict:
     """The daily task. Asks NS&I only when a result is due; never raises for NS&I trouble (recorded instead), so
     the task queue doesn't retry against NS&I."""
-    holder = os.environ.get(ENV, "").strip()
+    holder = holder_number()
     if not holder:  # still show the card (and the holding, if the finance session wrote it) with what's missing
         core.report(SENSOR, "not set up", {"friendly_name": "Premium Bonds", "icon": "mdi:trophy-outline",
-                                           "holding": holding(), "missing": ENV})
-        raise NotConfigured(f"set {ENV} in .env to your Premium Bonds holder number (NS&I app or letters)")
+                                           "holding": holding(), "missing": "holder number"})
+        raise NotConfigured("no Premium Bonds holder number: ask the finance Claude session to set it (home-state "
+                            "set_premium_bonds_holder, or PUT state/finance/premium_bonds_holder {\"holder\": ...})")
     today = today or london_today()
     draw = draw_date(today.year, today.month)
     month = draw.strftime("%Y-%m")

@@ -47,6 +47,10 @@ def run():
     assert calls[-1][1] == "/v1/state/finance/a%2Fb", "path segments are escaped"
     denied = call("get_document", {"collection": "x", "key": "forbidden"})
     assert denied["isError"] and "403" in denied["content"][0]["text"]
+    ok = call("set_premium_bonds_holder", {"holder": "1234 5678-90"})
+    assert not ok["isError"] and calls[-1] == ("PUT", "/v1/state/finance/premium_bonds_holder", {"holder": "1234567890"}, None)
+    for bad in ("12", "not a number!", ""):
+        assert call("set_premium_bonds_holder", {"holder": bad})["isError"], bad
     assert call("missing_arg", {})["isError"] and call("get_document", {})["isError"]
     print("home mcp OK")
 

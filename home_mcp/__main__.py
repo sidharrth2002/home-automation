@@ -11,6 +11,7 @@ rules for writing come from skills/home-state/SKILL.md, so the two stay the same
 """
 import json
 import os
+import re
 import sys
 import urllib.parse
 from pathlib import Path
@@ -53,6 +54,16 @@ def put_source(a):
     return api("PUT", f"/v1/portfolio/{seg(a['source'])}", a["document"])
 
 
+def set_holder(a):
+    holder = re.sub(r"[\s-]", "", str(a.get("holder", "")))
+    if not re.fullmatch(r"[A-Za-z0-9]{6,20}", holder):
+        raise ValueError("that doesn't look like a Premium Bonds holder number (letters and digits, from the NS&I "
+                         "app or a prize letter; not a bond number)")
+    api("PUT", "/v1/state/finance/premium_bonds_holder", {"holder": holder})
+    return {"saved": True, "next": "The home system is checking NS&I's prize checker now; the result shows on the Hub "
+                                   "(Cash card) within a minute."}
+
+
 TOOLS = {
     "whoami": ("Who this connection is and which parts of the home state it may write.", {}, [],
                lambda a: api("GET", "/v1/me")),
@@ -68,6 +79,11 @@ TOOLS = {
                              {"source": {"type": "string", "description": "e.g. hsbc, nsandi"},
                               "document": {"type": "object", "description": "the source's full state"}},
                              ["source", "document"], put_source),
+    "set_premium_bonds_holder": ("Save the user's NS&I Premium Bonds holder number, so the home system can check "
+                                 "for prizes after each monthly draw (it checks straight away too). Only use a "
+                                 "number the user gave you. It is sent only to NS&I's public prize checker.",
+                                 {"holder": {"type": "string", "description": "the holder number"}}, ["holder"],
+                                 set_holder),
     "list_documents": ("The documents in a collection, e.g. 'finance'.", {"collection": {"type": "string"}},
                        ["collection"], lambda a: api("GET", f"/v1/state/{seg(a['collection'])}")),
     "get_document": ("A free-form JSON document, e.g. collection 'finance', key 'plan'; includes its version.",
