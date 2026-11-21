@@ -255,6 +255,8 @@ print(json.dumps({"type": "result", "result": "All done: " + " ".join(args[args.
         assert res["files"] == ["result.md"] and res["turns"] == 2 and "All done" in res["summary"]
         assert f"Read(/{data.resolve()}/**)" in res["summary"] and "Bash" not in res["summary"], "tools are scoped"
         assert any("WebSearch: quiet cafes" in line for line in ctx._lines)
+        os.environ["CORE_TOKEN"] = "secret-for-test"
+        assert "CORE_TOKEN" not in worker.agent_env() and "PATH" in worker.agent_env(), "agents don't get secrets"
         try:
             worker.run_agent(worker.Context({"id": 8, "kind": "agent", "input": {"prompt": "x", "dirs": ["/nope"]}}, "w"))
             raise AssertionError("a missing folder should fail")

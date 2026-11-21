@@ -91,7 +91,7 @@ def run_agent(ctx: Context):
     started, turns, final = time.monotonic(), 0, None
     with open(work / "transcript.jsonl", "w") as transcript:
         proc = subprocess.Popen(cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                start_new_session=True, env={**os.environ, "CLAUDE_CODE_ENTRYPOINT": "home-tasks"})
+                                start_new_session=True, env=agent_env())
         killer = threading.Thread(target=_watch, args=(proc, ctx, started + timeout), daemon=True)
         killer.start()
         for line in proc.stdout:
@@ -122,6 +122,17 @@ def run_agent(ctx: Context):
                    and p.name not in ("prompt.md", "transcript.jsonl"))
     return {"summary": text[-4000:], "workspace": str(work), "files": files, "turns": final.get("num_turns"),
             "cost_usd": final.get("total_cost_usd"), "seconds": round(time.monotonic() - started)}
+
+
+def agent_env() -> dict:
+    """The worker's environment without this repo's secrets (.env), so an agent given a shell can't read them."""
+    secret = set()
+    env_file = ROOT / ".env"
+    for raw in env_file.read_text().splitlines() if env_file.exists() else []:
+        if "=" in raw and not raw.lstrip().startswith("#"):
+            secret.add(raw.split("=", 1)[0].strip())
+    return {k: v for k, v in os.environ.items() if k not in secret and "TOKEN" not in k and "SECRET" not in k
+            and "PASSWORD" not in k} | {"CLAUDE_CODE_ENTRYPOINT": "home-tasks"}
 
 
 def _watch(proc: subprocess.Popen, ctx: Context, deadline: float):
