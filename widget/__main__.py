@@ -19,6 +19,7 @@ which is git-ignored).
 import hashlib
 import hmac
 import json
+import logging
 import plistlib
 import os
 import secrets
@@ -28,6 +29,8 @@ import sys
 import tempfile
 import time
 import urllib.request
+
+import telemetry
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -233,6 +236,8 @@ def watch():
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "url"
     if cmd == "--watch":
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+        telemetry.setup("widget")
         watch()
     elif cmd == "url":
         print("\n".join(feed_urls()))

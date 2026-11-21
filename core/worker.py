@@ -18,6 +18,8 @@ import threading
 import time
 from pathlib import Path
 
+import telemetry
+
 from music_sync.service import load_env
 
 from . import client
@@ -162,11 +164,13 @@ def run_revalue(ctx: Context):
 
 
 HANDLERS = {"agent": run_agent, "revalue": run_revalue}
+FINISHED = telemetry.meter().create_counter("home.tasks.finished", description="tasks finished, by kind and outcome")
+DURATION = telemetry.meter().create_histogram("home.task.duration", unit="s", description="how long tasks took")
 
 
 def work_on(task: dict, worker: str):
     ctx = Context(task, worker)
-    stop = threading.Event()
+    stop, started = threading.Event(), time.monotonic()
 
     def beats():
         while not stop.wait(BEAT_S):
@@ -189,13 +193,16 @@ def work_on(task: dict, worker: str):
         except Exception as e:
             log.warning("couldn't report task %s finished (%s); retrying", task["id"], e)
             time.sleep(2 ** attempt)
-    log.info("task %s (%s) %s", task["id"], task["kind"], "cancelled" if ctx.cancelled.is_set() else
-             "failed" if error else "done")
+    outcome = "cancelled" if ctx.cancelled.is_set() else "failed" if error else "done"
+    FINISHED.add(1, {"kind": task["kind"], "outcome": outcome})
+    DURATION.record(time.monotonic() - started, {"kind": task["kind"], "outcome": outcome})
+    log.info("task %s (%s) %s", task["id"], task["kind"], outcome)
 
 
 def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("core.worker")
     worker = f"{socket.gethostname().split('.')[0]}-{os.getpid()}"
     running: list[threading.Thread] = []
     log.info("worker %s: %d slots, kinds %s", worker, SLOTS, ", ".join(HANDLERS))

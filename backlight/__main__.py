@@ -15,6 +15,8 @@ import logging
 import os
 import time
 
+import telemetry
+
 import websockets
 
 from music_sync.service import HA, load_env
@@ -112,6 +114,7 @@ class _Frames(asyncio.DatagramProtocol):
 async def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("backlight")
     backlight = Backlight()
     loop = asyncio.get_running_loop()
     await loop.create_datagram_endpoint(lambda: _Frames(backlight), local_addr=("127.0.0.1", PORT))

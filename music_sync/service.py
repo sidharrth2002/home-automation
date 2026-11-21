@@ -16,6 +16,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+import telemetry
+
 import numpy as np
 import websockets
 
@@ -379,6 +381,7 @@ class Controller:
 async def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("music_sync")
     token = os.environ.get("TOKEN")
     if not token:
         raise SystemExit("TOKEN missing from .env")

@@ -20,6 +20,8 @@ import subprocess
 import time
 import urllib.request
 
+import telemetry
+
 from music_sync.service import HA_HTTP, load_env
 
 log = logging.getLogger("presence")
@@ -71,6 +73,7 @@ def publish(state, attrs):
 def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("presence")
     macs = [norm_mac(m) for m in os.environ.get("PRESENCE_PHONE_MAC", "").split(",") if m.strip()]
     if not macs:
         raise SystemExit("set PRESENCE_PHONE_MAC in .env (phone: Settings > Wi-Fi > (i) > Wi-Fi Address)")

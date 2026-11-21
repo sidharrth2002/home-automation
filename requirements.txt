@@ -12,3 +12,6 @@ bleak
 fastapi==0.115.6
 uvicorn==0.32.1
 httpx==0.28.1  # tests only (FastAPI's TestClient)
+opentelemetry-sdk==1.29.0
+opentelemetry-exporter-otlp-proto-http==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0

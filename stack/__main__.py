@@ -20,6 +20,8 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+import telemetry
+
 ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable
 GRACE_S = 10
@@ -162,6 +164,7 @@ async def report(children, started_at, changed: asyncio.Event):
 async def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("supervisor")
     stopping, changed = asyncio.Event(), asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
@@ -169,6 +172,10 @@ async def main():
 
     started_at = time.time()
     children = [Child(name, argv) for name, argv in services().items()]
+    telemetry.gauge("home.service.up", lambda: [(int(c.state == "running"), {"service": c.name}) for c in children],
+                    "1 while the service is running")
+    telemetry.gauge("home.service.restarts", lambda: [(c.restarts, {"service": c.name}) for c in children],
+                    "restarts since the supervisor started")
     tasks = [asyncio.create_task(c.run(stopping, changed)) for c in children]
     reporter = asyncio.create_task(report(children, started_at, changed))
     log.info("supervising %s", ", ".join(c.name for c in children))

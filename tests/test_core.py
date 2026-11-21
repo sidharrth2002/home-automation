@@ -271,8 +271,23 @@ print(json.dumps({"type": "result", "result": "All done: " + " ".join(args[args.
     print("agent runner OK")
 
 
+def test_telemetry_off():
+    """With no endpoint set, telemetry does nothing and the helpers are safe no-ops."""
+    import telemetry
+    old = os.environ.pop("OTEL_EXPORTER_OTLP_ENDPOINT", None)
+    try:
+        assert telemetry.setup("test") is False
+        telemetry.gauge("home.test", lambda: [(1, {})])
+        telemetry.meter().create_counter("home.test.count").add(1)
+    finally:
+        if old:
+            os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = old
+    print("telemetry OK")
+
+
 def main():
     test_validate()
+    test_telemetry_off()
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
         db = test_api(tmp)

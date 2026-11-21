@@ -17,6 +17,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+import telemetry
+
 from music_sync.service import load_env
 
 from . import finance, tasks
@@ -79,9 +81,28 @@ def scheduler(db: DB):
         time.sleep(20)
 
 
+def instrument(app, db: DB, publisher: Publisher):
+    """Request traces and metrics for the API, and gauges for the queue, the database and publishing."""
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        FastAPIInstrumentor.instrument_app(app, excluded_urls="/v1/health")
+    except ImportError:
+        pass
+    path = Path(db.path)
+    telemetry.gauge("home.tasks", lambda: [(n, {"status": s}) for s, n in tasks.summary(db, 0)["counts"].items()],
+                    "tasks by status")
+    telemetry.gauge("home.core.db_size", lambda: [(path.stat().st_size + (path.with_suffix(".db-wal").stat().st_size
+                                                   if path.with_suffix(".db-wal").exists() else 0), {})],
+                    "state database size", "By")
+    telemetry.gauge("home.publish.age", lambda: [(time.time() - time.mktime(time.strptime(t, "%Y-%m-%dT%H:%M:%S")),
+                                                  {"publisher": name}) for name, t in publisher.last_ok.items()],
+                    "seconds since each publisher last reached Home Assistant", "s")
+
+
 def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("core")
     args = sys.argv[1:] or ["serve"]
     db = DB(os.environ.get("CORE_DB", DATA / "core.db"))
     if args[0] == "serve":
@@ -99,6 +120,7 @@ def main():
                              (lambda: scheduler(db), "scheduler")):
             threading.Thread(target=target, daemon=True, name=name).start()
         app = create_app(db, admin, health=lambda: {"maintenance": maintenance.status, "published": publisher.last_ok})
+        instrument(app, db, publisher)
         host, port = os.environ.get("CORE_BIND", "127.0.0.1"), int(os.environ.get("CORE_PORT", "8790"))
         log.info("core API on http://%s:%d (docs at /docs)", host, port)
         uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False)
