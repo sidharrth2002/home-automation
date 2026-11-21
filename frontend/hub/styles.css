@@ -487,6 +487,14 @@ details.tune .slider { flex: 1; }
 .cash .chart-head { margin-top: 18px; }
 .cash .cash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
 .cash .h-src { margin-top: 14px; }
+.bonds { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.bonds-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.bonds-head .label { display: inline-flex; align-items: center; gap: 8px; }
+.bonds-head .label svg { width: 16px; height: 16px; }
+.bonds-head b { font: 500 22px/1.2 var(--mono); }
+.bonds .invest-deltas { margin-top: 6px; }
+.bonds .cash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.bonds .h-src { margin-top: 10px; }
 
 /* charts */
 .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 22px 0 10px; flex-wrap: wrap; }

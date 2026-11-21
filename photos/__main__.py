@@ -62,6 +62,7 @@ PUBLISHED = DATA / "published.json"  # the set on screen, to put back when Home 
 OUT = ROOT / "homeassistant" / "config" / "www" / "photos"
 GUEST_OUT = ROOT / "homeassistant" / "config" / "www" / "photos-guest"
 SENSOR = "sensor.photo_frame"
+LIBRARY_SENSOR = "sensor.photo_library"  # how much of the library has been looked at (for the Hub)
 SOURCE = "onedrive"  # the core's media source
 ANALYSER = "faces"   # the core's name for what faces.py finds
 CORE_FIELDS = {"name": "name", "folder": "folder", "taken": "taken_at", "make": "camera", "focal": "focal_mm",
@@ -236,6 +237,11 @@ def look(budget: int = ANALYSE_PER_RUN, progress=lambda fraction, message: None,
                            cancelled=cancelled)
     remaining = sum(1 for r in index["items"].values() if r.get("look") is None and worth_a_look(r))
     log.info("looked at %d photos; %d still to look at", looked, remaining)
+    done = core.call("GET", f"/v1/media/{SOURCE}")["analysed"].get(ANALYSER, 0)
+    core.report(LIBRARY_SENSOR, round(100 * done / max(done + remaining, 1)), {
+        "friendly_name": "Photo library", "icon": "mdi:image-search", "unit_of_measurement": "%",
+        "looked_at": done, "remaining": remaining, "last_batch": looked,
+        "updated": datetime.now().astimezone().isoformat(timespec="seconds")})
     return {"looked": looked, "remaining": remaining}
 
 

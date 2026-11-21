@@ -97,7 +97,8 @@ find). Testing takes over the TV screen, so ask first.
   scene starts with `script.turn_off script.sleep_mode` so it can't dim them later).
 - Events: `home_say` {text, target: mac|tv, voice?, rate?}; `music_sync_command` {command}; `widget_ping`.
 - Feeds published by services (REST states, gone after an HA restart until republished): `sensor.investments`,
-  `sensor.investment_<sedol>`, `sensor.trading212`, `sensor.system_health`, `sensor.photo_frame` (photos: src, bg, label,
+  `sensor.investment_<sedol>`, `sensor.trading212`, `sensor.system_health`, `sensor.photo_library` (% of the library looked at), `sensor.premium_bonds` (Hub: Cash card + health tile),
+  `sensor.photo_frame` (photos: src, bg, label,
   portrait, people; shown in the Hub's Memories card and the screensaver).
 
 ## The core state service
@@ -129,6 +130,8 @@ find). Testing takes over the TV screen, so ask first.
   the process. Off when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
   Nothing may call `logging.config.dictConfig` after setup (it flushes the OTel handler under the logging lock:
   a 30 s deadlock); that's why core runs uvicorn with `log_config=None`.
+- Keep the Hub current: new data or a new service gets surfaced there (a card, a block or a health tile) in
+  the same PR, then `homeassistant.apply` and a screenshot check.
 - Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries
   state to the screens. A service's sensors are reported with `core.client.report(entity, state, attrs)` (table
   `live`, `PUT /v1/live/<entity>`), never POSTed to HA's /api/states: core mirrors them, retries, and re-sends after
