@@ -605,8 +605,11 @@ section("#cash", () => [T212, BONDS], () => {
 const monthName = (ym) => ym ? new Date(`${ym}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "";
 function bonds() {
   const e = S[BONDS];
-  if (!e) return "";
-  const a = e.attributes;
+  const a = e?.attributes ?? {};
+  if (!e || e.state === "not set up") return `<div class="bonds ${showMoney ? "" : "private"}">
+      <div class="bonds-head"><span class="label">${I.trophy} Premium Bonds</span><b class="money">${a.holding != null ? gbp(a.holding) : "—"}</b></div>
+      <p class="empty-note">Not set up yet. Add <b>PREMIUM_BOND_HOLDER=</b>your holder number (NS&amp;I app → Premium Bonds) to <b>.env</b>; prizes are checked after each monthly draw.${a.holding == null ? " Your holding appears once your finance session records it under <b>nsandi</b>." : ""}</p>
+    </div>`;
   const next = a.next_check ? new Date(`${a.next_check}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null;
   const result = e.state === "won" ? `<span class="delta up">Won in the ${esc(monthName(a.last_draw))} draw</span>`
     : e.state === "no win" ? `<span class="delta">No prize in ${esc(monthName(a.last_draw))}</span>`
@@ -951,7 +954,7 @@ function photosTile(svcTile) {
 }
 function bondsTile() {
   const e = S[BONDS];
-  if (!e) return ["idle", "Premium Bonds", "Not checked yet (needs PREMIUM_BOND_HOLDER in .env)"];
+  if (!e || e.state === "not set up") return ["idle", "Premium Bonds", "Not set up · needs PREMIUM_BOND_HOLDER in .env"];
   const a = e.attributes;
   if (e.state === "error") return ["warn", "Premium Bonds", `Check failed · ${esc(String(a.last_error ?? "").slice(0, 90))}`];
   if (e.state === "waiting") return ["idle", "Premium Bonds", "Waiting for the first draw check"];
