@@ -245,7 +245,8 @@ find). Testing takes over the TV screen, so ask first.
   screen with the page at the very top or bottom, where it scrolls all the way (the header has nothing focusable, so
   it was left cut off).
 - README images are public and come only from the Hub's demo mode (`?demo=1`, frontend/hub/demo.js: invented
-  portfolio, calendar, tasks and track; no HA connection; controls do nothing): `.venv/bin/python
+  portfolio, calendar, tasks and track; no HA connection; controls do nothing; money starts hidden, so the pictures
+  never show amounts, even invented ones): `.venv/bin/python
   frontend/readme_images.py` rebuilds docs/hero.jpg, hub.jpg, hub-money.jpg, hub-health.jpg and tv.jpg. Never put a
   screenshot of the real Hub in the repo. When the Hub gains a card or the README a section, extend demo.js and
   rerun it. Look at every image before committing. The README's look: docs/banner.svg (animated, CSS, honours

@@ -429,7 +429,7 @@ section("#calendar", () => calIds(), () => {
 });
 
 // investments (Hargreaves Lansdown): hidden until revealed on this device
-let showMoney = DEMO || (() => { try { return localStorage.hubShowMoney === "1"; } catch { return false; } })(); // demo figures are made up
+let showMoney = !DEMO && (() => { try { return localStorage.hubShowMoney === "1"; } catch { return false; } })(); // demo: hidden, so no figures in pictures
 let invRange = "1Y";
 let invAll = false;
 let invSrc = "all"; // holdings filter: "all" or a portfolio source id
