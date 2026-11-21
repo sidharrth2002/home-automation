@@ -126,7 +126,10 @@ def main():
         instrument(app, db, publisher)
         host, port = os.environ.get("CORE_BIND", "127.0.0.1"), int(os.environ.get("CORE_PORT", "8790"))
         log.info("core API on http://%s:%d (docs at /docs)", host, port)
-        uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False)
+        # log_config=None: uvicorn's own logging setup flushes every existing handler under the logging lock, which
+        # deadlocks with the telemetry exporter for its 30 s timeout on each start; its loggers use ours instead.
+        logging.getLogger("uvicorn").setLevel(logging.WARNING)
+        uvicorn.run(app, host=host, port=port, log_config=None, access_log=False)
     elif args[:2] == ["token", "add"] and len(args) >= 4:
         token = db.add_principal(args[2], args[3:])
         print(f"token for '{args[2]}' (writes {', '.join(args[3:])}); shown once, keep it safe:\n{token}")

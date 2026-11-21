@@ -127,6 +127,8 @@ find). Testing takes over the TV screen, so ask first.
   provisioned read-only: edit the JSON, then `docker restart telemetry`). A new service must call it too. Metrics:
   `telemetry.gauge(...)` / `telemetry.meter()`; names start `home.`. Never log amounts or secrets: logs now leave
   the process. Off when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
+  Nothing may call `logging.config.dictConfig` after setup (it flushes the OTel handler under the logging lock:
+  a 30 s deadlock); that's why core runs uvicorn with `log_config=None`.
 - Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries
   state to the screens. A service's sensors are reported with `core.client.report(entity, state, attrs)` (table
   `live`, `PUT /v1/live/<entity>`), never POSTed to HA's /api/states: core mirrors them, retries, and re-sends after
