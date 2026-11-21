@@ -145,8 +145,12 @@ find). Testing takes over the TV screen, so ask first.
   under their groups) | holdings (All/per-source tabs, source tag, "Settling" badge). No separate Cash card. Account
   type colours are fixed palette slots (ACCOUNT_TYPES/ALLOC in app.js), consecutive in bar order: re-run the dataviz
   validator if you change them. The merge passes `provider`, `label`, `interest_pct`, `matures` on each account.
-- Keep the Hub current: new data or a new service gets surfaced there (a card, a block or a health tile) in
-  the same PR, then `homeassistant.apply` and a screenshot check.
+- Keep every UI in sync, in the same PR: the Hub (desktop + phone), the TV app's TV layout (`?tv=1`, 1280 canvas;
+  every new control must be reachable with the remote's arrows: they're buttons, so FOCUSABLE picks them up, but
+  check) and screensaver (`?ambient=1`), the iPhone widget where it applies, and the README pictures (demo mode,
+  `frontend/readme_images.py`). Deploy with `homeassistant.apply` (the TV app loads the Hub fresh each launch);
+  rebuild the app with `tv-app/deploy` when tv-app/ changes, or `tv-app/deploy --no-open` when the TV is off or in
+  use (never launch it over something playing). Check demo screenshots of each.
 - Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries
   state to the screens. A service's sensors are reported with `core.client.report(entity, state, attrs)` (table
   `live`, `PUT /v1/live/<entity>`), never POSTed to HA's /api/states: core mirrors them, retries, and re-sends after
