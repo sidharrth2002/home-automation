@@ -12,7 +12,7 @@ import time
 import urllib.request
 from datetime import date
 
-from . import finance, portfolio
+from . import finance, portfolio, tasks
 from .db import DB
 
 log = logging.getLogger("core.publish")
@@ -43,8 +43,15 @@ def publish_investments(db: DB, post=post_state):
              len(sources), len(attrs["accounts"]), len(attrs["holdings"]))
 
 
-PUBLISHERS = {"investments": publish_investments}
-TRIGGERS = {"portfolio": "investments", "price": "investments"}  # audit entity -> publisher
+def publish_tasks(db: DB, post=post_state):
+    s = tasks.summary(db)
+    running = s["counts"].get("running", 0)
+    post("sensor.core_tasks", running, {"friendly_name": "Background tasks", "icon": "mdi:robot-outline",
+                                        "counts": s["counts"], "recent": s["recent"]})
+
+
+PUBLISHERS = {"investments": publish_investments, "tasks": publish_tasks}
+TRIGGERS = {"portfolio": "investments", "price": "investments", "task": "tasks"}  # audit entity -> publisher
 
 
 class Publisher:

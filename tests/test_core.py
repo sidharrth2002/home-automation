@@ -9,7 +9,11 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from core import finance, portfolio
+import json
+import os
+import stat
+
+from core import finance, portfolio, tasks, worker
 from core.db import DB
 from core.maintenance import Maintenance
 from core.publish import Publisher, publish_investments
@@ -150,7 +154,7 @@ def test_publish(db: DB):
 
 def test_reopen_and_maintenance(tmp: Path):
     db = DB(tmp / "core.db")  # migrations are idempotent
-    assert db.schema_version == 1 and finance.current(db)
+    assert db.schema_version == 2 and finance.current(db)
     m = Maintenance(db, tmp / "backups")
     m.run_once()
     m.run_once()  # one backup a day
@@ -174,6 +178,97 @@ def test_validate():
     print("validate OK")
 
 
+def test_tasks(tmp: Path):
+    db = DB(tmp / "tasks.db")
+    api = TestClient(create_app(db, ADMIN))
+    admin = {"Authorization": f"Bearer {ADMIN}"}
+    t = expect(200, api.post("/v1/tasks", json={"kind": "agent", "title": "Look into X", "input": {"prompt": "x"}},
+                             headers=admin))
+    assert t["status"] == "queued" and t["created_by"] == "services"
+    reader = {"Authorization": f"Bearer {db.add_principal('reader', ['doc/notes/*'])}"}
+    expect(403, api.post("/v1/tasks", json={"kind": "agent", "title": "no"}, headers=reader))
+    expect(403, api.post("/v1/tasks/claim", json={"worker": "w", "kinds": ["agent"]}, headers=reader))
+
+    # claim, heartbeat, progress, finish
+    c = expect(200, api.post("/v1/tasks/claim", json={"worker": "w1", "kinds": ["agent"]}, headers=admin))["task"]
+    assert c["id"] == t["id"] and c["status"] == "running" and c["attempts"] == 1
+    assert expect(200, api.post("/v1/tasks/claim", json={"worker": "w2", "kinds": ["agent"]}, headers=admin))["task"] is None
+    hb = expect(200, api.post(f"/v1/tasks/{c['id']}/heartbeat", json={"worker": "w1", "progress": 0.5, "message": "half",
+                                                                     "events": ["did a thing"]}, headers=admin))
+    assert hb == {"cancel": False}
+    assert expect(200, api.post(f"/v1/tasks/{c['id']}/heartbeat", json={"worker": "other"}, headers=admin))["cancel"]
+    done = expect(200, api.post(f"/v1/tasks/{c['id']}/finish", json={"worker": "w1", "result": {"ok": 1}}, headers=admin))
+    assert done["status"] == "done" and done["result"] == {"ok": 1} and done["progress"] == 1
+    assert any("did a thing" in e["message"] for e in expect(200, api.get(f"/v1/tasks/{c['id']}", headers=admin))["events"])
+
+    # failure retries with backoff, then fails for good; cancelling; a dead worker's lease is taken over
+    f = tasks.create(db, "agent", "flaky", max_attempts=2)
+    tasks.claim(db, ["agent"], "w")
+    tasks.finish(db, f["id"], "w", error="boom")
+    assert tasks.get(db, f["id"])["status"] == "queued" and tasks.get(db, f["id"])["run_after"] > tasks.now()
+    db.conn.execute("UPDATE tasks SET run_after=? WHERE id=?", ("2000-01-01", f["id"]))
+    tasks.claim(db, ["agent"], "w")
+    tasks.finish(db, f["id"], "w", error="boom again")
+    assert tasks.get(db, f["id"])["status"] == "failed"
+    q = tasks.create(db, "agent", "never mind")
+    assert expect(200, api.post(f"/v1/tasks/{q['id']}/cancel", headers=admin))["status"] == "cancelled"
+    r = tasks.create(db, "agent", "long one", max_attempts=2)
+    tasks.claim(db, ["agent"], "dies")
+    assert tasks.cancel(db, r["id"], "me")["cancel_requested"]
+    assert tasks.heartbeat(db, r["id"], "dies") == {"cancel": True}
+    db.conn.execute("UPDATE tasks SET lease_until=? WHERE id=?", ("2000-01-01", r["id"]))
+    assert tasks.claim(db, ["agent"], "w3")["worker"] == "w3", "an expired lease is taken over"
+
+    # schedules: due ones are queued once, and not again while the last is still pending
+    tasks.set_schedule(db, "tick", "revalue", "Tick", 3600)
+    assert tasks.run_due(db) == 1 and tasks.run_due(db) == 0
+    db.conn.execute("UPDATE schedules SET next_run='2000-01-01'")
+    assert tasks.run_due(db) == 0, "the previous one is still queued"
+    s = tasks.summary(db)
+    assert s["counts"]["failed"] == 1 and all(x["title"] != "Tick" or x["status"] != "queued" for x in s["recent"])
+    print("tasks OK")
+
+
+def test_agent_runner(tmp: Path):
+    """run_agent against a fake `claude` that streams JSON like the real one: events, files, result, cancel."""
+    fake = tmp / "bin" / "claude"
+    fake.parent.mkdir()
+    fake.write_text("""#!/usr/bin/env python3
+import json, sys, time
+args = sys.argv[1:]
+print(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "WebSearch",
+                  "input": {"query": "quiet cafes"}}]}}), flush=True)
+open("result.md", "w").write("# Found")
+if "slow" in args[1]:
+    time.sleep(30)
+print(json.dumps({"type": "result", "result": "All done: " + " ".join(args[args.index("--allowedTools") + 1:]),
+                  "is_error": False, "num_turns": 2, "total_cost_usd": 0.01}), flush=True)
+""")
+    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+    old_path, old_ws = os.environ["PATH"], worker.WORKSPACES
+    os.environ["PATH"], worker.WORKSPACES = f"{fake.parent}:{old_path}", tmp / "tasks"
+    try:
+        data = tmp / "sheets"
+        data.mkdir()
+        ctx = worker.Context({"id": 7, "kind": "agent", "input": {"prompt": "find cafes", "dirs": [str(data)]}}, "w")
+        res = worker.run_agent(ctx)
+        assert res["files"] == ["result.md"] and res["turns"] == 2 and "All done" in res["summary"]
+        assert f"Read(/{data.resolve()}/**)" in res["summary"] and "Bash" not in res["summary"], "tools are scoped"
+        assert any("WebSearch: quiet cafes" in line for line in ctx._lines)
+        try:
+            worker.run_agent(worker.Context({"id": 8, "kind": "agent", "input": {"prompt": "x", "dirs": ["/nope"]}}, "w"))
+            raise AssertionError("a missing folder should fail")
+        except ValueError:
+            pass
+        slow = worker.Context({"id": 9, "kind": "agent", "input": {"prompt": "slow"}}, "w")
+        threading.Timer(1.5, slow.cancelled.set).start()
+        t0 = time.monotonic()
+        assert worker.run_agent(slow) is None and time.monotonic() - t0 < 15, "cancel stops the agent"
+    finally:
+        os.environ["PATH"], worker.WORKSPACES = old_path, old_ws
+    print("agent runner OK")
+
+
 def main():
     test_validate()
     with tempfile.TemporaryDirectory() as d:
@@ -181,6 +276,8 @@ def main():
         db = test_api(tmp)
         test_publish(db)
         test_reopen_and_maintenance(tmp)
+        test_tasks(tmp)
+        test_agent_runner(tmp)
 
 
 if __name__ == "__main__":

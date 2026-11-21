@@ -197,9 +197,11 @@ def publish_paused(reason) -> bool:
         return False
 
 
-def revalue(prices: Prices):
+def revalue(prices: Prices) -> int:
     """Today's price for each manual holding core can revalue (units + an ISIN), from FT. Only public fund ids are
-    sent to FT. FT quotes some funds in pence: the price implied by what was written tells which."""
+    sent to FT. FT quotes some funds in pence: the price implied by what was written tells which. Run hourly by the
+    core task worker (schedule "revalue"). Returns how many prices were recorded."""
+    recorded = 0
     for h in core.call("GET", "/v1/portfolio/priceable")["items"]:
         if len(h["key"]) != 12:  # only ISINs can be looked up reliably
             continue
@@ -218,6 +220,8 @@ def revalue(prices: Prices):
             continue
         core.call("PUT", f"/v1/prices/{h['key']}", {"day": day.isoformat(), "price_gbp": gbp, "source": "FT",
                                                      "name": h["name"]})
+        recorded += 1
+    return recorded
 
 
 # ── running ──────────────────────────────────────────────────────
@@ -261,8 +265,8 @@ def t212_delay():
 
 def watch():
     """Two independent sources on their own timers: a problem with one never delays or unblocks the other."""
-    hl, prices = HL(), Prices()
-    due = {"hl": 0.0, "t212": 0.0, "revalue": 0.0}
+    hl = HL()
+    due = {"hl": 0.0, "t212": 0.0}
     paused = {}  # source -> halt reason already published, so a halt is announced once, not every tick
     while True:
         now = time.time()
@@ -304,12 +308,6 @@ def watch():
                     due["t212"] = now + 60
                 except Exception as e:
                     log.warning("Trading 212 refresh failed: %s", e)
-        if now >= due["revalue"]:  # manual holdings (e.g. HSBC funds) at today's price, hourly
-            due["revalue"] = now + 3600
-            try:
-                revalue(prices)
-            except Exception as e:
-                log.warning("revaluing manual holdings failed: %s", e)
         time.sleep(15)
 
 

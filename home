@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 
 PIDFILE=.home.pid
 PY=.venv/bin/python
-SERVICES='python -m (music_sync|netflix|presence|investments|widget|announce|photos|backlight|core|stack)( |$)'
+SERVICES='python -m (music_sync|presence|investments|widget|announce|photos|backlight|core|core.worker|stack)( |$)'
 
 supervisor_pid() {
   [[ -f $PIDFILE ]] && kill -0 "$(cat $PIDFILE)" 2>/dev/null && cat $PIDFILE
@@ -79,7 +79,7 @@ reload() {
 
 status() {
   if pid=$(supervisor_pid); then echo "supervisor: running (pid $pid)"; else echo "supervisor: stopped"; fi
-  pgrep -fl "$SERVICES" | grep -v stack | sed -E 's/^([0-9]+) .*-m ([a-z_]+).*/  \2: running (pid \1)/' || true
+  pgrep -fl "$SERVICES" | grep -v stack | sed -E 's/^([0-9]+) .*-m ([a-z_.]+).*/  \2: running (pid \1)/' || true
   if docker info >/dev/null 2>&1; then
     echo "homeassistant: $(docker inspect -f '{{.State.Status}}' homeassistant 2>/dev/null || echo missing)"
   else

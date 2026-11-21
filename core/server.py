@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from . import finance, portfolio
+from . import finance, portfolio, tasks
 from .db import DB, Conflict, Forbidden, NotFound, Principal
 
 log = logging.getLogger("core.server")
@@ -23,6 +23,42 @@ log = logging.getLogger("core.server")
 class Status(BaseModel):
     status: str = Field(pattern="^(ok|paused)$")
     paused_reason: str | None = None
+
+
+class NewTask(BaseModel):
+    kind: str = Field(description="what runs it: 'agent' (a headless Claude Code session), or a built-in like 'revalue'")
+    title: str = Field(min_length=1, max_length=200)
+    input: dict[str, Any] | None = Field(None, description="for 'agent': {prompt, dirs?, tools?, model?, timeout_min?}")
+    priority: int = 0
+    delay_s: float = Field(0, ge=0)
+    max_attempts: int = Field(1, ge=1, le=10)
+
+
+class Claim(BaseModel):
+    worker: str
+    kinds: list[str]
+
+
+class Beat(BaseModel):
+    worker: str
+    progress: float | None = Field(None, ge=0, le=1)
+    message: str | None = None
+    events: list[str] | None = None
+
+
+class Finish(BaseModel):
+    worker: str
+    result: Any = None
+    error: str | None = None
+    cancelled: bool = False
+
+
+class Schedule(BaseModel):
+    kind: str
+    title: str
+    every_s: int = Field(ge=60)
+    input: dict[str, Any] | None = None
+    enabled: bool = True
 
 
 class Price(BaseModel):
@@ -175,5 +211,50 @@ def create_app(db: DB, admin_token: str, health=lambda: {}) -> FastAPI:
     @app.get("/v1/valuations", tags=["portfolio"], summary="Daily totals")
     def get_valuations(limit: int = Query(400, ge=1, le=5000), p: Principal = Depends(who)):
         return {"items": [[d, v] for d, v in finance.valuations(db, limit).items()]}
+
+    # -- background tasks ---------------------------------------------------------------
+    @app.post("/v1/tasks", tags=["tasks"], summary="Queue a background task")
+    def create_task(body: NewTask, p: Principal = Depends(who)):
+        p.check(f"task/{body.kind}")
+        return tasks.create(db, body.kind, body.title, body.input, by=p.name, priority=body.priority,
+                            delay_s=body.delay_s, max_attempts=body.max_attempts)
+
+    @app.get("/v1/tasks", tags=["tasks"])
+    def list_tasks(status: str | None = None, limit: int = Query(50, ge=1, le=500), p: Principal = Depends(who)):
+        return {"items": tasks.listing(db, status, limit), **tasks.summary(db, 0)}
+
+    @app.get("/v1/tasks/{task_id}", tags=["tasks"], summary="A task with its latest events")
+    def get_task(task_id: int, events: int = Query(100, ge=0, le=500), p: Principal = Depends(who)):
+        return tasks.get(db, task_id, events)
+
+    @app.post("/v1/tasks/{task_id}/cancel", tags=["tasks"])
+    def cancel_task(task_id: int, p: Principal = Depends(who)):
+        p.check(f"task/{tasks.get(db, task_id)['kind']}")
+        return tasks.cancel(db, task_id, p.name)
+
+    @app.post("/v1/tasks/claim", tags=["workers"], summary="Workers: lease the next ready task")
+    def claim_task(body: Claim, p: Principal = Depends(who)):
+        p.check("worker")
+        return {"task": tasks.claim(db, body.kinds, body.worker)}
+
+    @app.post("/v1/tasks/{task_id}/heartbeat", tags=["workers"], summary="Workers: renew the lease, report progress")
+    def beat(task_id: int, body: Beat, p: Principal = Depends(who)):
+        p.check("worker")
+        return tasks.heartbeat(db, task_id, body.worker, body.progress, body.message, body.events)
+
+    @app.post("/v1/tasks/{task_id}/finish", tags=["workers"])
+    def finish_task(task_id: int, body: Finish, p: Principal = Depends(who)):
+        p.check("worker")
+        tasks.finish(db, task_id, body.worker, body.result, body.error, body.cancelled)
+        return tasks.get(db, task_id)
+
+    @app.get("/v1/schedules", tags=["tasks"])
+    def list_schedules(p: Principal = Depends(who)):
+        return {"items": tasks.schedules(db)}
+
+    @app.put("/v1/schedules/{name}", tags=["tasks"], summary="Create or change a recurring task")
+    def put_schedule(name: str, body: Schedule, p: Principal = Depends(who)):
+        p.check(f"schedule/{name}")
+        return tasks.set_schedule(db, name, body.kind, body.title, body.every_s, body.input, body.enabled, p.name)
 
     return app

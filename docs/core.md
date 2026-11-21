@@ -62,8 +62,8 @@ erDiagram
 ```
 
 `schema_migrations` records which numbered migrations in `core/db.py` have run; new tables arrive as new
-migrations, applied at start. Planned next: a jobs table for the background task orchestrator, and media tables
-for the photos (metadata and analysis results; the image files stay on disk, named by content hash).
+migrations, applied at start. Migration 2 added `tasks`, `task_events` and `schedules` (below). Planned next: media
+tables for the photos (metadata and analysis results; the image files stay on disk, named by content hash).
 
 ## The API
 
@@ -101,3 +101,40 @@ python -m core token list
 
 Every hour it backs up the database (one file a day in `data/core/backups/`, 14 kept), runs an integrity check, and
 optimises and checkpoints SQLite. `/v1/health` shows the results and when each publisher last succeeded.
+
+## Background tasks
+
+Work that runs in the background and is tracked: ad-hoc jobs ("go through the spreadsheets in this folder and
+summarise them", "find three good restaurants near X") and recurring ones (repricing holdings, hourly).
+
+```mermaid
+sequenceDiagram
+    participant you as You / Claude (bin/task)
+    participant core as core API
+    participant w as task worker
+    participant c as claude -p (headless)
+    you->>core: POST /v1/tasks {kind: agent, prompt, dirs}
+    w->>core: POST /v1/tasks/claim (lease 90 s)
+    w->>c: run in data/tasks/<id>/
+    loop every 20 s
+        w->>core: heartbeat (progress, log lines) → cancel?
+    end
+    c-->>w: result.md, transcript
+    w->>core: finish (result or error → retry with backoff)
+    core-->>you: sensor.core_tasks → Hub
+```
+
+- The queue lives in `tasks` (with a lease, attempts, cancel flag, progress and result), `task_events` (the log, last
+  500 lines a task) and `schedules` (which queue a task every N seconds, skipping a turn while the last is pending).
+- The worker (`python -m core.worker`, supervised as `tasks`) only talks to the API, so more workers can run, on
+  other machines too. A worker that dies loses its lease after 90 s and the task is claimed again.
+- `agent` tasks run `claude -p` in their own folder, `data/tasks/<id>/`. They can read that folder and any `dirs`
+  the task names, search and fetch the web, and write only inside their folder; no shell unless the task adds a
+  tool (e.g. `Bash(python3:*)` for spreadsheets). The answer is in `result.md`, with the full transcript beside it.
+- Built-in kinds: `revalue` (FT prices for hand-written holdings; scheduled hourly). New kinds are a function in
+  `core/worker.py`'s HANDLERS.
+
+```sh
+bin/task run "Summarise the spreadsheets in this folder" --dir ~/Documents/Budget --tool 'Bash(python3:*)'
+bin/task list | show <id> | cancel <id> | schedules
+```

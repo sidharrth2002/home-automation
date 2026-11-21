@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Background tasks from the command line (talks to the core API with CORE_TOKEN from .env).
+
+    bin/task run "<prompt>" [--title T] [--dir PATH]... [--tool TOOL]... [--model M] [--timeout MIN]
+    bin/task list [status]
+    bin/task show <id>            status, progress, recent events, and the result
+    bin/task cancel <id>
+    bin/task schedules
+
+`run` starts a headless Claude Code session in data/tasks/<id>/. --dir lets it read a folder; --tool adds a tool
+beyond the defaults (e.g. 'Bash(python3:*)' to open spreadsheets with Python).
+"""
+import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+os.chdir(ROOT)
+
+from core import client  # noqa: E402  (standard library only)
+
+
+def load_env():
+    env = ROOT / ".env"
+    for raw in env.read_text().splitlines() if env.exists() else []:
+        if "=" in raw and not raw.lstrip().startswith("#"):
+            k, v = raw.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+
+
+def opts(args, names):
+    out, rest = {n: [] for n in names}, []
+    i = 0
+    while i < len(args):
+        if args[i] in names and i + 1 < len(args):
+            out[args[i]].append(args[i + 1])
+            i += 2
+        else:
+            rest.append(args[i])
+            i += 1
+    return out, rest
+
+
+def line(t):
+    pct = f" {round((t.get('progress') or 0) * 100)}%" if t["status"] == "running" else ""
+    return f"#{t['id']:<5} {t['status']:<9}{pct:<5} {t['kind']:<8} {t['title'][:70]}"
+
+
+def main(argv):
+    load_env()
+    if not argv:
+        sys.exit(__doc__)
+    cmd, args = argv[0], argv[1:]
+    if cmd == "run":
+        o, rest = opts(args, ["--title", "--dir", "--tool", "--model", "--timeout"])
+        if len(rest) != 1:
+            sys.exit(__doc__)
+        prompt = rest[0]
+        inp = {"prompt": prompt, "dirs": o["--dir"], "tools": o["--tool"]}
+        if o["--model"]:
+            inp["model"] = o["--model"][0]
+        if o["--timeout"]:
+            inp["timeout_min"] = float(o["--timeout"][0])
+        title = o["--title"][0] if o["--title"] else (prompt[:80] + ("…" if len(prompt) > 80 else ""))
+        t = client.call("POST", "/v1/tasks", {"kind": "agent", "title": title, "input": inp})
+        print(f"queued task #{t['id']}: {t['title']}")
+    elif cmd == "list":
+        q = f"?status={args[0]}" if args else ""
+        for t in client.call("GET", f"/v1/tasks{q}")["items"]:
+            print(line(t))
+    elif cmd == "show" and len(args) == 1:
+        t = client.call("GET", f"/v1/tasks/{int(args[0])}?events=30")
+        print(line(t))
+        if t.get("message"):
+            print(f"  {t['message']}")
+        for e in t["events"]:
+            print(f"  {e['ts'][11:19]} {e['message']}")
+        if t.get("error"):
+            print(f"\nerror: {t['error']}")
+        if t.get("result"):
+            print("\n" + json.dumps(t["result"], indent=2))
+    elif cmd == "cancel" and len(args) == 1:
+        print(line(client.call("POST", f"/v1/tasks/{int(args[0])}/cancel")))
+    elif cmd == "schedules":
+        for s in client.call("GET", "/v1/schedules")["items"]:
+            print(f"{s['name']:<12} every {s['every_s'] // 60} min  {'on ' if s['enabled'] else 'off'}  "
+                  f"next {s['next_run'][11:16]}  {s['title']}")
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv[1:])
+    except client.CoreError as e:
+        sys.exit(str(e))
