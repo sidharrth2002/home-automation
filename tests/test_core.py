@@ -375,6 +375,17 @@ def test_media(tmp: Path):
     expect(400, api.put("/v1/media/Bad Source/items", json={"items": []}, headers=admin))
     print("media OK")
 
+    # reactions: setting the Premium Bonds holder number queues a check at once (once, while one is pending)
+    from core.__main__ import react_once
+    seq = db.last_seq()
+    db.put_doc("finance", "premium_bonds_holder", {"holder": "made-up"}, "finance")
+    db.put_doc("finance", "premium_bonds_holder", {"holder": "made-up-2"}, "finance")
+    db.put_doc("finance", "plan", {"x": 1}, "finance")
+    react_once(db, seq, wait=0)
+    queued = [t for t in tasks.listing(db, "queued") if t["kind"] == "premium-bonds"]
+    assert len(queued) == 1 and queued[0]["created_by"] == "core", queued
+    print("reactions OK")
+
 
 def test_telemetry_off():
     """With no endpoint set, telemetry does nothing and the helpers are safe no-ops."""

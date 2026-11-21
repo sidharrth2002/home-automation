@@ -84,7 +84,6 @@ def run():
     def ask(holder, period):
         asked.append(period)
         return pb.ask(holder, period, post=lambda f: answers[period])
-    os.environ.pop(pb.ENV, None)
     try:
         pb.check(date(2026, 11, 6), ask=ask)
         raise AssertionError("needs the holder number")
@@ -92,7 +91,8 @@ def run():
         pass
     state, attrs = fake.live[pb.SENSOR]
     assert state == "not set up" and attrs["holding"] == 1000.0, "the Hub still shows the card and the holding"
-    os.environ[pb.ENV] = HOLDER
+    fake.docs[pb.HOLDER_DOC] = {"holder": HOLDER}  # set by the finance session through the core
+    assert pb.holder_number() == HOLDER
     try:
         out = pb.check(date(2026, 11, 3), ask=ask, notify=lambda t, m: notes.append(m))  # before results are due
         assert asked == ["unclaimed_prize"] and "won" not in out, (asked, out)        # only the monthly unclaimed check
@@ -120,11 +120,10 @@ def run():
         pb.check(date(2026, 12, 9), ask=ask)
         assert fake.live[pb.SENSOR][0] == "no win" and fake.docs[pb.DOC]["last_error"] is None
     finally:
-        os.environ.pop(pb.ENV, None)
         logging.getLogger().removeHandler(handler)
 
-    # nothing sensitive leaves: no holder number anywhere it's kept, no amounts in the logs
-    kept = repr(fake.docs) + repr(fake.live)
+    # nothing sensitive leaves: the holder number stays in its own document only, no amounts in the logs
+    kept = repr({k: v for k, v in fake.docs.items() if k != pb.HOLDER_DOC}) + repr(fake.live)
     assert HOLDER not in kept and HOLDER not in logs.getvalue()
     assert "50" not in logs.getvalue() and "£" not in logs.getvalue(), logs.getvalue()
     print("premium bonds OK")
