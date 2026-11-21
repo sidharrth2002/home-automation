@@ -111,6 +111,9 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   SILENT_RMS (otherwise a paused song keeps the lights pulsing). On the mic (Spotify on the TV) room noise never goes
   silent and the mic gain rides up to 40×, so while the TV's Cast device (`TV_CAST` in .env) says paused, music sync
   feeds the show zeros and `mic_hops(hold=...)` freezes the gain. `tests.test_analysis` covers the pause.
+- WiZ sockets: every `wizlight(ip)` opens its own UDP socket until `async_close()`, so go through `lights._ask`; and
+  `find_wizlights` cancelled mid-wait never closes its socket on port 38899, so it runs under `asyncio.shield`. Both
+  leaked until 2026-11-21 (~600 sockets; discovery then failed with "Address already in use" and no mode would start).
 - The screensaver (`HubDream`, the Hub with `?ambient=1`) is set with `settings put secure screensaver_components`;
   `tv-app/screensaver on|off|test|status|delay <min>` (the idle delay is `system screen_off_timeout`; the user
   chose 1 minute). The original value is saved once in `data/tv/original-screensaver.txt`

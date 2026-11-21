@@ -41,6 +41,15 @@ def _broadcast_addr() -> str:
         return "255.255.255.255"
 
 
+async def _ask(ip: str, fn):
+    """Run fn on a throwaway wizlight, then close it: each one opens its own socket, and they used to pile up."""
+    w = wizlight(ip)
+    try:
+        return await fn(w)
+    finally:
+        await w.async_close()
+
+
 class Bulb:
     def __init__(self, mac: str, ip: str):
         self.mac, self.ip = mac, ip
@@ -84,6 +93,7 @@ class Lights:
         self._transport, _ = await loop.create_datagram_endpoint(_Sink, family=socket.AF_INET, local_addr=("0.0.0.0", 0))
         await self.discover()
         if not self.bulbs:
+            self._transport.close()
             raise RuntimeError("No WiZ bulbs found; set WIZ_BULB_IPS or check 'Allow local communication' in the WiZ app")
         await self._save_state()
         self._tasks = [asyncio.create_task(self._sender()), asyncio.create_task(self._heartbeat())]
@@ -102,13 +112,15 @@ class Lights:
     async def discover(self):
         found = {}
         try:
-            for b in await discovery.discover_lights(broadcast_space=_broadcast_addr(), wait_time=3):
-                found[await b.getMac()] = b.ip
+            # Shielded: cancelled mid-wait, find_wizlights never closes its socket on the discovery port, and every
+            # later discovery fails with "Address already in use".
+            for b in await asyncio.shield(discovery.find_wizlights(wait_time=3, broadcast_address=_broadcast_addr())):
+                found[b.mac_address] = b.ip_address
         except Exception as e:
             log.warning("broadcast discovery failed: %s", e)
         for ip in self._extra_ips:
             try:
-                found.setdefault(await wizlight(ip).getMac(), ip)
+                found.setdefault(await _ask(ip, lambda w: w.getMac()), ip)
             except Exception as e:
                 log.warning("bulb %s unreachable: %s", ip, e)
         for mac, ip in found.items():
@@ -190,7 +202,7 @@ class Lights:
             lost = False
             for bulb in self.bulbs.values():
                 try:
-                    await asyncio.wait_for(wizlight(bulb.ip).updateState(), 2)
+                    await asyncio.wait_for(_ask(bulb.ip, lambda w: w.updateState()), 2)
                     if not bulb.healthy:
                         log.info("bulb %s is back", bulb.mac)
                     bulb.healthy = True
@@ -217,7 +229,7 @@ class Lights:
         snap = {}
         for mac, bulb in self.bulbs.items():
             try:
-                st = (await wizlight(bulb.ip).updateState())[0]
+                st = (await _ask(bulb.ip, lambda w: w.updateState()))[0]
                 bulb.saved = {"on": bool(st.get_state()), "brightness": st.get_brightness(),
                               "rgb": st.get_rgb(), "colortemp": st.get_colortemp()}
                 snap[mac] = bulb.saved
@@ -230,16 +242,16 @@ class Lights:
             st = bulb.saved
             if not st:
                 continue
+            if not st["on"]:
+                put = lambda w: w.turn_off()
+            elif st.get("colortemp"):
+                put = lambda w: w.turn_on(PilotBuilder(colortemp=st["colortemp"], brightness=st["brightness"]))
+            elif st.get("rgb") and any(st["rgb"]):
+                put = lambda w: w.turn_on(PilotBuilder(rgb=tuple(st["rgb"]), brightness=st["brightness"]))
+            else:
+                put = lambda w: w.turn_on(PilotBuilder(brightness=st["brightness"]))
             try:
-                w = wizlight(bulb.ip)
-                if not st["on"]:
-                    await w.turn_off()
-                elif st.get("colortemp"):
-                    await w.turn_on(PilotBuilder(colortemp=st["colortemp"], brightness=st["brightness"]))
-                elif st.get("rgb") and any(st["rgb"]):
-                    await w.turn_on(PilotBuilder(rgb=tuple(st["rgb"]), brightness=st["brightness"]))
-                else:
-                    await w.turn_on(PilotBuilder(brightness=st["brightness"]))
+                await _ask(bulb.ip, put)
             except Exception as e:
                 log.warning("could not restore %s: %s", bulb.ip, e)
         STATE_FILE.unlink(missing_ok=True)
