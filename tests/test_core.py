@@ -12,8 +12,9 @@ from fastapi.testclient import TestClient
 import json
 import os
 import stat
+import urllib.error
 
-from core import finance, portfolio, tasks, worker
+from core import finance, live, portfolio, tasks, worker
 from core.db import DB
 from core.maintenance import Maintenance
 from core.publish import Publisher, publish_investments
@@ -304,7 +305,10 @@ def test_live(tmp: Path):
     def post(e, s, a):
         if down.is_set():
             raise OSError("Home Assistant is down")
+        if e == "sensor.aaa_refused":  # sorts first: a permanent refusal mustn't hold up the rest
+            raise urllib.error.HTTPError("http://ha", 400, "Bad Request", None, None)
         posted.append((e, s))
+    live.put(db, "sensor.aaa_refused", "x" * 300, {}, "test")
     pub = Publisher(db, post=post)
     assert {"live:binary_sensor.someone_home", "live:sensor.photo_frame"} <= pub.dirty
     threading.Thread(target=pub.run, daemon=True).start()
@@ -317,7 +321,6 @@ def test_live(tmp: Path):
     wait_for(("binary_sensor.someone_home", "off"))
     wait_for(("sensor.photo_frame", 3))
     down.set()
-    from core import live
     live.put(db, "sensor.photo_frame", 4, {}, "test")
     pub.live_changed("sensor.photo_frame")
     time.sleep(1)

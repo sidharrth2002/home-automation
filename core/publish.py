@@ -10,6 +10,7 @@ import logging
 import os
 import threading
 import time
+import urllib.error
 import urllib.request
 from datetime import date
 
@@ -56,7 +57,10 @@ def publish_live(db: DB, entity: str, post=post_state):
         row = live.get(db, entity)
     except NotFound:  # deleted since it was marked
         return
-    post(entity, row["state"], row["attributes"])
+    state = row["state"]
+    if isinstance(state, str):
+        state = state[:255]  # Home Assistant's limit; it refuses longer
+    post(entity, state, row["attributes"])
 
 
 PUBLISHERS = {"investments": publish_investments, "tasks": publish_tasks}
@@ -71,6 +75,7 @@ class Publisher:
         self.wake = threading.Event()
         self.wake.set()
         self.last_ok: dict[str, str] = {}
+        self.backoff = 2
 
     def everything(self) -> set[str]:
         return set(PUBLISHERS) | {LIVE + e for e in live.entities(self.db)}
@@ -81,7 +86,7 @@ class Publisher:
         self.wake.set()
 
     def run(self):
-        backoff, last_full = 2, time.monotonic()
+        last_full = time.monotonic()
         while True:
             self.wake.wait(timeout=REPUBLISH_S)
             time.sleep(DEBOUNCE_S)
@@ -98,13 +103,22 @@ class Publisher:
                         PUBLISHERS[name](self.db, self.post)
                     # one freshness figure for all live entities
                     self.last_ok["live" if name.startswith(LIVE) else name] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                    backoff = 2
+                    self.backoff = 2
+                except urllib.error.HTTPError as e:
+                    if e.code >= 500:
+                        self._retry(name, e)
+                        break
+                    log.error("Home Assistant refused %s (%s); skipped until it changes or the next full re-send",
+                              name, e)  # retrying now won't help
                 except Exception as e:  # Home Assistant down or restarting: dirty again, try again
-                    self.dirty.add(name)
-                    log.warning("publishing %s failed (%s); retrying in %ds", name, e, backoff)
-                    threading.Timer(backoff, self.wake.set).start()
-                    backoff = min(backoff * 2, 60)
+                    self._retry(name, e)
                     break  # the rest stay marked: no point timing out on each while it's down
+
+    def _retry(self, name: str, e: Exception):
+        self.dirty.add(name)
+        log.warning("publishing %s failed (%s); retrying in %ds", name, e, self.backoff)
+        threading.Timer(self.backoff, self.wake.set).start()
+        self.backoff = min(self.backoff * 2, 60)
 
     def follow(self):
         seq = self.db.last_seq()
