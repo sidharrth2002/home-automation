@@ -14,6 +14,7 @@ the logs; a win also raises a Home Assistant notification (silent, no voice on t
 import json
 import logging
 import os
+import re
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta
@@ -103,14 +104,14 @@ def ask(holder: str, period: str, post=_post) -> dict:
         raise ValueError(f"unexpected reply from NS&I (keys: {', '.join(sorted(body)) or 'none'})")
     prizes = [{"prize": int(float(e["prize"])), "date": e.get("date")} for e in body.get("history") or []
               if e.get("bond_number") not in (None, "", "0")]
-    return {"won": "no" not in str(body["status"]).lower(), "header": str(body.get("header") or ""), "prizes": prizes}
+    return {"won": str(body["status"]).lower() == "win", "header": str(body.get("header") or ""), "prizes": prizes}
 
 
 def _for_month(result: dict, draw: date) -> bool:
     """False if the reply names a different month: NS&I hasn't put this month's results up yet."""
-    text = result["header"].lower()
-    named = [i + 1 for i, m in enumerate(MONTHS) if m in text]
-    return not named or draw.month in named
+    named = [(MONTHS.index(m) + 1, int(y)) for m, y in re.findall(rf"\b({'|'.join(MONTHS)})\s+(\d{{4}})\b",
+                                                                result["header"].lower())]
+    return not named or (draw.month, draw.year) in named  # "May 2026", not the word "may"
 
 
 # ── the task ─────────────────────────────────────────────────────

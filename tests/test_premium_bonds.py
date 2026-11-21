@@ -54,6 +54,11 @@ def run():
         {"prize": "25", "bond_number": "123ABC456", "date": "2026-11-02"}, {"prize": "0", "bond_number": "0"}]))
     assert won["won"] and won["prizes"] == [{"prize": 25, "date": "2026-11-02"}], won  # no bond numbers kept
     assert not pb.ask(HOLDER, "this_month", post=lambda f: reply())["won"]
+    assert not pb.ask(HOLDER, "this_month", post=lambda f: reply("failure"))["won"], "only 'win' is a win"
+    nov = pb.draw_date(2026, 11)
+    assert pb._for_month({"header": "You may have won in the November 2026 draw"}, nov), "'may' is not a month"
+    assert not pb._for_month({"header": "Results for the October 2026 draw"}, nov)
+    assert pb._for_month({"header": "Sorry, you didn't win"}, nov)
     for bad, exc in ((reply(holder="is invalid"), pb.InvalidHolder), ({"oops": 1}, ValueError)):
         try:
             pb.ask(HOLDER, "this_month", post=lambda f, bad=bad: bad)
