@@ -1,6 +1,7 @@
 """A small client for the core API, for this repo's services (they use the admin token, CORE_TOKEN in .env)."""
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -49,6 +50,19 @@ def patch(collection: str, doc_id: str, fields: dict) -> dict:
 def put_source(source: str, doc: dict) -> dict:
     """A portfolio source's full current state (a new snapshot unless it's unchanged)."""
     return call("PUT", f"/v1/portfolio/{source}", doc)
+
+
+def ready(wait_s: float = 0) -> bool:
+    """Is the API up? Waits up to `wait_s` for it (a service starting alongside the core)."""
+    deadline = time.monotonic() + wait_s
+    while True:
+        try:
+            call("GET", "/v1/health", timeout=3)
+            return True
+        except Exception:
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(2)
 
 
 def report(entity: str, state, attributes: dict, timeout=10) -> bool:

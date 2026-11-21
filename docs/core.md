@@ -49,6 +49,8 @@ erDiagram
     fin_instruments ||--o{ fin_positions : ""
     fin_instruments ||--o{ fin_prices : ""
     documents ||--o{ document_versions : "history"
+    media ||--o{ media_analysis : "found"
+    media ||--o{ media_shown : "shown"
 
     fin_sources { text id PK "hl, t212, hsbc" text kind "auto or manual" text status int current_snapshot_id }
     fin_snapshots { int id PK text source_id FK text as_of text taken_at text principal text document "as written" }
@@ -62,13 +64,17 @@ erDiagram
     document_versions { text collection PK text key PK int version PK text data "null = deleted" }
     audit_log { int seq PK text ts text principal text action text entity text key }
     live { text entity PK text state text attrs text updated_by text updated_at }
+    media { int id PK text source "onedrive" text source_id text name text taken_at text camera int width int height int bytes }
+    media_analysis { int media_id PK text analyser PK "faces" text result text analysed_at }
+    media_shown { text shown_at PK int media_id PK }
+    media_cursors { text source PK text key PK text value "listing cursor" }
     principals { int id PK text name text token_hash text scopes text revoked_at }
 ```
 
 `schema_migrations` records which numbered migrations in `core/db.py` have run; new tables arrive as new
 migrations, applied at start. Migration 2 added `tasks`, `task_events` and `schedules` (below); migration 3 `live`
-(the latest state of each entity the services report: no history, no audit, since it changes often). Planned next: media
-tables for the photos (metadata and analysis results; the image files stay on disk, named by content hash).
+(the latest state of each entity the services report: no history, no audit, since it changes often); migration 4
+the `media` tables (below).
 
 ## The API
 
@@ -85,6 +91,11 @@ FastAPI, so `/docs` is interactive and `/openapi.json` describes every call. Eve
 | `GET/PUT/PATCH/DELETE /v1/state/<collection>/<key>` | any other app state, versioned; `If-Match` for safe edits |
 | `PUT /v1/live/<entity>` | a service reports `{"state", "attributes"}`; mirrored into Home Assistant (unchanged: nothing sent) |
 | `GET /v1/live[/<entity>]` | what the services last reported |
+| `GET /v1/media/<source>` | counts, listing cursors, the set shown last |
+| `GET /v1/media/<source>/items?analyser=&analysed=&after=` | a page of items (5000), with that analyser's result |
+| `PUT /v1/media/<source>/items` | a listing's changes: `{"items", "deleted", "cursor"}` |
+| `PUT /v1/media/<source>/analysis/<analyser>` | `{"results": {id: result}}` |
+| `POST /v1/media/<source>/shown` | `{"ids"}`: a set went on screen |
 | `GET /v1/changes?since=&wait=` | the change feed (long-poll) |
 | `GET /v1/audit` | who changed what |
 
@@ -94,7 +105,7 @@ The portfolio format is `core.portfolio.Source` (in `/openapi.json`, and in the 
 
 - The services use `CORE_TOKEN` from `.env`, which may write anything.
 - Every other client gets its own token with write scopes, matched against `doc/<collection>/<key>`,
-  `portfolio/<source>`, `price/<instrument>` and `live/<entity>`: `python -m core token add finance 'portfolio/hsbc*' 'doc/finance/*'`.
+  `portfolio/<source>`, `price/<instrument>`, `live/<entity>` and `media/<source>`: `python -m core token add finance 'portfolio/hsbc*' 'doc/finance/*'`.
   Tokens are stored hashed, can be revoked, and every write is logged under the token's name.
 - It listens on 127.0.0.1 by default. On a Pi serving other devices, set `CORE_BIND` to its LAN address.
 
@@ -108,6 +119,34 @@ python -m core token list
 
 Every hour it backs up the database (one file a day in `data/core/backups/`, 14 kept), runs an integrity check, and
 optimises and checkpoints SQLite. `/v1/health` shows the results and when each publisher last succeeded.
+
+## Media: the photo library
+
+The photo library's index lives here: one `media` row per OneDrive photo (name, folder, when, camera, size; about
+18,000 rows), what each analyser found (`media_analysis`, one row per photo and analyser, the result as JSON), every
+set that went on screen (`media_shown`), and where the OneDrive listing got to (`media_cursors`). The images
+themselves stay in OneDrive; the 40 on screen are downloaded, re-encoded and served from disk as before.
+
+```mermaid
+flowchart LR
+    od["OneDrive<br/>(Graph delta)"] -->|"changes every 4 h"| ph["photos service"]
+    ph -->|"PUT media/onedrive/items"| core["core: media tables"]
+    sched["schedule photos-look<br/>(hourly)"] --> worker["task worker"]
+    worker -->|"150 thumbnails<br/>faces on this machine"| core
+    core -->|"looked-at photos"| ph
+    ph -->|"pick 40, POST shown"| core
+    ph -->|"sensor.photo_frame"| core
+```
+
+- **Progressive analysis.** Looking at photos is a background task (`photos-look`, hourly, 150 thumbnails), saving
+  every 25, so it shows in the task list, can be cancelled, and a crash loses at most 25. The library gets looked at
+  once; a photo whose file changes (a different size) loses its results and is looked at again.
+- **Analysers are separate.** Results are keyed by analyser (`faces` now). A new kind of analysis (a caption, a
+  scene label from a vision model) is a new analyser name and task kind, run over the same rows without touching the
+  old results.
+- **Policy stays in the client.** The core stores and filters; what's worth a look and what gets shown are the photos
+  service's rules (`photos/__main__.py`), unchanged.
+- The old `data/photos/index.json` was moved in once at start and kept as `index.json.migrated`.
 
 ## Live state: everything goes through the core
 
@@ -157,10 +196,11 @@ sequenceDiagram
 - `agent` tasks run `claude -p` in their own folder, `data/tasks/<id>/`. They can read that folder and any `dirs`
   the task names, search and fetch the web, and write only inside their folder; no shell unless the task adds a
   tool (e.g. `Bash(python3:*)` for spreadsheets). The answer is in `result.md`, with the full transcript beside it.
-- Built-in kinds: `revalue` (FT prices for hand-written holdings; scheduled hourly) and `premium-bonds` (daily:
-  NS&I's public prize checker with the holder number from .env, asked only once a month's results are due, 3
-  days after the draw, plus unclaimed prizes every 30 days; results in `doc finance/premium_bonds` and
-  `sensor.premium_bonds`, beside the holding in `portfolio/nsandi`; a win raises a silent HA notification). New kinds are a function in
+- Built-in kinds: `revalue` (FT prices for hand-written holdings; scheduled hourly), `photos-look` (a batch of
+  photos for faces; hourly) and `premium-bonds` (daily: NS&I's public prize checker with the holder number from
+  .env, asked only once a month's results are due, 3 days after the draw, plus unclaimed prizes every 30 days;
+  results in `doc finance/premium_bonds` and `sensor.premium_bonds`, beside the holding in `portfolio/nsandi`; a
+  win raises a silent HA notification). New kinds are a function in
   `core/worker.py`'s HANDLERS.
 
 ```sh

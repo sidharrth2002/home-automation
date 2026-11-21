@@ -155,7 +155,7 @@ def test_publish(db: DB):
 
 def test_reopen_and_maintenance(tmp: Path):
     db = DB(tmp / "core.db")  # migrations are idempotent
-    assert db.schema_version == 3 and finance.current(db)
+    assert db.schema_version == 4 and finance.current(db)
     m = Maintenance(db, tmp / "backups")
     m.run_once()
     m.run_once()  # one backup a day
@@ -275,7 +275,7 @@ print(json.dumps({"type": "result", "result": "All done: " + " ".join(args[args.
 def test_live(tmp: Path):
     """Services report entity state; the core keeps the latest and the publisher mirrors it."""
     db = DB(tmp / "core.db")
-    assert db.schema_version == 3
+    assert db.schema_version >= 3
     changed = []
     api = TestClient(create_app(db, ADMIN, on_live=changed.append))
     admin = {"Authorization": f"Bearer {ADMIN}"}
@@ -332,6 +332,46 @@ def test_live(tmp: Path):
     print("live OK")
 
 
+def test_media(tmp: Path):
+    """A library's index, analysis results and shown sets, over the API (made-up items)."""
+    db = DB(tmp / "core.db")
+    assert db.schema_version == 4
+    api = TestClient(create_app(db, ADMIN))
+    admin = {"Authorization": f"Bearer {ADMIN}"}
+    base = "/v1/media/onedrive"
+    item = lambda i, size=100: {"id": f"id{i:03d}", "name": f"IMG_{i}.HEIC", "taken_at": "2024-11-03T12:00:00Z",
+                                "camera": "Apple", "focal_mm": 6.8, "width": 4032, "height": 3024, "bytes": size}
+    got = expect(200, api.put(f"{base}/items", json={"items": [item(i) for i in range(12)],
+                                                     "cursor": {"key": "Pictures", "value": "link-1"}}, headers=admin))
+    assert got["changed"] == 12
+    assert expect(200, api.put(f"{base}/items", json={"items": [item(0)]}, headers=admin))["changed"] == 0  # unchanged
+    looks = {f"id{i:03d}": {"ok": True, "faces": i} for i in range(5)} | {"gone": {"ok": False}}
+    assert expect(200, api.put(f"{base}/analysis/faces", json={"results": looks}, headers=admin))["recorded"] == 5
+
+    # pages and filters
+    first = expect(200, api.get(f"{base}/items?analyser=faces&limit=5", headers=admin))
+    assert [i["id"] for i in first["items"]] == [f"id{i:03d}" for i in range(5)] and first["next"] == "id004"
+    assert first["items"][3]["analysis"] == {"ok": True, "faces": 3}
+    todo = expect(200, api.get(f"{base}/items?analyser=faces&analysed=false", headers=admin))["items"]
+    assert len(todo) == 7 and all(i["analysis"] is None for i in todo)
+    assert len(expect(200, api.get(f"{base}/items?analyser=faces&analysed=true", headers=admin))["items"]) == 5
+
+    # a changed file loses its results; a deleted one goes, with them
+    expect(200, api.put(f"{base}/items", json={"items": [item(1, size=999)], "deleted": ["id002"]}, headers=admin))
+    done = {i["id"] for i in expect(200, api.get(f"{base}/items?analyser=faces&analysed=true", headers=admin))["items"]}
+    assert done == {"id000", "id003", "id004"}, done
+
+    expect(200, api.post(f"{base}/shown", json={"ids": ["id000", "id003", "nope"]}, headers=admin))
+    s = expect(200, api.get(base, headers=admin))
+    assert s["items"] == 11 and s["analysed"] == {"faces": 3} and s["cursors"] == {"Pictures": "link-1"}
+    assert sorted(s["last_shown"]) == ["id000", "id003"]
+
+    token = db.add_principal("reader", ["doc/notes/*"])
+    expect(403, api.put(f"{base}/items", json={"items": [item(50)]}, headers={"Authorization": f"Bearer {token}"}))
+    expect(400, api.put("/v1/media/Bad Source/items", json={"items": []}, headers=admin))
+    print("media OK")
+
+
 def test_telemetry_off():
     """With no endpoint set, telemetry does nothing and the helpers are safe no-ops."""
     import telemetry
@@ -357,6 +397,7 @@ def main():
         test_tasks(tmp)
         test_agent_runner(tmp)
         test_live(tmp)
+        test_media(tmp)
 
 
 if __name__ == "__main__":
