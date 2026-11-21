@@ -100,7 +100,7 @@ find). Testing takes over the TV screen, so ask first.
   scene starts with `script.turn_off script.sleep_mode` so it can't dim them later).
 - Events: `home_say` {text, target: mac|tv, voice?, rate?}; `music_sync_command` {command}; `widget_ping`.
 - Feeds published by services (REST states, gone after an HA restart until republished): `sensor.investments`,
-  `sensor.investment_<sedol>`, `sensor.trading212`, `sensor.system_health`, `sensor.photo_library` (% of the library looked at), `sensor.premium_bonds` (Hub: Cash card + health tile),
+  `sensor.investment_<sedol>`, `sensor.trading212`, `sensor.system_health`, `sensor.photo_library` (% of the library looked at), `sensor.premium_bonds` (Hub: NS&I group + health tile),
   `sensor.photo_frame` (photos: src, bg, label,
   portrait, people; shown in the Hub's Memories card and the screensaver).
 
@@ -133,6 +133,11 @@ find). Testing takes over the TV screen, so ask first.
   the process. Off when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
   Nothing may call `logging.config.dictConfig` after setup (it flushes the OTel handler under the logging lock:
   a 30 s deadlock); that's why core runs uvicorn with `log_config=None`.
+- Hub Investments card: overview + chart | "Where it is" (allocation bar by account type, then one group per portfolio
+  source with its accounts; rate/maturity/"not in total"; Trading 212's interest and the Premium Bonds checks as notes
+  under their groups) | holdings (All/per-source tabs, source tag, "Settling" badge). No separate Cash card. Account
+  type colours are fixed palette slots (ACCOUNT_TYPES/ALLOC in app.js), consecutive in bar order: re-run the dataviz
+  validator if you change them. The merge passes `provider`, `label`, `interest_pct`, `matures` on each account.
 - Keep the Hub current: new data or a new service gets surfaced there (a card, a block or a health tile) in
   the same PR, then `homeassistant.apply` and a screenshot check.
 - Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries

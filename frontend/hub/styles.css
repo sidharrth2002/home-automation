@@ -71,7 +71,7 @@ body.dim .blob { opacity: .16; }
     "stack stack stack stack stack stack stack stack music music music music"
     "calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar"
     "photos photos photos photos photos photos photos photos photos photos photos photos"
-    "invest invest invest invest invest invest invest invest invest cash cash cash"
+    "invest invest invest invest invest invest invest invest invest invest invest invest"
     "desk desk desk desk desk desk desk tv tv tv tv tv"
     "health health health health health health health tv tv tv tv tv"
     "foot foot foot foot foot foot foot foot foot foot foot foot";
@@ -86,26 +86,26 @@ body.dim .blob { opacity: .16; }
     "stack stack stack stack stack stack stack stack stack stack stack stack"
     "calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar"
     "photos photos photos photos photos photos photos photos photos photos photos photos"
-    "invest invest invest invest invest invest invest invest invest cash cash cash"
+    "invest invest invest invest invest invest invest invest invest invest invest invest"
     "desk desk desk desk desk desk desk tv tv tv tv tv"
     "health health health health health health health tv tv tv tv tv"
     "foot foot foot foot foot foot foot foot foot foot foot foot"; }
 .top { grid-area: top; } .room { grid-area: room; } .scenes { grid-area: scenes; }
 .music { grid-area: music; } .desk { grid-area: desk; } .tv { grid-area: tv; }
-.health-card { grid-area: health; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .photos-card { grid-area: photos; } .invest-card { grid-area: invest; } .cash-card { grid-area: cash; }
+.health-card { grid-area: health; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .photos-card { grid-area: photos; } .invest-card { grid-area: invest; }
 
 @media (max-width: 1100px) {
   .hub { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas:
-    "top top" "room room" "scenes scenes" "calendar calendar" "photos photos" "invest invest" "cash cash" "music desk" "tv health" "foot foot"; }
+    "top top" "room room" "scenes scenes" "calendar calendar" "photos photos" "invest invest" "music desk" "tv health" "foot foot"; }
   .stack { display: contents; }
   .no-music .hub { grid-template-areas:
-    "top top" "room room" "scenes scenes" "calendar calendar" "photos photos" "invest invest" "cash cash" "desk desk" "tv health" "foot foot"; }
+    "top top" "room room" "scenes scenes" "calendar calendar" "photos photos" "invest invest" "desk desk" "tv health" "foot foot"; }
 }
 @media (max-width: 720px) {
   .hub { grid-template-columns: minmax(0, 1fr); grid-template-areas:
-    "top" "room" "scenes" "music" "calendar" "photos" "invest" "cash" "desk" "tv" "health" "foot"; }
+    "top" "room" "scenes" "music" "calendar" "photos" "invest" "desk" "tv" "health" "foot"; }
   .no-music .hub { grid-template-areas:
-    "top" "room" "scenes" "calendar" "photos" "invest" "cash" "desk" "tv" "health" "foot"; }
+    "top" "room" "scenes" "calendar" "photos" "invest" "desk" "tv" "health" "foot"; }
   .chips { justify-content: flex-end; }
   .chips .chip:nth-child(3) { display: none; }
 }
@@ -463,7 +463,14 @@ details.tune .slider { flex: 1; }
   color: var(--ink-2); background: rgba(255,255,255,.07); transition: background .2s, color .2s; }
 .eye:hover { color: var(--ink); background: rgba(255,255,255,.13); }
 .eye svg { width: 18px; height: 18px; }
-.invest { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(18px, 3vw, 44px); }
+/* wide: overview | where it is | holdings; narrower: overview and where it is stacked beside the holdings */
+.invest { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 4fr) minmax(0, 6fr); gap: clamp(18px, 2.4vw, 36px); align-items: start; }
+.invest-where .alloc { margin-top: 12px; }
+@media (max-width: 1100px) {
+  .invest { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+  .invest-where { grid-column: 1; }
+  .invest .holdings { grid-column: 2; grid-row: 1 / span 2; }
+}
 .money { transition: filter .35s, opacity .35s; }
 .private .money { filter: blur(9px); opacity: .7; user-select: none; }
 .invest-total { font: 400 clamp(44px, 5.4vw, 72px)/1 var(--serif); letter-spacing: -.02em; }
@@ -478,23 +485,38 @@ details.tune .slider { flex: 1; }
   border: 1px solid var(--line); min-width: 110px; }
 .acct span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .acct b { font: 500 15px/1.2 var(--mono); }
+/* where the money is: allocation by account type, then each provider's accounts */
+.alloc { margin-top: 18px; }
+.alloc-bar { display: flex; gap: 2px; height: 10px; border-radius: 4px; overflow: hidden; }
+.alloc-bar i { min-width: 3px; }
+.alloc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.alloc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.alloc-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.alloc-legend b { font: 500 11.5px/1 var(--mono); color: var(--ink); }
+.providers { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.provider { padding: 10px 12px 6px; border-radius: 14px; background: rgba(255,255,255,.035); border: 1px solid var(--line); }
+.provider-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding-bottom: 6px; }
+.provider-head b:first-child { font-size: 13px; font-weight: 600; }
+.provider-head span { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.provider-head .money { font: 500 14px/1.2 var(--mono); }
+.prov-acct { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 0;
+  border-top: 1px solid var(--line); }
+.prov-acct > i { width: 8px; height: 8px; border-radius: 2px; }
+.prov-acct.excluded > i { border: 1px solid var(--ink-3); }
+.prov-acct div { min-width: 0; }
+.prov-acct span { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prov-acct small { display: block; font-size: 11px; color: var(--ink-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prov-acct b { font: 500 13.5px/1.2 var(--mono); }
+.prov-acct.excluded b { color: var(--ink-3); }
+.prov-note { margin: 0; padding: 7px 0 4px 18px; border-top: 1px solid var(--line); font-size: 11.5px; line-height: 1.5; color: var(--ink-2); }
+.prov-note.bad { color: #ff7a8a; }
+.holdings-filter { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.holding-name .pending { font-style: normal; margin-right: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10.5px;
+  color: var(--ink); background: rgba(255,255,255,.1); }
+.no-spark { color: var(--ink-3); text-align: center; font-size: 12px; }
 
 /* cash */
-.cash-card .card-head { gap: 12px; }
-.cash-card .card-head .kicker { margin-left: auto; }
-.cash .invest-total { font-size: clamp(40px, 4.2vw, 56px); }
 .est { font-style: normal; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-left: 2px; }
-.cash .chart-head { margin-top: 18px; }
-.cash .cash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
-.cash .h-src { margin-top: 14px; }
-.bonds { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
-.bonds-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.bonds-head .label { display: inline-flex; align-items: center; gap: 8px; }
-.bonds-head .label svg { width: 16px; height: 16px; }
-.bonds-head b { font: 500 22px/1.2 var(--mono); }
-.bonds .invest-deltas { margin-top: 6px; }
-.bonds .cash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
-.bonds .h-src { margin-top: 10px; }
 
 /* charts */
 .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 22px 0 10px; flex-wrap: wrap; }
@@ -570,6 +592,7 @@ dialog.event.holding-dlg { width: min(780px, calc(100vw - 32px)); max-height: mi
 .h-src { margin: 16px 0 0; color: var(--ink-3); font-size: 11px; }
 @media (max-width: 720px) {
   .invest { grid-template-columns: minmax(0, 1fr); }
+  .invest-where, .invest .holdings { grid-column: auto; grid-row: auto; }
   .holdings-head, .holding { grid-template-columns: minmax(0, 1fr) 64px 104px; gap: 10px; }
   .mini { width: 64px; }
   .positions { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -102,8 +102,6 @@ const I = {
   speaker: svg(`<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>`),
   pulse: svg(`<path d="M3 12h4l2-6 4 12 2-6h6"/>`),
   reactor: svg(`<circle cx="12" cy="12" r="9.2"/><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><path d="M12 2.8v3.2M12 18v3.2M4 7.4l2.8 1.6M17.2 15l2.8 1.6M4 16.6l2.8-1.6M17.2 9l2.8-1.6"/>`),
-  piggy: svg(`<path d="M19 11c0-3.3-3.1-6-7-6S5 7.7 5 11c0 1.6.7 3 1.9 4.1V18h3v-1.2c.7.1 1.4.2 2.1.2s1.4-.1 2.1-.2V18h3v-2.9c.6-.5 1.1-1 1.5-1.6H21v-3h-2z"/><circle cx="15.5" cy="10.5" r=".6" fill="currentColor"/><path d="M9 7.5c.8-.9 2-1.2 3.2-1"/>`),
-  trophy: svg(`<path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5v1.5A3 3 0 0 0 8 10.5M16 6h3v1.5a3 3 0 0 1-3 3"/><path d="M12 13v3M9 20h6M10 16h4v4h-4z"/>`),
   chart: svg(`<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/>`),
   eye: svg(`<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`),
   eyeOff: svg(`<path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17.7 17.7 0 0 1-3.2 4.2M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>`),
@@ -432,6 +430,89 @@ section("#calendar", () => calIds(), () => {
 let showMoney = (() => { try { return localStorage.hubShowMoney === "1"; } catch { return false; } })();
 let invRange = "1Y";
 let invAll = false;
+let invSrc = "all"; // holdings filter: "all" or a portfolio source id
+
+// Account types: a fixed palette slot each (colour follows the type, never its rank). The common types take
+// consecutive slots in bar order, the order the palette is validated for (dataviz validator, dark surface).
+const ALLOC = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+const ACCOUNT_TYPES = { isa: ["ISA", 0], gia: ["GIA", 1], savings: ["Savings", 2], premium_bonds: ["Premium Bonds", 3],
+  cash: ["Cash", 4], current: ["Cash", 4], sipp: ["Pension", 5], pension: ["Pension", 5], lisa: ["LISA", 6], other: ["Other", 7] };
+const typeOf = (t) => ACCOUNT_TYPES[t] ?? ACCOUNT_TYPES.other;
+const shortDate = (iso, opts = { day: "numeric", month: "short" }) => iso ? new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString(undefined, opts) : "";
+
+// Where the money is: one bar by account type (of what counts towards the total), then each provider's accounts.
+function allocation(accounts) {
+  const counted = accounts.filter((x) => x.in_total !== false && (x.total ?? 0) > 0);
+  const sum = counted.reduce((s, x) => s + x.total, 0);
+  if (!sum) return "";
+  const by = new Map();
+  for (const x of counted) {
+    const [label, slot] = typeOf(x.type);
+    by.set(slot, { label, slot, v: (by.get(slot)?.v ?? 0) + x.total });
+  }
+  const segs = [...by.values()].sort((p, q) => p.slot - q.slot);
+  const share = (v) => `${((v / sum) * 100).toFixed(v / sum < 0.1 ? 1 : 0)}%`;
+  return `<div class="alloc">
+      <div class="alloc-bar" role="img" aria-label="${segs.map((s) => `${s.label} ${share(s.v)}`).join(", ")}">${segs.map((s) =>
+        `<i style="flex:${s.v.toFixed(2)};background:${ALLOC[s.slot]}" title="${esc(s.label)} · ${share(s.v)}"></i>`).join("")}</div>
+      <div class="alloc-legend">${segs.map((s) => `<span><i style="background:${ALLOC[s.slot]}"></i>${esc(s.label)} <b>${share(s.v)}</b></span>`).join("")}</div>
+    </div>`;
+}
+// Trading 212 pays interest daily on its cash (sensor.trading212, from the investments service).
+function t212Note() {
+  const e = S[T212];
+  if (!e) return "";
+  const a = e.attributes, it = a.interest ?? {};
+  if (a.status === "paused") return `<p class="prov-note bad">Refresh paused · ${esc(a.paused_reason ?? "")}. Fix the key, then run <b>python -m investments t212</b>.</p>`;
+  const bits = [
+    it.est_rate_pct != null ? `≈ ${it.est_rate_pct.toFixed(2)}% a year` : "",
+    it.last_amount != null ? `<span class="up">+<span class="money">${gbp(it.last_amount, 2)}</span></span>${it.last_date ? ` on ${esc(shortDate(it.last_date))}` : ""}` : "",
+    it.month != null ? `<span class="money">${gbp(it.month, 2)}</span> this month` : "",
+    it.ytd != null ? `<span class="money">${gbp(it.ytd, 2)}</span> this year` : "",
+  ].filter(Boolean);
+  return bits.length ? `<p class="prov-note">Interest paid daily · ${bits.join(" · ")}</p>` : "";
+}
+// Premium Bonds: NS&I's monthly draw, checked by the core's premium-bonds task (sensor.premium_bonds).
+function bondsNote() {
+  const e = S[BONDS];
+  const a = e?.attributes ?? {};
+  if (!e || e.state === "not set up") return `<p class="prov-note">Prize checks not set up: ask your finance Claude to <b>set your Premium Bonds holder number</b>.</p>`;
+  const next = a.next_check ? `next check ${esc(shortDate(a.next_check))}` : "";
+  const result = e.state === "won" ? `<span class="up">Won in the ${esc(monthName(a.last_draw))} draw</span>`
+    : e.state === "no win" ? `No prize in ${esc(monthName(a.last_draw))}`
+    : e.state === "error" ? `<span class="down">Couldn't reach NS&amp;I's prize checker</span>`
+    : "Waiting for the first draw check";
+  const year = a.won_this_year ? `${a.won_this_year} prize${a.won_this_year > 1 ? "s" : ""} this year, <span class="money">${gbp(a.won_this_year_total)}</span>` : "";
+  const unclaimed = a.unclaimed ? `<span class="up">${a.unclaimed} unclaimed (<span class="money">${gbp(a.unclaimed_total)}</span>)</span>` : "";
+  return `<p class="prov-note">${[result, year, unclaimed, next].filter(Boolean).join(" · ")}</p>`;
+}
+function providers(a) {
+  const accounts = a.accounts ?? [];
+  const order = (a.sources ?? []).map((s) => s.id);
+  const ids = [...new Set([...order, ...accounts.map((x) => x.source)])].filter((id) => accounts.some((x) => x.source === id));
+  return `<div class="providers">${ids.map((id) => {
+    const src = (a.sources ?? []).find((s) => s.id === id) ?? {};
+    const rows = accounts.filter((x) => x.source === id);
+    const total = rows.filter((x) => x.in_total !== false).reduce((s, x) => s + (x.total ?? 0), 0);
+    const fresh = src.kind === "auto" ? (src.updated ? `Live · ${hm(new Date(src.updated))}` : "Live")
+      : src.as_of ? `As of ${shortDate(src.as_of)}` : "";
+    return `<div class="provider">
+        <div class="provider-head"><b>${esc(src.name ?? rows[0].provider ?? id)}</b><span>${esc(fresh)}</span><b class="money">${gbp(total)}</b></div>
+        ${rows.map((x) => {
+          const kind = x.type === "current" ? "Current account" : typeOf(x.type)[0];
+          const meta = [kind.toLowerCase() === String(x.label ?? "").toLowerCase() ? "" : kind,
+            x.interest_pct != null ? `${(+x.interest_pct).toFixed(2)}%` : "",
+            x.matures ? `matures ${shortDate(x.matures, { month: "short", year: "numeric" })}` : "",
+            x.in_total === false ? "not in total" : ""].filter(Boolean).join(" · ");
+          return `<div class="prov-acct ${x.in_total === false ? "excluded" : ""}">
+              <i style="background:${x.in_total === false ? "transparent" : ALLOC[typeOf(x.type)[1]]}"></i>
+              <div><span>${esc(x.label ?? x.name)}</span><small>${esc(meta)}</small></div>
+              <b class="money">${gbp(x.total)}</b></div>`;
+        }).join("")}
+        ${id === "t212" ? t212Note() : id === "nsandi" ? bondsNote() : ""}
+      </div>`;
+  }).join("")}</div>`;
+}
 let openHolding = null; // { sedol, range }
 const gbp = (v, dp = 0) => v == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: dp, minimumFractionDigits: dp }).format(v);
 const signed = (v, fmt) => v == null ? "—" : `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
@@ -516,35 +597,46 @@ const rangeTabsFor = (act, current, avail, keys) => `<div class="ranges">${keys.
 const rangeTabs = (act, current, avail) => `<div class="ranges">${Object.keys(RANGES).filter((k) => avail >= RANGES[k] * 0.8 || k === "1M")
   .map((k) => `<button data-act="${act}" data-v="${k}" aria-pressed="${k === current}">${k}</button>`).join("")}</div>`;
 
-section("#invest", () => [INVEST, ...Object.keys(S).filter((id) => id.startsWith("sensor.investment_"))], () => {
+section("#invest", () => [INVEST, T212, BONDS, ...Object.keys(S).filter((id) => id.startsWith("sensor.investment_"))], () => {
   const e = S[INVEST];
   const head = (right) => `<div class="card-head"><div class="card-title">${I.chart} Investments</div>${right}</div>`;
   if (!e) return head(`<span class="kicker">Not connected</span>`) +
     `<p class="empty-note">Run <b>python -m investments setup</b> in the project (your Hargreaves Lansdown details go into the macOS Keychain), then <b>python -m investments login</b>.</p>`;
   const a = e.attributes;
   const total = parseFloat(e.state);
-  const holdings = a.holdings ?? [];
-  const stock = holdings.reduce((s, h) => s + (h.value ?? 0), 0) || 1;
+  const allHoldings = a.holdings ?? [];
+  const stock = allHoldings.reduce((s, h) => s + (h.value ?? 0), 0) || 1;
+  const holders = [...new Set(allHoldings.map((h) => h.source))];
+  if (invSrc !== "all" && !holders.includes(invSrc)) invSrc = "all";
+  const holdings = invSrc === "all" ? allHoldings : allHoldings.filter((h) => h.source === invSrc);
+  const srcName = (id) => (a.sources ?? []).find((s) => s.id === id)?.name ?? id ?? "";
+  const srcTabs = holders.length > 1 ? `<div class="ranges">${["all", ...holders].map((id) =>
+    `<button data-act="inv-src" data-v="${esc(id)}" aria-pressed="${id === invSrc}">${id === "all" ? "All" : esc(srcName(id))}</button>`).join("")}</div>` : "";
   const paused = a.status === "paused" ? `<p class="invest-paused"><b>Refresh paused</b> · ${esc(a.paused_reason ?? "")}<br>Check your details, then run <b>python -m investments login</b> once by hand.</p>` : "";
   const updated = a.updated ? new Date(a.updated) : null;
   const toggle = `<button class="eye" data-act="money" aria-pressed="${showMoney}" aria-label="${showMoney ? "Hide" : "Show"} values">${showMoney ? I.eye : I.eyeOff}</button>`;
   const biggest = Math.max(...holdings.map((h) => h.value ?? 0), 1);
-  const port = portfolioSeries(holdings);
+  const port = portfolioSeries(allHoldings);
   const span = port.length ? port.at(-1)[0] - port[0][0] : 0;
   const ranged = sinceDays(port, RANGES[invRange]);
   const rangeMove = change(ranged);
   const chart = port.length > 1
-    ? `<div class="chart-head"><span class="kicker">Today's holdings over ${invRange} <b class="${(rangeMove ?? 0) >= 0 ? "up" : "down"}">${pct(rangeMove)}</b></span>${rangeTabs("inv-range", invRange, span)}</div>
+    ? `<div class="chart-head"><span class="kicker" title="Funds with a price history, at today's units">Today's ${allHoldings.every((h) => seriesOf(h.sedol).length) ? "holdings" : "priced funds"} over ${invRange} <b class="${(rangeMove ?? 0) >= 0 ? "up" : "down"}">${pct(rangeMove)}</b></span>${rangeTabs("inv-range", invRange, span)}</div>
        ${lineChart(ranged, { fmt: (v) => `<span class="money">${gbp(v)}</span>`, h: 170 })}`
     : sparkline(a.history);
-  const rows = (invAll ? holdings : holdings.slice(0, 7)).map((h) => `
+  const rows = (invAll ? holdings : holdings.slice(0, 7)).map((h) => {
+    const unit = /[a-z]/i.test(h.unit_type ?? "") ? h.unit_type : h.account;
+    const settling = h.status === "pending" ? `<em class="pending">Settling${h.settles ? ` ${esc(shortDate(h.settles))}` : ""}</em>` : "";
+    const trend = spark(sinceDays(seriesOf(h.sedol), 92)) || `<span class="no-spark" title="No price history for this fund yet">—</span>`;
+    return `
     <button class="holding" data-act="holding" data-v="${esc(h.sedol)}" style="--w:${((h.value ?? 0) / biggest).toFixed(3)}">
       <i class="bar"></i>
-      <div class="holding-name"><b>${esc(h.name)}</b><span>${((h.value ?? 0) / stock * 100).toFixed(1)}% · ${esc(h.unit_type || h.account)}</span></div>
-      ${spark(sinceDays(seriesOf(h.sedol), 92))}
+      <div class="holding-name"><b>${esc(h.name)}</b><span>${settling}${((h.value ?? 0) / stock * 100).toFixed(1)}% · ${holders.length > 1 ? `${esc(srcName(h.source))} · ` : ""}${esc(unit ?? "")}</span></div>
+      ${trend}
       <div class="holding-val"><b class="money">${gbp(h.value)}</b>
         <span><em class="${(h.day_change_pct ?? 0) >= 0 ? "up" : "down"}">${h.day_change_pct != null ? pct(h.day_change_pct, 2) : ""}</em> <em class="${(h.gain_pct ?? 0) >= 0 ? "up" : "down"}">${h.gain_pct != null ? pct(h.gain_pct) : ""}</em></span></div>
-    </button>`).join("");
+    </button>`;
+  }).join("");
   return head(`<span class="kicker">${updated ? `Updated ${hm(updated)}` : ""}</span>${toggle}`) + paused + `
     <div class="invest ${showMoney ? "" : "private"}">
       <div class="invest-summary">
@@ -554,78 +646,23 @@ section("#invest", () => [INVEST, ...Object.keys(S).filter((id) => id.startsWith
           ${a.gain != null ? `<span class="delta ${a.gain >= 0 ? "up" : "down"}"><span class="money">${signed(a.gain, gbp)}</span>${a.gain_pct != null ? ` · ${pct(a.gain_pct)}` : ""} all time</span>` : ""}
         </div>
         ${chart}
-        <div class="accounts">${(a.accounts ?? []).map((acc) => `<div class="acct"><span>${esc(acc.name)}</span><b class="money">${gbp(acc.total)}</b></div>`).join("")}
-          ${a.cash ? `<div class="acct"><span>Cash</span><b class="money">${gbp(a.cash)}</b></div>` : ""}</div>
+      </div>
+      <div class="invest-where">
+        <span class="kicker">Where it is</span>
+        ${allocation(a.accounts ?? [])}
+        ${providers(a)}
       </div>
       <div class="holdings">
+        ${srcTabs ? `<div class="holdings-filter">${srcTabs}</div>` : ""}
         <div class="holdings-head"><span>Holding</span><span>3M</span><span>Today · all time</span></div>
         ${rows || `<p class="empty-note">No holdings.</p>`}
         ${holdings.length > 7 ? `<button class="more" data-act="inv-all">${invAll ? "Show fewer" : `Show all ${holdings.length}`}</button>` : ""}
+        ${a.cash ? `<p class="h-src">Plus <span class="money">${gbp(a.cash)}</span> uninvested cash in the investment accounts.</p>` : ""}
       </div>
     </div>`;
 });
 
-// cash (Trading 212): balance and the interest it pays, hidden until revealed like the investments card
-let cashRange = "3M";
-section("#cash", () => [T212, BONDS], () => {
-  const e = S[T212];
-  const eye = `<button class="eye" data-act="money" aria-pressed="${showMoney}" aria-label="${showMoney ? "Hide" : "Show"} values">${showMoney ? I.eye : I.eyeOff}</button>`;
-  const head = (right) => `<div class="card-head"><div class="card-title">${I.piggy} Cash</div>${right}</div>`;
-  if (!e) return head(`<span class="kicker">${S[BONDS] ? "" : "Not connected"}</span>${S[BONDS] ? eye : ""}`) +
-    `<p class="empty-note">In the Trading 212 app create a <b>read-only</b> API key (Settings → API), then run <b>python -m investments setup-t212</b> and <b>python -m investments t212</b>.</p>` + bonds();
-  const a = e.attributes, it = a.interest ?? {};
-  const cash = parseFloat(e.state);
-  const paused = a.status === "paused" ? `<p class="invest-paused"><b>Refresh paused</b> · ${esc(a.paused_reason ?? "")}<br>Fix the key, then run <b>python -m investments t212</b> by hand.</p>` : "";
-  const updated = a.updated ? new Date(a.updated) : null;
-  const daily = it.daily ?? [];
-  const span = daily.length ? daily.at(-1)[0] - daily[0][0] : 0;
-  const cut = daily.length ? daily.at(-1)[0] - RANGES[cashRange] : 0;
-  let run = 0;
-  const cum = daily.filter((d) => d[0] >= cut).map(([d, v]) => [d, (run += v)]);
-  const lastDay = it.last_date ? new Date(`${it.last_date}T12:00:00`) : null;
-  const stat = (label, v) => `<div class="pos"><span>${label}</span><b class="money">${v == null ? "—" : gbp(v, 2)}</b></div>`;
-  return head(`<span class="kicker">Trading 212</span>${eye}`) + paused + `
-    <div class="cash ${showMoney ? "" : "private"}">
-      <div class="invest-total money">${Number.isFinite(cash) ? gbp(cash, 2) : "—"}</div>
-      <div class="invest-deltas">
-        ${it.last_amount != null ? `<span class="delta up"><span class="money">+${gbp(it.last_amount, 2)}</span> interest${lastDay ? ` · ${lastDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : ""}</span>` : `<span class="delta">No interest paid yet</span>`}
-        ${it.est_rate_pct != null ? `<span class="delta" title="Latest daily payment ×365 over today's balance. The rate and the balance both move.">≈ ${it.est_rate_pct.toFixed(2)}% a year <em class="est">est.</em></span>` : ""}
-      </div>
-      ${cum.length > 1 ? `<div class="chart-head"><span class="kicker">Interest earned</span>${rangeTabsFor("cash-range", cashRange, span, ["1M", "3M", "1Y"])}</div>
-        ${lineChart(cum, { fmt: (v) => `<span class="money">${gbp(v, 2)}</span>`, h: 120, delta: false })}` : ""}
-      <div class="positions cash-stats">
-        ${stat("This month", it.month)}${stat("Last 30 days", it.last30)}
-        ${stat("This year", it.ytd)}${stat("All time", it.all_time)}
-      </div>
-      <p class="h-src">${it.est_month != null ? `At today's rate, about <span class="money">${gbp(it.est_month, 2)}</span> a month. ` : ""}Interest is paid daily${updated ? ` · updated ${hm(updated)}` : ""}.</p>
-    </div>` + bonds();
-});
-
-// Premium Bonds: the holding (from the finance session's portfolio/nsandi) and what the monthly draws paid
 const monthName = (ym) => ym ? new Date(`${ym}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "";
-function bonds() {
-  const e = S[BONDS];
-  const a = e?.attributes ?? {};
-  if (!e || e.state === "not set up") return `<div class="bonds ${showMoney ? "" : "private"}">
-      <div class="bonds-head"><span class="label">${I.trophy} Premium Bonds</span><b class="money">${a.holding != null ? gbp(a.holding) : "—"}</b></div>
-      <p class="empty-note">Not set up yet. Ask your finance Claude to <b>set your Premium Bonds holder number</b> (NS&amp;I app → Premium Bonds). Prizes are then checked after each monthly draw.${a.holding == null ? " Your holding appears once your finance session records it under <b>nsandi</b>." : ""}</p>
-    </div>`;
-  const next = a.next_check ? new Date(`${a.next_check}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null;
-  const result = e.state === "won" ? `<span class="delta up">Won in the ${esc(monthName(a.last_draw))} draw</span>`
-    : e.state === "no win" ? `<span class="delta">No prize in ${esc(monthName(a.last_draw))}</span>`
-    : e.state === "error" ? `<span class="delta down">Couldn't check NS&amp;I · trying again tomorrow</span>`
-    : `<span class="delta">Waiting for the first draw check</span>`;
-  const stat = (label, v, n) => `<div class="pos"><span>${label}${n ? ` · ${n}` : ""}</span><b class="money">${v == null ? "—" : gbp(v)}</b></div>`;
-  return `<div class="bonds ${showMoney ? "" : "private"}">
-      <div class="bonds-head"><span class="label">${I.trophy} Premium Bonds</span><b class="money">${a.holding != null ? gbp(a.holding) : "—"}</b></div>
-      <div class="invest-deltas">${result}</div>
-      <div class="positions cash-stats">
-        ${stat("Won this year", a.won_this_year_total ?? 0, a.won_this_year || "")}
-        ${a.unclaimed ? stat("Unclaimed", a.unclaimed_total, a.unclaimed) : ""}
-      </div>
-      <p class="h-src">${a.holding == null ? "Holding not recorded yet (the finance session writes it). " : ""}${next ? `Next check ${next}.` : ""}</p>
-    </div>`;
-}
 
 function renderHolding() {
   const dlg = $("#holding");
@@ -1066,14 +1103,13 @@ document.addEventListener("click", (ev) => {
     return renderHolding();
   }
   if (act === "h-range") { openHolding.range = v; return renderHolding(); }
-  if (act === "cash-range") { cashRange = v; lastSig["#cash"] = null; return renderAll(); }
   if (act === "inv-range") { invRange = v; lastSig["#invest"] = null; return renderAll(); }
   if (act === "inv-all") { invAll = !invAll; lastSig["#invest"] = null; return renderAll(); }
+  if (act === "inv-src") { invSrc = v; invAll = false; lastSig["#invest"] = null; return renderAll(); }
   if (act === "money") {
     showMoney = !showMoney;
     try { localStorage.hubShowMoney = showMoney ? "1" : "0"; } catch { /* private mode */ }
     lastSig["#invest"] = null;
-    lastSig["#cash"] = null;
     renderHolding();
     return renderAll();
   }
