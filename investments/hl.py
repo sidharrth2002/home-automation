@@ -7,7 +7,8 @@ module is deliberately paranoid:
 - stage 2 (password + secure-number digits) is only submitted if the page asks for exactly 3 known digit
   positions, otherwise nothing is sent;
 - ANY failed or unexpected login writes a halt file, and `login()` refuses to run again until a human clears it
-  (`python -m investments login`). There are no automatic retries anywhere;
+  (`python -m investments login`). The one thing tried again later is a login page that couldn't be used, since
+  nothing has been sent by then (and six in a row halts);
 - the session cookie is saved and reused, so a normal refresh doesn't log in at all.
 """
 import json
@@ -17,12 +18,13 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from http.cookiejar import LWPCookieJar
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
 BASE = "https://online.hl.co.uk/"
+QUEUE_HOST = "queue.hl.co.uk"
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "investments"
 COOKIES = DATA / "hl_cookies.txt"
@@ -158,6 +160,17 @@ class HL:
     def _get(self, path):
         r = self.s.get(BASE + path, timeout=30)
         r.raise_for_status()
+        # HL sometimes puts pages behind a Queue-it waiting room (queue.hl.co.uk), whose page sends the browser on
+        # with a line of JavaScript. Take that step like a browser would; with no queue it lands back on the page
+        # with a queueittoken. If there really is a queue, this stays on queue.hl.co.uk and the caller sees that.
+        for _ in range(2):
+            if urlparse(r.url).netloc != QUEUE_HOST:
+                break
+            m = re.search(r"decodeURIComponent\('([^']+)'\)", r.text)
+            if not m:
+                break
+            r = self.s.get(urljoin(r.url, unquote(m.group(1))), timeout=30)
+            r.raise_for_status()
         return r
 
     @staticmethod
@@ -227,7 +240,8 @@ class HL:
         if not tag or not tag.get("value"):
             # Say which page came back: a maintenance or error page is temporary, a redesigned form isn't.
             title = soup.title.get_text(" ", strip=True)[:80] if soup.title else "no title"
-            reason = f"login form has no hl_vt token (got {getattr(r, 'status_code', '?')} {cls._path(r)}, \"{title}\")"
+            where = urlparse(r.url).netloc + cls._path(r)
+            reason = f"login form has no hl_vt token (got {getattr(r, 'status_code', '?')} {where}, \"{title}\")"
             if not halt:
                 raise NotSent(reason)
             _halt(f"{reason}; nothing more was sent")

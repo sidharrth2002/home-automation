@@ -28,6 +28,8 @@ home". README.md is the human-facing overview; this file is how to work on it sa
   One exception, because nothing has been sent yet: a stage-1 login page that won't load or has no `hl_vt` token
   raises `NotSent` and is tried next round; MAX_NOT_SENT (6) in a row halts. (A bad page right after boot on
   2026-11-14 halted HL for a week.) Anything after stage 1 is posted still halts at once.
+  That page was HL's Queue-it waiting room (queue.hl.co.uk): `_get` follows its one JavaScript redirect like a
+  browser, which lands back on the real page with a queueittoken unless there's a real queue.
 - **Things here are physical.** Lights, the TV and speech happen in the user's room. Test with harmless paths first
   (the `ping` webhook, a neutral phrase), put lamps back exactly as they were after a toggle test, and don't interrupt
   what's playing on the TV unless the user has said it's fine. When the user asks to control the home from chat, just

@@ -12,9 +12,12 @@ def stage2(asked=(1, 3, 5), boxes=6):
     return f'<input name="hl_vt" value="t2"><div class="secure-number-container">{cells}</div>'
 
 
+QUEUE = "<script>document.location.href = decodeURIComponent('%2F%3Fc%3Dhluk%26e%3Dhlwaiting');</script>"
+
+
 class Resp:
     def __init__(self, url, text=""):
-        self.url, self.text = "https://online.hl.co.uk/" + url, text
+        self.url, self.text = (url if "://" in url else "https://online.hl.co.uk/" + url), text
     def raise_for_status(self):
         pass
 
@@ -30,6 +33,10 @@ class FakeSession:
     def get(self, url, **kw):
         if self.login_page is None:
             raise hl.requests.ConnectionError("network is down")
+        if self.login_page in ("queue", "queued"):  # Queue-it waiting room: passes through, or really queued
+            if url.startswith("https://queue.hl.co.uk/?c=hluk&e=hlwaiting") and self.login_page == "queue":
+                return Resp("my-accounts/login-step-one?queueittoken=x", STAGE1)
+            return Resp("https://queue.hl.co.uk/?c=hluk&e=hlwaitingroom", QUEUE)
         return Resp("my-accounts/login-step-one", self.login_page)
     def post(self, url, data, **kw):
         self.posts.append(data)
@@ -114,6 +121,12 @@ def run():
             s = FakeSession(login_page=page)
             expect(hl.NotSent, lambda: client(s, tmp).login(CREDS))
             assert s.posts == [] and not hl.HALT.exists()
+        # the Queue-it waiting room: followed once to the real form when it lets us through; a real queue sends nothing
+        s = FakeSession(login_page="queue"); client(s, tmp).login(CREDS)
+        assert len(s.posts) == 2 and not hl.HALT.exists()
+        s = FakeSession(login_page="queued")
+        expect(hl.NotSent, lambda: client(s, tmp).login(CREDS))
+        assert s.posts == [] and not hl.HALT.exists()
         # ...a good page resets the count...
         client(FakeSession(), tmp).login(CREDS)
         assert hl.HL.not_sent == 0
