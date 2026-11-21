@@ -108,7 +108,9 @@ The portfolio format is `core.portfolio.Source` (in `/openapi.json`, and in the 
   `portfolio/<source>`, `price/<instrument>`, `live/<entity>` and `media/<source>`: `python -m core token add finance 'portfolio/hsbc*' 'doc/finance/*'`.
   Tokens are stored hashed, can be revoked, and every write is logged under the token's name.
 - Claude Code sessions use the `home-state` skill (`bin/install-skill`); Claude Desktop's chat uses the same
-  operations through a local MCP server, `home_mcp` (`bin/install-mcp`), with the same scoped token. A skill uploaded
+  operations through a local MCP server, `home_mcp` (`bin/install-mcp`), with the same token (`claude`: every area
+  but the task worker's). Besides named tools it has `api_schema` (every endpoint) and `api_request` (call any), so
+  it can view and change anything; it refuses writes to `hl`/`t212` (fetched automatically) and worker endpoints. A skill uploaded
   to claude.ai can't be used: it runs in Anthropic's cloud and can't reach the API on this machine.
 - It listens on 127.0.0.1 by default. On a Pi serving other devices, set `CORE_BIND` to its LAN address.
 
@@ -116,7 +118,7 @@ The portfolio format is `core.portfolio.Source` (in `/openapi.json`, and in the 
 
 ```sh
 python -m core serve                 # the supervisor runs it when CORE_TOKEN is set
-bin/install-skill finance 'portfolio/hsbc*' 'portfolio/nsandi*' 'doc/finance/*'   # skill + a token for it
+bin/install-skill claude 'doc/*' 'portfolio/*' 'price/*' 'live/*' 'media/*' 'task/*' 'schedule/*'   # skill + its token
 python -m core token list
 ```
 
