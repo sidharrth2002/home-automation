@@ -5,8 +5,8 @@ home-state skill (skills/home-state) that Claude Code sessions use.
 
 Standard library only (the MCP SDK's dependencies clash with the core's FastAPI pins). It speaks MCP's stdio
 transport: one JSON-RPC message per line on stdin/stdout; anything else goes to stderr. It uses the token in
-~/.config/home-core/token (made by bin/install-skill, scoped: e.g. portfolio/hsbc*, portfolio/nsandi*,
-doc/finance/*), so it can read everything and write only what that token allows. The portfolio format and the
+~/.config/home-core/token (made by bin/install-skill: the `claude` token,
+writing doc/*, portfolio/*, price/*, live/*, media/*, task/*, schedule/*), so it can read everything and write only what that token allows. The portfolio format and the
 rules for writing come from skills/home-state/SKILL.md, so the two stay the same.
 """
 import json
@@ -34,8 +34,11 @@ def guide() -> str:
 
 
 INSTRUCTIONS = ("This connects to the user's home system: a central state service on their Mac (SQLite behind an API) "
-                "whose data shows on their Hub, TV and phone widget within seconds. Use it to read or update their "
-                "portfolio (e.g. HSBC, NS&I Premium Bonds and savings), finance notes, plans and to-dos. Read before "
+                "whose data shows on their Hub, TV and phone widget within seconds. Use it to view or change anything "
+                "there: their portfolio (HL, Trading 212, HSBC, NS&I Premium Bonds, savings), snapshots, prices, "
+                "daily valuations, Premium Bonds prize checks, finance notes, plans and to-dos, the live sensors the "
+                "services report, the photo library, and background tasks and schedules. The named tools cover the "
+                "common cases; api_schema lists every endpoint and api_request calls any of them. Read before "
                 "you write, show the user old vs new figures before writing, and confirm with a read afterwards. A "
                 "403 means the token may not write there: tell the user rather than working around it.\n\n")
 
@@ -62,6 +65,39 @@ def set_holder(a):
     api("PUT", "/v1/state/finance/premium_bonds_holder", {"holder": holder})
     return {"saved": True, "next": "The home system is checking NS&I's prize checker now; the result shows on the Hub "
                                    "(Cash card) within a minute."}
+
+
+WORKER_ONLY = re.compile(r"^/v1/tasks/(claim|\d+/(heartbeat|finish))$")
+AUTOMATIC_PATH = re.compile(r"^/v1/portfolio/(hl|t212)(/|$)")
+
+
+def schema(a):
+    """The API's endpoints (method, path, summary), or the full description of the ones matching `path`."""
+    spec = api("GET", "/openapi.json")
+    want = a.get("path")
+    if not want:
+        return [f"{m.upper()} {path}  {op.get('summary') or ''}".rstrip()
+                for path, ops in spec["paths"].items() for m, op in ops.items()]
+    ops = {path: o for path, o in spec["paths"].items() if want in path}
+    names = set(re.findall(r'#/components/schemas/([\w.-]+)', json.dumps(ops)))
+    for _ in range(3):  # schemas that refer to other schemas
+        names |= set(re.findall(r'#/components/schemas/([\w.-]+)', json.dumps(
+            [spec["components"]["schemas"][n] for n in names if n in spec["components"]["schemas"]])))
+    return {"paths": ops, "schemas": {n: spec["components"]["schemas"][n] for n in sorted(names)
+                                      if n in spec["components"]["schemas"]}}
+
+
+def request(a):
+    method, path = str(a.get("method", "GET")).upper(), str(a.get("path", ""))
+    if method not in ("GET", "PUT", "PATCH", "POST", "DELETE"):
+        raise ValueError(f"method {method}?")
+    if not path.startswith("/v1/") or ".." in path:
+        raise ValueError("path must start with /v1/ (see api_schema)")
+    if method != "GET" and AUTOMATIC_PATH.match(path.split("?")[0]):
+        raise ValueError("HL and Trading 212 are fetched automatically; never write them by hand")
+    if WORKER_ONLY.match(path.split("?")[0]):
+        raise ValueError("that endpoint is for the task worker only")
+    return api(method, path, a.get("body"), a.get("if_version"))
 
 
 TOOLS = {
@@ -100,6 +136,17 @@ TOOLS = {
                         "if_version": {"type": "integer"}}, ["collection", "key", "fields"],
                        lambda a: api("PATCH", f"/v1/state/{seg(a['collection'])}/{seg(a['key'])}", a["fields"],
                                      a.get("if_version"))),
+    "api_schema": ("Every endpoint of the home state API (method, path, summary). Pass `path` (or part of one, e.g. "
+                   "'/v1/tasks') for the full request and response formats of the matching endpoints.",
+                   {"path": {"type": "string"}}, [], schema),
+    "api_request": ("Call any endpoint of the home state API (see api_schema), e.g. GET /v1/valuations, "
+                    "GET /v1/portfolio/hsbc/snapshots, PUT /v1/prices/<isin>, POST /v1/tasks, GET /v1/live, "
+                    "GET /v1/media/onedrive. Writes need the token's scope; HL and Trading 212 can't be written.",
+                    {"method": {"type": "string", "enum": ["GET", "PUT", "PATCH", "POST", "DELETE"]},
+                     "path": {"type": "string", "description": "starting /v1/, with any ?query"},
+                     "body": {"description": "JSON body for PUT, PATCH and POST"},
+                     "if_version": {"type": "integer", "description": "for document edits: the version you read"}},
+                    ["method", "path"], request),
     "get_audit": ("Who changed what, newest first (counts, never amounts). entity e.g. 'portfolio' or 'document'.",
                   {"entity": {"type": "string"}, "limit": {"type": "integer"}}, [],
                   lambda a: api("GET", "/v1/audit?" + urllib.parse.urlencode(

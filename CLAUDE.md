@@ -45,7 +45,8 @@ music_sync/           audio capture -> beat/tempo analysis -> light show; Spotif
 announce/             speaks `home_say` events with macOS `say`, on the Mac or cast to the TV
 core/                 central state service: SQLite (data/core/core.db) + FastAPI on 127.0.0.1:8790; publishes sensor.investments
 skills/home-state/    Claude Code skill (+ stdlib client) other sessions use to read/write core; bin/install-skill
-home_mcp/             the same for Claude Desktop's chat: a stdlib MCP server (stdio) over core with the skill's token;
+home_mcp/             the same for Claude Desktop's chat: a stdlib MCP server (stdio) over core with the skill's token
+                      (`claude`: doc/portfolio/price/live/media/task/schedule; api_schema + api_request reach any endpoint);
                       bin/install-mcp adds it to claude_desktop_config.json. No MCP SDK: its deps break FastAPI's pins
 investments/          Hargreaves Lansdown client (hl.py, lockout-safe), FT price history (prices.py), Trading 212 (t212.py)
 backlight/            the Bluetooth LED strip behind the cabinet (MELK/ELK-BLEDOM), as light.tv_backlight

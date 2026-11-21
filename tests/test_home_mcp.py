@@ -51,6 +51,24 @@ def run():
     assert not ok["isError"] and calls[-1] == ("PUT", "/v1/state/finance/premium_bonds_holder", {"holder": "1234567890"}, None)
     for bad in ("12", "not a number!", ""):
         assert call("set_premium_bonds_holder", {"holder": bad})["isError"], bad
+    out = call("api_request", {"method": "POST", "path": "/v1/tasks", "body": {"kind": "agent", "title": "t"}})
+    assert not out["isError"] and calls[-1] == ("POST", "/v1/tasks", {"kind": "agent", "title": "t"}, None)
+    call("api_request", {"method": "get", "path": "/v1/portfolio/hl/snapshots"})
+    assert calls[-1][:2] == ("GET", "/v1/portfolio/hl/snapshots"), "reading HL is fine"
+    for bad in ({"method": "PUT", "path": "/v1/portfolio/t212", "body": {}}, {"method": "DELETE", "path": "/v1/portfolio/hl"},
+                {"method": "POST", "path": "/v1/tasks/claim", "body": {}}, {"method": "POST", "path": "/v1/tasks/3/finish"},
+                {"method": "GET", "path": "/etc/passwd"}, {"method": "GET", "path": "/v1/../x"}, {"method": "HEAD", "path": "/v1/me"}):
+        assert call("api_request", bad)["isError"], bad
+    spec = {"paths": {"/v1/tasks": {"post": {"summary": "Queue", "requestBody": {"$ref": "#/components/schemas/NewTask"}}},
+                      "/v1/me": {"get": {"summary": "Me"}}},
+            "components": {"schemas": {"NewTask": {"properties": {"x": {"$ref": "#/components/schemas/Inner"}}},
+                                       "Inner": {"type": "object"}, "Unused": {}}}}
+    mcp.api = lambda method, path, body=None, if_version=None: spec
+    listing = json.loads(call("api_schema", {})["content"][0]["text"])
+    assert "POST /v1/tasks  Queue" in listing and "GET /v1/me  Me" in listing
+    detail = json.loads(call("api_schema", {"path": "/v1/tasks"})["content"][0]["text"])
+    assert list(detail["paths"]) == ["/v1/tasks"] and set(detail["schemas"]) == {"NewTask", "Inner"}
+    mcp.api = fake
     assert call("missing_arg", {})["isError"] and call("get_document", {})["isError"]
     print("home mcp OK")
 
