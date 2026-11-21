@@ -87,65 +87,36 @@ so "turn the TV lamps blue" or "lights out" just works.
 
 ```mermaid
 flowchart LR
-    subgraph Mac
+    subgraph inputs["In"]
         direction TB
-        audio["system audio<br/>(audiotee)"]
-        mic["microphone"]
-        spotify["Spotify app"]
-        sync["music_sync"]
-        strip_svc["backlight<br/>(Bluetooth)"]
-        photos["photos<br/>(picks by faces)"]
-        voice["announce<br/>(macOS voice)"]
-        core["core<br/>(state DB + API)"]
-        worker["task worker<br/>(Claude Code, jobs)"]
-        inv["investments"]
-        widget["widget feed"]
-        sup(["./home"])
-        audio --> sync
-        mic --> sync
-        spotify --> sync
-        sync -->|"show frames<br/>(local UDP)"| strip_svc
-        inv -->|"snapshots"| core
-        sync -->|"now playing"| core
-        photos -->|"library index,<br/>photo frame"| core
-        worker <-->|"claim, progress"| core
-        sup -.-> sync & strip_svc & photos & voice & core & worker & inv & widget
+        music["Music on the Mac<br/>(system audio, mic, Spotify)"]
+        feeds["OneDrive, HL, Trading 212,<br/>FT (all read-only)"]
+        calendar["iCloud calendar"]
+        claude["Claude<br/>(chat, Code, Desktop)"]
     end
-
+    subgraph mac["Mac, supervised by ./home"]
+        direction TB
+        services["Services<br/>music sync · photos · investments<br/>backlight · voice · widget feed"]
+        core[("core<br/>state database + API")]
+        worker["Task worker<br/>(background jobs)"]
+        services -->|"state"| core
+        worker <-->|"tasks"| core
+    end
     ha["Home Assistant<br/>(Docker)"]
-    grafana["Grafana: logs, metrics,<br/>traces (Docker)"]
-    bulbs(("WiZ bulbs"))
-    strip(("cabinet<br/>LED strip"))
-    tv["TCL Google TV<br/>app + screensaver<br/>+ Cast"]
-    hub["Hub"]
-    phone["iPhone widget<br/>+ Shortcuts"]
-    claude["Claude"]
-    agents["other Claude sessions<br/>(home-state skill)"]
-    icloud["iCloud"]
-    onedrive["OneDrive"]
-    money["Hargreaves Lansdown,<br/>Trading 212, FT"]
-
-    sync -- UDP --> bulbs
-    sync <-->|"websocket<br/>(modes, TV paused)"| ha
-    strip_svc <-- websocket --> ha
-    strip_svc -- BLE --> strip
-    core -->|"every sensor<br/>(REST, retried)"| ha
-    sup -->|"system health"| ha
-    sup -. "OpenTelemetry<br/>(every service)" .-> grafana
-    widget -- REST --> ha
-    agents -->|"API, scoped token"| core
-    photos -->|"image files"| ha
-    onedrive -.->|"Graph API,<br/>read-only"| photos
-    money -. read-only .-> inv
-    voice -- cast --> tv
-    ha -- desk lamp --> bulbs
-    ha <-- remote --> tv
-    tv <-- websocket --> ha
-    hub <-- websocket --> ha
-    ha -. feed .-> phone
-    phone -. webhooks .-> ha
-    icloud -- CalDAV --> ha
-    claude -- MCP --> ha
+    subgraph out["Out"]
+        direction TB
+        lights(("Bulbs + LED strip"))
+        screens["Hub · TV · iPhone widget"]
+    end
+    music --> services
+    feeds --> services
+    calendar --> ha
+    claude -->|"home-state"| core
+    claude -->|"MCP"| ha
+    core -->|"sensors"| ha
+    services -->|"light shows<br/>(direct, low latency)"| lights
+    ha --> lights
+    ha <--> screens
 ```
 
 Home Assistant runs in Docker. The audio side can't, because it needs Core Audio and the mic, and neither can the
@@ -154,7 +125,9 @@ supervisor, and `./home` starts and stops the lot together. The strip is a Home 
 backlight service mirrors its state over Bluetooth, and during a show music sync drives it directly.
 
 Shared state goes through `core`: services and other clients write to its API, it keeps the data in SQLite, and it
-pushes what the screens need into Home Assistant. [docs/core.md](docs/core.md) has the design.
+pushes what the screens need into Home Assistant. [docs/core.md](docs/core.md) has the design. Every service also sends its logs, metrics and
+traces to a local Grafana ([docs/telemetry.md](docs/telemetry.md)). Each part's own detail, with diagrams, is in those
+docs and in [CLAUDE.md](CLAUDE.md).
 
 ## Running it
 
