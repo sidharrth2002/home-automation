@@ -279,6 +279,7 @@ so it can go back. `?ambient=1` previews it.
 
 ```sh
 tv-app/deploy                  # build with Gradle, install over adb and open it (TV_HOST in .env)
+tv-app/deploy --no-open        # install without opening it, e.g. while someone's watching
 tv-app/screensaver on | off | test | status
 tv-app/screensaver delay 1     # start it after a minute idle
 ```

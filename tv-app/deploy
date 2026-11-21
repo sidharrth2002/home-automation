@@ -2,6 +2,7 @@
 # Build the Android TV app and install it on the TV over the home network.
 #   tv-app/deploy            build, install and open it
 #   tv-app/deploy --build    just build the APK
+#   tv-app/deploy --no-open  build and install without opening it (the TV is off, or someone's watching)
 # The TV needs developer options with USB debugging on (the first connection asks you to allow it on the TV).
 # TV_HOST in ../.env is the TV's address; the Hub address is this Mac's, baked into the app at build time.
 set -euo pipefail
@@ -18,5 +19,6 @@ echo "built $APK (Hub at $HUB)"
 
 source ./adb.sh  # finds the TV and sets $ADB and $SERIAL
 "$ADB" -s "$SERIAL" install -r "$APK"
+if [[ ${1:-} == --no-open ]]; then echo "installed on the TV (not opened)"; exit 0; fi
 "$ADB" -s "$SERIAL" shell am start -n com.sid.home/.MainActivity >/dev/null
 echo "installed and opened on the TV"
