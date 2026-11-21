@@ -194,7 +194,8 @@ Nothing is recorded; audio only lives in memory.
 <summary><b>TV mode and the desk lamp</b></summary>
 <br>
 
-**TV mode** is warm white between 2200 and 2700K at 15%. Loud scenes can push it up by at most 8 points over about 3
+**TV mode** is warm white between 2200 and 2700K at 15% after dark. In daylight it rises to as much as 40%, following
+the sun's height and the cloud cover, so the glow still shows in a bright room; changes fade in over about a minute. Loud scenes can push it up by at most 8 points over about 3
 seconds, and it settles back over about 8. It listens to the room, so it works with every app, and it never times out
 on quiet scenes. The *TV bias lighting* automation starts it when the TV turns on (unless music sync is already
 running) and stops it when the TV turns off, and only on a real off-to-on change, otherwise every Home Assistant

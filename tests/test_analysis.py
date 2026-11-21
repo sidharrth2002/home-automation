@@ -5,7 +5,7 @@ Run: .venv/bin/python -m tests.test_analysis
 import numpy as np
 
 from music_sync.analysis import HOP, SR, Analyzer
-from music_sync.show import Show
+from music_sync.show import Show, daylight
 
 BPM = 128
 BEAT = 60 / BPM
@@ -114,6 +114,37 @@ def test_tv():
     print("TV OK")
 
 
+def test_tv_daylight():
+    """TV glow follows the light outside: night stays subtle, full day is brighter, and a change fades in."""
+    assert daylight(-18) == 0 and daylight(None) == 0 and daylight(30) == 1
+    assert daylight(30, 100) == 0.5 and 0 < daylight(0) < 1
+    audio, _ = synth()
+
+    def run(level, change_at=None, to=None):
+        a, show = Analyzer(), Show(2)
+        show.mode, show.daylight = "tv", level
+        dims, prev, max_step = [], None, 0
+        for i in range(len(audio) // HOP):
+            now = (i + 1) * HOP / SR
+            if change_at and now >= change_at:
+                show.daylight = to
+            d = show.update(a.process(audio[i * HOP:(i + 1) * HOP], now), a.tempo, now)[0]["dimming"]
+            if now > 5:
+                max_step = max(max_step, abs(d - prev)) if prev is not None else 0
+                dims.append(d)
+                prev = d
+        return dims, max_step
+
+    night, _ = run(0.0)
+    day, _ = run(1.0)
+    dusk, step = run(1.0, change_at=10, to=0.0)
+    print(f"TV daylight: night {min(night)}..{max(night)}%, day {min(day)}..{max(day)}%, "
+          f"day->night ends at {dusk[-1]}%, max step {step}% per hop")
+    assert max(night) <= 23 and min(day) >= 40 and max(day) <= 48
+    assert dusk[-1] < min(day) and step <= 1, "a daylight change fades, never jumps"
+    print("TV daylight OK")
+
+
 def _png(fill):
     import io
     from PIL import Image
@@ -186,5 +217,6 @@ def test_pause():
 if __name__ == "__main__":
     main()
     test_tv()
+    test_tv_daylight()
     test_palette()
     test_pause()

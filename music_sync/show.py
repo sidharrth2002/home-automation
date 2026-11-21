@@ -30,11 +30,21 @@ SILENT_RMS = 0.005  # below this for SILENT_S (a pause, not a quiet bar) the sho
 SILENT_S = 0.5
 
 # TV mode is bias lighting, not a show: warm white, dim, and it only ever drifts.
-TV_BASE_DIM = 15  # percent
+TV_BASE_DIM = 15  # percent, after dark
+TV_DAY_DIM = 40  # percent in full daylight: a 15% glow is invisible against a bright room
+TV_DAY_TAU_S = 20.0  # daylight steps (sun updates, cloud cover) fade in instead of jumping
 TV_SWELL_DIM = 8  # loud scenes add at most this much
 TV_TEMP_K = (2200, 2700)  # warmer when the soundtrack is bass-heavy (explosions, score swells)
 TV_FADE_IN_S = 4.0
 TV_AGC_HALF_LIFE_S = 60.0  # slow, so a quiet scene stays dim instead of being re-normalised up
+
+
+def daylight(elevation: float | None, clouds: float | None = None) -> float:
+    """How bright it is outside, 0 (night) to 1: the sun from civil dusk (-6°) to 10° up, halved by full cloud."""
+    if elevation is None:
+        return 0.0  # unknown: stay at the night level, the subtle one
+    sun = min(1.0, max(0.0, (elevation + 6) / 16))
+    return sun * (1 - 0.5 * min(100.0, max(0.0, clouds or 0.0)) / 100)
 
 
 def _decay(dt, tau):
@@ -60,6 +70,8 @@ class Show:
         self.tv_peak = 1e-4
         self.tv_level = 0.0
         self.tv_bass = 0.0
+        self.daylight = 0.0  # set by the service from sun.sun and the weather
+        self.tv_day = None
         self.palette = []  # palette.Swatch list from album art; empty = use harmony hue
         self.palette_idx = 0
 
@@ -164,7 +176,11 @@ class Show:
         self.tv_level += (1 - math.exp(-dt / tau)) * (level - self.tv_level)
         self.tv_bass += (1 - math.exp(-dt / 4.0)) * (f.bands["bass"] - self.tv_bass)
 
-        target = TV_BASE_DIM + TV_SWELL_DIM * self.tv_level
+        if self.tv_day is None:
+            self.tv_day = self.daylight
+        self.tv_day += (1 - math.exp(-dt / TV_DAY_TAU_S)) * (self.daylight - self.tv_day)
+
+        target = TV_BASE_DIM + (TV_DAY_DIM - TV_BASE_DIM) * self.tv_day + TV_SWELL_DIM * self.tv_level
         fade = min(1.0, (now - self.tv_since) / TV_FADE_IN_S)
         dimming = round(100 + (target - 100) * fade)  # ease down from full instead of snapping dark
         warm, cool = TV_TEMP_K

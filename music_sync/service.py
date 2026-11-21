@@ -24,7 +24,7 @@ from .analysis import HOP, Analyzer
 from .engine import BeatEngine
 from .lights import Lights
 from .nowplaying import NowPlaying
-from .show import Show
+from .show import Show, daylight
 
 log = logging.getLogger("music_sync")
 
@@ -39,7 +39,9 @@ TEMPO_SENSOR = "sensor.music_sync_tempo"
 NOW_PLAYING_SENSOR = "sensor.music_sync_now_playing"
 COMMAND_EVENT = "music_sync_command"  # fired by the play/pause/skip scripts: {"command": "play_pause"|"next"|"previous"}
 TV = os.environ.get("TV_ENTITY", "media_player.smart_tv_pro")
-WATCHED = (SWITCH, MODE, SENSITIVITY, LATENCY, COLOURS, TV)
+SUN = "sun.sun"  # elevation and cloud cover set how bright TV mode's glow is
+WEATHER = os.environ.get("WEATHER_ENTITY", "weather.forecast_home")
+WATCHED = (SWITCH, MODE, SENSITIVITY, LATENCY, COLOURS, TV, SUN, WEATHER)
 MODES = ("auto", "calm", "party", "tv", "classic")
 ALBUM_ART, MUSIC_KEY = "Album art", "Music key"
 # TV apps that play music rather than video: TV mode gives these a real (auto) show instead of bias lighting.
@@ -109,6 +111,8 @@ class Controller:
         self.tv_app: str | None = None  # foreground app while the TV is on, else None
         self.cast = os.environ.get("TV_CAST", "")  # the TV's Cast device; Spotify on the TV plays through it
         self.cast_state = ""
+        self.sun_elevation: float | None = None
+        self.clouds: float | None = None
         self.mac_heard_at = 0.0
         self.now_playing = NowPlaying()
         self.session: asyncio.Task | None = None
@@ -179,6 +183,10 @@ class Controller:
     def apply(self, entity_id, state, attrs=None):
         if entity_id == self.cast and entity_id:
             self.cast_state = state
+        elif entity_id == SUN:
+            self.sun_elevation = (attrs or {}).get("elevation")
+        elif entity_id == WEATHER:
+            self.clouds = (attrs or {}).get("cloud_coverage")
         elif entity_id == TV:
             self.tv_app = ((attrs or {}).get("app_id") or "") if state not in ("off", "unavailable", "unknown") else None
         elif entity_id == MODE and state in MODES:
@@ -268,6 +276,7 @@ class Controller:
     def _step(self, samples, now, analyzer, show, classic, classic_buf, lights):
         """Analyse one hop and drive the bulbs. Returns the hop's RMS."""
         show.mode, show.latency_ms = self.show_mode, self.latency_ms
+        show.daylight = daylight(self.sun_elevation, self.clouds)
         # Album colours only while Spotify is actually what's playing; otherwise follow the music's key.
         use_art = self.colours == ALBUM_ART and self.now_playing.state == "playing"
         show.palette = self.now_playing.palette if use_art else []
