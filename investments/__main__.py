@@ -15,6 +15,7 @@ import getpass
 import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import date, datetime
@@ -127,6 +128,14 @@ def publish(accounts):
 _published_series = {}  # sedol -> date last published, so each fund's history is posted once a day
 
 
+def post_series(holding_id: str, name: str, series_pence):
+    """sensor.investment_<id>: a fund's price history in pence, which the Hub's charts read (once a day per fund)."""
+    post(round(series_pence[-1][1], 2), {"friendly_name": name, "icon": "mdi:chart-line", "sedol": holding_id,
+                                         "unit_of_measurement": "GBX", "source": "FT", "series": compact(series_pence)},
+         entity=f"sensor.investment_{holding_id.lower()}")
+    _published_series[holding_id] = date.today().isoformat()
+
+
 def publish_prices(accounts, prices: Prices):
     """One sensor per fund with its price history (sensor.investment_<sedol>), for the Hub's detail charts."""
     today = date.today().isoformat()
@@ -144,10 +153,7 @@ def publish_prices(accounts, prices: Prices):
         # FT quotes some funds in pounds and some in pence; HL always shows pence. Match HL's units.
         if h.get("price_p") and 50 < h["price_p"] / series[-1][1] < 200:
             series = [(d, p * 100) for d, p in series]
-        post(round(series[-1][1], 2), {"friendly_name": h["name"], "icon": "mdi:chart-line", "sedol": sedol,
-                                       "unit_of_measurement": "GBX", "source": "FT", "series": compact(series)},
-             entity=f"sensor.investment_{sedol.lower()}")
-        _published_series[sedol] = today
+        post_series(sedol, h["name"], series)
     log.info("price history published for %d funds", len(_published_series))
 
 
@@ -194,11 +200,12 @@ def publish_paused(reason) -> bool:
 
 def revalue(prices: Prices) -> int:
     """Today's price for each manual holding core can revalue (units + an ISIN), from FT. Only public fund ids are
-    sent to FT. FT quotes some funds in pence: the price implied by what was written tells which. Run hourly by the
-    core task worker (schedule "revalue"). Returns how many prices were recorded."""
+    sent to FT. FT quotes some funds in pence: the price implied by what was written tells which. Also publishes each
+    one's price history (in pence, like HL's) for the Hub's charts. Run hourly by the core task worker (schedule
+    "revalue"). Returns how many prices were recorded."""
     recorded = 0
     for h in core.call("GET", "/v1/portfolio/priceable")["items"]:
-        if len(h["key"]) != 12:  # only ISINs can be looked up reliably
+        if not re.fullmatch(r"[a-z]{2}[0-9a-z]{10}", h["key"].lower()):  # only ISINs can be looked up reliably
             continue
         try:
             series = prices.history(h["key"].upper(), h["name"])
@@ -216,6 +223,11 @@ def revalue(prices: Prices) -> int:
         core.call("PUT", f"/v1/prices/{h['key']}", {"day": day.isoformat(), "price_gbp": gbp, "source": "FT",
                                                      "name": h["name"]})
         recorded += 1
+        if _published_series.get(h["key"]) != date.today().isoformat():  # the history too, for the Hub's charts
+            try:
+                post_series(h["key"], h["name"], series if gbp != price else [(d, p * 100) for d, p in series])
+            except OSError as e:
+                log.warning("price history for %s not published: %s", h["name"], e)
     return recorded
 
 
