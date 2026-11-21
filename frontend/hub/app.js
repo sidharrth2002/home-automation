@@ -48,6 +48,7 @@ if (TV_MODE) {
   document.querySelector('meta[name="viewport"]')?.setAttribute("content", "width=1280");
 }
 const T212 = "sensor.trading212";
+const TASKS = "sensor.core_tasks"; // background tasks: counts and the latest few, from core
 
 const APPS = {
   "com.netflix.ninja": ["Netflix", "229,9,20"],
@@ -833,7 +834,7 @@ if (AMBIENT) setInterval(() => { quote = QUOTES[Math.floor(Math.random() * QUOTE
 const ago = (ms) => { const m = Math.round(ms / 60000); return !Number.isFinite(m) ? "no refresh yet" : m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 const upFor = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : m < 2880 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.floor(m / 1440)} d`; };
 const ageMs = (iso) => iso ? Date.now() - new Date(iso).getTime() : Infinity;
-section("#health", () => [HEALTH, INVEST, T212, SYNC, MODE, HOME, WEATHER, TV, ...LIGHTS.map((l) => l.id), ...calIds()], () => {
+section("#health", () => [HEALTH, INVEST, T212, TASKS, SYNC, MODE, HOME, WEATHER, TV, ...LIGHTS.map((l) => l.id), ...calIds()], () => {
   const h = S[HEALTH];
   const ha = h?.attributes ?? {};
   const hAge = ageMs(ha.updated);
@@ -897,6 +898,8 @@ section("#health", () => [HEALTH, INVEST, T212, SYNC, MODE, HOME, WEATHER, TV, .
     svcTile("music_sync", "Music sync", () => is(SYNC, "on") ? `Following the music · ${esc(st(MODE))}` : "Idle, ready", "Not running"),
     svcTile("announce", "Voice", () => "Ready to speak", "Not running"),
     svcTile("presence", "Presence", () => is(HOME, "on") ? "Home" : is(HOME, "off") ? "Away · lights off" : "Running"),
+    svcTile("core", "State service", () => "Serving the API", "Not running"),
+    svcTile("tasks", "Task worker", () => +st(TASKS) ? `Running ${st(TASKS)} task${+st(TASKS) > 1 ? "s" : ""}` : "Idle, ready", "Not running"),
     feedTile("Hargreaves Lansdown", INVEST, "investments", 180, 540),
     feedTile("Trading 212", T212, "investments", 90, 300),
     cal, weather, bulbs, tvTile,
@@ -906,8 +909,23 @@ section("#health", () => [HEALTH, INVEST, T212, SYNC, MODE, HOME, WEATHER, TV, .
   const [cls, text] = bad ? ["bad", `${bad} problem${bad > 1 ? "s" : ""}`] : warn ? ["warn", `${warn} to check`] : ["", "All systems normal"];
   return `
     <div class="card-head"><div class="card-title">${I.pulse} System health</div><span class="health-pill ${cls}"><i></i>${text}</span></div>
-    <div class="tiles">${tiles.map(([lvl, name, detail]) => `<div class="tile ${lvl}"><i class="tdot"></i><div><b>${name}</b><span>${detail}</span></div></div>`).join("")}</div>`;
+    <div class="tiles">${tiles.map(([lvl, name, detail]) => `<div class="tile ${lvl}"><i class="tdot"></i><div><b>${name}</b><span>${detail}</span></div></div>`).join("")}</div>
+    ${taskList()}`;
 });
+
+// Background tasks under the health tiles: what's running, and what finished in the last day.
+function taskList() {
+  const day = Date.now() - 86_400_000;
+  const rows = (at(TASKS, "recent") ?? []).filter((t) => t.status === "running" || t.status === "queued"
+    || Date.parse(t.finished_at ?? t.created_at) > day).slice(0, 5);
+  if (!rows.length) return "";
+  const lvl = { running: "ok", queued: "idle", done: "ok", failed: "bad", cancelled: "idle" };
+  return `<div class="tasks"><span class="label">Background tasks</span>${rows.map((t) => {
+    const when = t.status === "running" ? `${Math.round((t.progress ?? 0) * 100)}% · ${esc(t.message ?? "working")}`
+      : t.status === "queued" ? "Queued" : `${t.status[0].toUpperCase()}${t.status.slice(1)} ${ago(Date.now() - Date.parse(t.finished_at))}`;
+    return `<div class="task ${lvl[t.status] ?? "idle"} ${t.status}"><i class="tdot"></i><b>${esc(t.title)}</b><span>${when}</span></div>`;
+  }).join("")}</div>`;
+}
 
 section("#foot", () => [], () => `
   <div><span class="svc"><span class="dot ${conn?.connected ? "ok" : "bad"}" id="conn-dot"></span><span id="conn-label">${conn?.connected ? "Live" : "Connecting…"}</span></span>

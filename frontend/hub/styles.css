@@ -410,6 +410,15 @@ details.tune .slider { flex: 1; }
 .health-pill i, .tdot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #5ee6a8; box-shadow: 0 0 10px rgba(94,230,168,.8); }
 .health-pill.warn i, .tile.warn .tdot { background: #ffb454; box-shadow: 0 0 10px rgba(255,180,84,.8); }
 .health-pill.bad i, .tile.bad .tdot { background: #ff6b7d; box-shadow: 0 0 10px rgba(255,107,125,.8); }
+.tasks { display: grid; gap: 6px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.07); }
+.tasks .label { margin-bottom: 4px; }
+.task { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13px; }
+.task b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task span { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.task.idle .tdot { background: rgba(255,255,255,.3); box-shadow: none; }
+.task.bad .tdot { background: #ff6b7d; box-shadow: 0 0 10px rgba(255,107,125,.8); }
+.task.running .tdot { animation: pulse-dot 1.6s ease-in-out infinite; }
+@keyframes pulse-dot { 50% { opacity: .35; } }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 10px; }
 .tile { display: flex; gap: 12px; align-items: flex-start; min-width: 0; padding: 13px 14px; border-radius: 14px;
   background: rgba(255,255,255,.035); border: 1px solid var(--line); }

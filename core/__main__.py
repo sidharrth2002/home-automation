@@ -13,12 +13,13 @@ import logging
 import os
 import sys
 import threading
+import time
 import urllib.request
 from pathlib import Path
 
 from music_sync.service import load_env
 
-from . import finance
+from . import finance, tasks
 from .db import DB, NotFound
 from .maintenance import Maintenance
 from .publish import Publisher
@@ -58,6 +59,26 @@ def migrate_legacy(db: DB):
     log.info("migrated the last HL snapshot (%d accounts)", len(accounts))
 
 
+DEFAULT_SCHEDULES = [  # name, kind, title, every_s; created once, then edited over the API
+    ("revalue", "revalue", "Revalue hand-written holdings from FT prices", 3600),
+]
+
+
+def scheduler(db: DB):
+    """Queue scheduled tasks when they're due."""
+    for name, kind, title, every in DEFAULT_SCHEDULES:
+        try:
+            tasks.schedules(db, name)
+        except NotFound:
+            tasks.set_schedule(db, name, kind, title, every, by="core", first_in_s=60)
+    while True:
+        try:
+            tasks.run_due(db)
+        except Exception:
+            log.exception("scheduler failed")
+        time.sleep(20)
+
+
 def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -74,7 +95,8 @@ def main():
                              "(python -c 'import secrets; print(secrets.token_urlsafe(32))')")
         migrate_legacy(db)
         publisher, maintenance = Publisher(db), Maintenance(db, DATA / "backups")
-        for target, name in ((publisher.run, "publish"), (publisher.follow, "follow"), (maintenance.run, "maintenance")):
+        for target, name in ((publisher.run, "publish"), (publisher.follow, "follow"), (maintenance.run, "maintenance"),
+                             (lambda: scheduler(db), "scheduler")):
             threading.Thread(target=target, daemon=True, name=name).start()
         app = create_app(db, admin, health=lambda: {"maintenance": maintenance.status, "published": publisher.last_ok})
         host, port = os.environ.get("CORE_BIND", "127.0.0.1"), int(os.environ.get("CORE_PORT", "8790"))

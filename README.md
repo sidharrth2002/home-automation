@@ -74,6 +74,9 @@ so "turn the TV lamps blue" or "lights out" just works.
 - **Central state.** One local database behind an API (`core/`) holds the app's state: my portfolio from every
   source (HL and Trading 212 fetched automatically, the rest written by another Claude session over the API), plus
   any other app data. It keeps every version, tells Home Assistant when something changes, and backs itself up.
+- **Background tasks.** I can hand off work ("go through these spreadsheets", "find a few good restaurants near
+  X") and it runs in the background as a headless Claude Code session, tracked in the central state with its
+  progress, log and result, and listed on the Hub. Recurring jobs run the same way on schedules.
 - **One switch.** `./home up` and `./home down` start and stop everything, and a supervisor restarts anything that
   falls over.
 
@@ -91,6 +94,7 @@ flowchart LR
         photos["photos<br/>(picks by faces)"]
         voice["announce<br/>(macOS voice)"]
         core["core<br/>(state DB + API)"]
+        worker["task worker<br/>(Claude Code, jobs)"]
         inv["investments"]
         widget["widget feed"]
         sup(["./home"])
@@ -99,7 +103,8 @@ flowchart LR
         spotify --> sync
         sync -->|"show frames<br/>(local UDP)"| strip_svc
         inv -->|"snapshots"| core
-        sup -.-> sync & strip_svc & photos & voice & core & inv & widget
+        worker <-->|"claim, progress"| core
+        sup -.-> sync & strip_svc & photos & voice & core & worker & inv & widget
     end
 
     ha["Home Assistant<br/>(Docker)"]
@@ -427,7 +432,7 @@ home                ./home up | down | reload | status | logs
 stack/              the supervisor behind ./home, and the health it reports
 music_sync/         audio capture, analysis, light show, now playing
 announce/           the voice: speaks home_say events on the Mac or the TV
-core/               the central state service: SQLite, the API, publishing to Home Assistant
+core/               the central state service: SQLite, the API, publishing to Home Assistant, and the task worker
 investments/        Hargreaves Lansdown, FT prices, Trading 212
 skills/home-state/  the Claude Code skill other sessions use to read and write the state
 backlight/          the Bluetooth LED strip behind the cabinet
@@ -437,8 +442,7 @@ tv-app/             the Android TV app and screensaver, and the scripts that dep
 homeassistant/      Home Assistant config as code, and apply.py
 frontend/hub/       the Hub, plus screenshot.py
 presence/           phone on the Wi-Fi -> home or away
-netflix/            an export parser that isn't run any more
-bin/                audiotee, ha, check-commit, ha-mcp-headers
+bin/                audiotee, ha, task, install-skill, check-commit, ha-mcp-headers
 tests/
 ```
 

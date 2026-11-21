@@ -9,8 +9,10 @@ Design (see docs/core.md for the diagram):
 - Finance (core/finance.py): sources -> immutable snapshots -> balances and positions, plus instruments, prices and
   daily valuations. A snapshot is never edited; history is the snapshots.
 
-Planned (as later migrations, when something uses them): media metadata and analysis results for the photos (the
-image bytes stay on disk, named by content hash), and a jobs table for durable background work.
+- Tasks (core/tasks.py): a durable queue of background work with leases, retries, cancellation, events and schedules.
+
+Planned (as a later migration): media metadata and analysis results for the photos (the image bytes stay on disk,
+named by content hash).
 
 The SQL sticks to what SQLite and Postgres share (TEXT ISO timestamps, JSON in TEXT) so it can move later.
 """
@@ -77,6 +79,26 @@ MIGRATIONS = [
     CREATE TABLE fin_valuations (
         day TEXT PRIMARY KEY, total REAL NOT NULL, by_source TEXT NOT NULL, computed_at TEXT NOT NULL);
 
+    """,
+    # 2: background tasks (core/tasks.py)
+    """
+    CREATE TABLE tasks (
+        id INTEGER PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, input TEXT, dedupe TEXT,
+        status TEXT NOT NULL DEFAULT 'queued'
+            CHECK (status IN ('queued', 'running', 'done', 'failed', 'cancelled')),
+        priority INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, max_attempts INTEGER NOT NULL DEFAULT 3,
+        run_after TEXT NOT NULL, worker TEXT, lease_until TEXT, cancel_requested INTEGER NOT NULL DEFAULT 0,
+        progress REAL, message TEXT, result TEXT, error TEXT, created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL, started_at TEXT, finished_at TEXT);
+    CREATE INDEX tasks_ready ON tasks (status, run_after, priority);
+    CREATE UNIQUE INDEX tasks_dedupe ON tasks (dedupe) WHERE status IN ('queued', 'running');
+    CREATE TABLE task_events (
+        id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL REFERENCES tasks (id), ts TEXT NOT NULL,
+        level TEXT NOT NULL, message TEXT NOT NULL);
+    CREATE INDEX task_events_task ON task_events (task_id, id);
+    CREATE TABLE schedules (
+        name TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, input TEXT, every_s INTEGER NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1, next_run TEXT NOT NULL, last_task_id INTEGER);
     """,
 ]
 

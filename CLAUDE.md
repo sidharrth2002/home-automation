@@ -50,7 +50,6 @@ backlight/            the Bluetooth LED strip behind the cabinet (MELK/ELK-BLEDO
 photos/               OneDrive photos via Microsoft Graph: picks a few good ones (faces, people, you) for the Hub
 widget/               iPhone Scriptable widget (home.js) + its feed, webhook actions and signed Shortcuts (__main__.py)
 presence/             phone-on-Wi-Fi home/away (needs PRESENCE_PHONE_MAC; not currently running)
-netflix/              export parser, no longer run
 homeassistant/        HA config as code (helpers, templates, scripts, automations, dashboards, voice.json) + apply.py
 frontend/hub/         the Hub: plain HTML/CSS/JS on HA's websocket API, no build step; TV mode for the TV app
 tv-app/               Android TV app (a full-screen WebView of the Hub); tv-app/deploy builds and installs it
@@ -115,7 +114,14 @@ find). Testing takes over the TV screen, so ask first.
   print or paste them. Tests use made-up numbers only.
 - Tokens: the admin token is only for this repo's services; anything else gets `python -m core token add <name>
   <scopes>` (scopes are globs over `doc/<collection>/<key>`, `portfolio/<source>`, `price/<instrument>`).
-- `tests.test_core` covers the API, scopes, snapshots, revaluation, publishing and maintenance.
+- `tests.test_core` covers the API, scopes, snapshots, revaluation, publishing, maintenance, tasks and the agent runner.
+- Background work: when the user asks for something to be done in the background ("go investigate…", "process these
+  files", "find restaurants…"), queue it with `bin/task run "<prompt>" [--dir <folder>] [--tool …]` and tell them
+  the task number; check with `bin/task show <id>`. Agent tasks are headless `claude -p` runs in data/tasks/<id>/
+  with read access to their folder and named dirs, web search/fetch, and writes only in their folder; only add
+  tools (e.g. Bash) the task really needs. Results (result.md) can be personal: they stay under data/.
+- Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries
+  state to the screens. Exception: music sync's light frames stay direct UDP (timing), its control/state doesn't.
 
 ## Gotchas
 
