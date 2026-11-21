@@ -336,9 +336,18 @@ def _state(entity_id: str) -> dict | None:
         raise
 
 
+def guest_switch() -> bool:
+    """Whether guest mode is on. Raises OSError while that can't be known (HA unreachable, or the switch not
+    loaded yet after a restart), so the frame isn't swapped on a guess."""
+    state = (_state(guest.SWITCH) or {"state": "off"}).get("state")  # never created: off
+    if state not in ("on", "off"):
+        raise OSError(f"guest switch is {state}")
+    return state == "on"
+
+
 def guest_on() -> bool:
     try:
-        return (_state(guest.SWITCH) or {}).get("state") == "on"
+        return guest_switch()
     except OSError:
         return False
 
@@ -347,9 +356,9 @@ def sync_frame(faces: Faces):
     """Keep the frame showing the right set: landscapes while guest mode is on, otherwise mine."""
     with FRAME_LOCK:  # publish() may be posting a new set of mine from the refresh thread
         try:
-            frame, want_guest = core.live(SENSOR), guest_on()
+            frame, want_guest = core.live(SENSOR), guest_switch()
         except OSError:
-            return  # the core isn't up yet; try again next time
+            return  # the core or Home Assistant isn't answering: don't swap on a guess; try again next time
         showing_guest = bool(frame and frame["attributes"].get("guest"))
         if frame and showing_guest == want_guest:
             return

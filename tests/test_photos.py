@@ -85,6 +85,24 @@ def run():
                             cancelled=lambda: next(stop)) == 5 and [len(s) for s in saved] == [5]
     print("photo looking OK")
 
+    # guest mode: an unknown switch (HA restarting) is "don't know", never "off"
+    real = ph._state
+    try:
+        for state, want in (({"state": "on"}, True), ({"state": "off"}, False), (None, False)):
+            ph._state = lambda e, s=state: s
+            assert ph.guest_switch() is want
+        for state in ({"state": "unavailable"}, {"state": "unknown"}):
+            ph._state = lambda e, s=state: s
+            try:
+                ph.guest_switch()
+                raise AssertionError("an unknown switch must not read as off")
+            except OSError:
+                pass
+            assert ph.guest_on() is False  # publishing still falls back to showing mine
+    finally:
+        ph._state = real
+    print("guest switch OK")
+
 
 if __name__ == "__main__":
     run()
