@@ -670,9 +670,12 @@ section("#desk", () => [SUN, WEATHER, OUTDOOR, T_K, T_B, ADAPT, HOLD, MAXB, DESK
 });
 
 // TV: a remote control plus what's on. Keys go through remote.send_command, apps through play_media.
-const TV_APPS = [["Netflix", "com.netflix.ninja"], ["YouTube", "com.google.android.youtube.tv"], ["Spotify", "com.spotify.tv.android"],
-  ["Prime Video", "com.amazon.amazonvideo.livingroom"], ["Disney+", "com.disney.disneyplus"], ["iPlayer", "uk.co.bbc.iplayer"],
-  ["Apple TV", "com.apple.atve.androidtv.appletv"]];
+// [name, package, launch link]. The TV rejects HA's default market://launch?id=<package> link, so apps open through a
+// link the TV hands to the app; one without a link (not found yet) still sends the package and doesn't open.
+const TV_APPS = [["Netflix", "com.netflix.ninja", "https://www.netflix.com/title"],
+  ["YouTube", "com.google.android.youtube.tv", "https://www.youtube.com"], ["Spotify", "com.spotify.tv.android"],
+  ["Prime Video", "com.amazon.amazonvideo.livingroom", "https://app.primevideo.com"], ["Disney+", "com.disney.disneyplus"],
+  ["iPlayer", "uk.co.bbc.iplayer"], ["Apple TV", "com.apple.atve.androidtv.appletv"]];
 const tvKey = (key) => call("remote", "send_command", { entity_id: TV_REMOTE, command: key });
 section("#tv", () => [TV, TV_AUTO, SYNC, MODE], () => {
   const on = is(TV, "on");
@@ -704,8 +707,8 @@ section("#tv", () => [TV, TV_AUTO, SYNC, MODE], () => {
         <div class="vol-bar" style="--p:${typeof vol === "number" ? Math.round(vol * 100) : 0}%"><i></i><span>${typeof vol === "number" ? `${Math.round(vol * 100)}%` : "Volume"}</span></div>
         <button class="rk" data-act="tv-key" data-v="VOLUME_UP" data-hold aria-label="Volume up" ${dis}>${I.plus}</button></div>
     </div>
-    <div class="apps">${TV_APPS.map(([n, pkg]) => `<button class="app-chip ${app === pkg ? "now" : ""}" style="--brand:${(APPS[pkg] ?? [0, "150,150,190"])[1]}"
-      data-act="tv-app" data-v="${pkg}" data-name="${esc(n)}" ${live ? "" : "disabled"}>${esc(n)}</button>`).join("")}</div>
+    <div class="apps">${TV_APPS.map(([n, pkg, link]) => `<button class="app-chip ${app === pkg ? "now" : ""}" style="--brand:${(APPS[pkg] ?? [0, "150,150,190"])[1]}"
+      data-act="tv-app" data-v="${esc(link ?? pkg)}" data-name="${esc(n)}" ${live ? "" : "disabled"}>${esc(n)}</button>`).join("")}</div>
     <div class="row"><span class="label">Glow with the TV</span>
       <button class="switch" role="switch" aria-checked="${is(TV_AUTO, "on")}" data-act="toggle" data-id="${TV_AUTO}" aria-label="Glow with the TV"></button></div>
     <div class="row"><span class="label">Bias lighting</span><span class="value">${glowing ? "Active" : "—"}</span></div>`;

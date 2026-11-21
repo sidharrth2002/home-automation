@@ -75,6 +75,12 @@ tv-app/deploy                                 # build the TV app and install it 
 Edit the JSON under `homeassistant/` and re-run apply rather than changing things in the HA UI; the repo is the
 source of truth. The Hub is redeployed by apply (content-hashed, so no stale cache).
 
+TV app buttons (`TV_APPS` in app.js): this TV rejects HA's default `market://launch?id=<package>` app link (HA logs
+"Received an error from the device"), so apps open through a link the TV routes to the app. Tested 2026-11-21:
+Netflix `https://www.netflix.com/title`, YouTube `https://www.youtube.com`, Prime `https://app.primevideo.com` work;
+`spotify://`, `https://www.disneyplus.com`, `https://www.bbc.co.uk/iplayer`, `https://tv.apple.com` don't (still to
+find). Testing takes over the TV screen, so ask first.
+
 ## Entities and events worth knowing
 
 - Lights: `light.wiz_rgbw_tunable_624d4e` (TV lamp 1), `light.wiz_rgbw_tunable_4b472c` (TV lamp 2), `light.desk_lamp`,
