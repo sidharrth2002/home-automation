@@ -42,6 +42,8 @@ def services():
     """name -> argv. Presence only runs once it knows which phone to look for."""
     out = {"music_sync": [PY, "-m", "music_sync"], "widget": [PY, "-m", "widget", "--watch"],
            "announce": [PY, "-m", "announce"]}
+    if os.environ.get("CORE_TOKEN"):  # the central state service (core/); the investments service writes to it
+        out = {"core": [PY, "-m", "core", "serve"], **out}
     if os.environ.get("PRESENCE_PHONE_MAC"):
         out["presence"] = [PY, "-m", "presence"]
     from investments.__main__ import any_configured  # Keychain lookup; only run once credentials are stored

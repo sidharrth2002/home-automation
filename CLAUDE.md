@@ -43,6 +43,8 @@ home                  ./home up | down | restart | reload | status | logs <servi
 stack/                supervisor run by ./home: starts, restarts and stops the Mac-side services; publishes sensor.system_health
 music_sync/           audio capture -> beat/tempo analysis -> light show; Spotify now-playing and album palettes
 announce/             speaks `home_say` events with macOS `say`, on the Mac or cast to the TV
+core/                 central state service: SQLite (data/core/core.db) + FastAPI on 127.0.0.1:8790; publishes sensor.investments
+skills/home-state/    Claude Code skill (+ stdlib client) other sessions use to read/write core; bin/install-skill
 investments/          Hargreaves Lansdown client (hl.py, lockout-safe), FT price history (prices.py), Trading 212 (t212.py)
 backlight/            the Bluetooth LED strip behind the cabinet (MELK/ELK-BLEDOM), as light.tv_backlight
 photos/               OneDrive photos via Microsoft Graph: picks a few good ones (faces, people, you) for the Hub
@@ -98,6 +100,22 @@ find). Testing takes over the TV screen, so ask first.
 - Feeds published by services (REST states, gone after an HA restart until republished): `sensor.investments`,
   `sensor.investment_<sedol>`, `sensor.trading212`, `sensor.system_health`, `sensor.photo_frame` (photos: src, bg, label,
   portrait, people; shown in the Hub's Memories card and the screensaver).
+
+## The core state service
+
+- Design and schema: docs/core.md. Keep it, the README diagram and this section current with every change to core.
+- Shared state goes through core, not straight into HA: services write with `core.client` (CORE_TOKEN in .env),
+  core publishes to HA. `sensor.investments` is now built by core from every `portfolio/<source>`; the investments
+  service sends `portfolio/hl` and `portfolio/t212` snapshots and pauses `hl` on a halt.
+- Portfolio writes are snapshots of a source's full state (never edits); manual holdings with units + an ISIN are
+  revalued at read time from `fin_prices` (the investments service records FT prices hourly via
+  `GET /v1/portfolio/priceable` -> `PUT /v1/prices/<isin>`).
+- Schema changes are new entries in `db.MIGRATIONS`, never edits to an applied one. The audit log stores counts, never
+  amounts; logs too. The database and its backups are under data/ (git-ignored) and hold real figures: never commit,
+  print or paste them. Tests use made-up numbers only.
+- Tokens: the admin token is only for this repo's services; anything else gets `python -m core token add <name>
+  <scopes>` (scopes are globs over `doc/<collection>/<key>`, `portfolio/<source>`, `price/<instrument>`).
+- `tests.test_core` covers the API, scopes, snapshots, revaluation, publishing and maintenance.
 
 ## Gotchas
 
