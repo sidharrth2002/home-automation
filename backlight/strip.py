@@ -20,6 +20,11 @@ WRITE = "0000fff3-0000-1000-8000-00805f9b34fb"
 NAME_PREFIX = os.environ.get("BACKLIGHT_NAME", "MELK")
 MAX_HZ = 20
 SCAN_S = 15
+MAX_MISSES = 3  # missed scans in a row before restarting the process (~4 minutes)
+
+
+class StripNotFound(ConnectionError):
+    pass
 
 
 def power(on: bool) -> bytes:
@@ -73,14 +78,22 @@ class Strip:
         self._wake.set()
 
     async def run(self):
-        backoff = 2
+        backoff, misses = 2, 0
         while True:
             try:
                 await self._connect()
-                backoff = 2
+                backoff, misses = 2, 0
                 await self._send_loop()
             except asyncio.CancelledError:
                 raise
+            except StripNotFound as e:
+                # After a drop, macOS can keep a stale link to the strip inside this process, and a connected strip
+                # doesn't advertise, so scans never find it again. A fresh process clears that; the supervisor
+                # restarts us.
+                misses += 1
+                if misses >= MAX_MISSES:
+                    raise SystemExit(f"strip: {e}; {misses} scans missed it, exiting for a fresh Bluetooth stack")
+                log.warning("strip: %s; retrying in %ds", e, backoff)
             except Exception as e:
                 log.warning("strip: %s; retrying in %ds", e or type(e).__name__, backoff)
             self.connected.clear()
@@ -97,7 +110,7 @@ class Strip:
         dev = await BleakScanner.find_device_by_filter(
             lambda d, a: (d.name or a.local_name or "").startswith(NAME_PREFIX), timeout=SCAN_S)
         if not dev:
-            raise ConnectionError(f"no {NAME_PREFIX}* strip in range (is its phone app connected to it?)")
+            raise StripNotFound(f"no {NAME_PREFIX}* strip in range (is its phone app connected to it?)")
         self.client = BleakClient(dev, timeout=20, disconnected_callback=lambda _: self._wake.set())
         await self.client.connect()
         self.sent = None

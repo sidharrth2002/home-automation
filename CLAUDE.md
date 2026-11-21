@@ -124,7 +124,9 @@ source of truth. The Hub is redeployed by apply (content-hashed, so no stale cac
   while the service runs. Music sync gives it its own frame in the show (`Lights.outputs`) over UDP 127.0.0.1:38998;
   live frames win, and after 2 s without one it goes back to the helpers. The template light only gets `brightness`
   in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has its colour row (swatches, hue, white-to-colour)
-  under the orbs, sending hs_color; brightness is the orb's slider.
+  under the orbs, sending hs_color; brightness is the orb's slider. After a drop, macOS can keep a stale link to the
+  strip inside the process (it then stops advertising, so rescans never see it; seen 2026-11-21, 2 h unreachable,
+  doing its own effects): after 3 missed scans the service exits and the supervisor restarts it, which clears it.
 - Guest photos (`input_boolean.guest_photos`, Hub "Guest" button, voice "guest mode"): the frame shows 30 Wikimedia
   Commons featured landscapes (`photos/guest.py`, face-checked, credited, cached in www/photos-guest) instead of mine,
   on the Hub and the TV screensaver. `sync_frame` checks every 20 s and runs before the slow refresh; a refresh while
