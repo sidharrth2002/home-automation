@@ -242,7 +242,9 @@ print(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_us
 open("result.md", "w").write("# Found")
 if "slow" in args[1]:
     time.sleep(30)
-print(json.dumps({"type": "result", "result": "All done: " + " ".join(args[args.index("--allowedTools") + 1:]),
+allowed = args[args.index("--allowedTools") + 1:args.index("--disallowedTools")]
+denied = args[args.index("--disallowedTools") + 1:]
+print(json.dumps({"type": "result", "result": "All done: " + " ".join(allowed) + " | denied: " + " ".join(denied),
                   "is_error": False, "num_turns": 2, "total_cost_usd": 0.01}), flush=True)
 """)
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
@@ -254,7 +256,9 @@ print(json.dumps({"type": "result", "result": "All done: " + " ".join(args[args.
         ctx = worker.Context({"id": 7, "kind": "agent", "input": {"prompt": "find cafes", "dirs": [str(data)]}}, "w")
         res = worker.run_agent(ctx)
         assert res["files"] == ["result.md"] and res["turns"] == 2 and "All done" in res["summary"]
-        assert f"Read(/{data.resolve()}/**)" in res["summary"] and "Bash" not in res["summary"], "tools are scoped"
+        allowed, denied = res["summary"].split(" | denied: ")
+        assert f"Read(/{data.resolve()}/**)" in allowed and "Bash" not in allowed, "tools are scoped"
+        assert "Bash(rclone:*)" in denied and "CloudStorage" in denied, "OneDrive is never touched"
         assert any("WebSearch: quiet cafes" in line for line in ctx._lines)
         os.environ["CORE_TOKEN"] = "secret-for-test"
         assert "CORE_TOKEN" not in worker.agent_env() and "PATH" in worker.agent_env(), "agents don't get secrets"

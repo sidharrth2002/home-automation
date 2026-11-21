@@ -33,6 +33,10 @@ SLOTS = int(os.environ.get("CORE_WORKER_SLOTS", "2"))
 BEAT_S = 20
 POLL_S = 5
 AGENT_TOOLS = ["Read(./**)", "Glob", "Grep", "WebSearch", "WebFetch", "Write(./**)", "Edit(./**)"]
+# Never allowed, whatever a task asks for: OneDrive (the photo library) must not be changed. The sync folders under
+# ~/Library/CloudStorage mirror deletions to the cloud, and the rclone sign-in (read-only scopes) stays unread.
+AGENT_DENY = ["Bash(rclone:*)", "Bash(rm:*)", f"Edit(/{Path.home()}/Library/CloudStorage/**)",
+              f"Write(/{Path.home()}/Library/CloudStorage/**)", f"Read(/{Path.home()}/.config/rclone/**)"]
 AGENT_PROMPT = ("You are running as a background task for the user's home system, with nobody watching. Work in the "
                 "current directory. Put the deliverable in result.md (clear, concise, with sources for anything from "
                 "the web), and end with a short summary of what you did and found. Don't ask questions: make "
@@ -85,7 +89,7 @@ def run_agent(ctx: Context):
         raise ValueError(f"no such folder: {', '.join(missing)}")
     tools = AGENT_TOOLS + [f"Read(/{d}/**)" for d in dirs] + list(inp.get("tools") or [])
     cmd = [claude, "-p", prompt, "--output-format", "stream-json", "--verbose", "--append-system-prompt", AGENT_PROMPT,
-           "--allowedTools", *tools]
+           "--allowedTools", *tools, "--disallowedTools", *AGENT_DENY]
     for d in dirs:
         cmd += ["--add-dir", d]
     if inp.get("model"):

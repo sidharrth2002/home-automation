@@ -102,6 +102,29 @@ def run():
     finally:
         ph._state = real
     print("guest switch OK")
+    read_only()
+
+
+def read_only():
+    """The OneDrive library must never be changed: guard the code paths that could."""
+    import ast
+    from pathlib import Path
+    root = Path(ph.__file__).parent
+    for f in root.glob("*.py"):
+        tree = ast.parse(f.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "Request" and f.name == "graph.py":
+                kws = {k.arg for k in node.keywords}
+                assert not {"method", "data"} & kws and len(node.args) == 1, f"graph.py may only make GET requests ({kws})"
+            if isinstance(node, ast.List) and node.elts and getattr(node.elts[0], "value", None) == "rclone":
+                cmd = [getattr(e, "value", "?") for e in node.elts[1:3]]
+                assert cmd[0] == "about" or cmd == ["config", "dump"] or cmd == ["config", "show"], \
+                    f"{f.name}: rclone {' '.join(map(str, cmd))} isn't on the read-only list"
+        assert "CloudStorage" not in f.read_text(), f"{f.name} mustn't touch the OneDrive sync folder"
+    from core import worker
+    assert {"Bash(rclone:*)", "Bash(rm:*)"} <= set(worker.AGENT_DENY)
+    assert any("CloudStorage" in d and d.startswith("Write(") for d in worker.AGENT_DENY)
+    print("OneDrive read-only guards OK")
 
 
 if __name__ == "__main__":

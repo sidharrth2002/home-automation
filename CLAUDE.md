@@ -199,6 +199,12 @@ find). Testing takes over the TV screen, so ask first.
   for hours on this DNS64/NAT64 network while the router answers fine, so `graph.py` falls back to `dig`. A failed
   set keeps the old one on screen and logs a warning. `sensor.photo_frame` goes through core (live state), which
   re-sends it after an HA restart; `data/photos/published.json` is my set, put back when guest mode ends.
+- OneDrive must never be changed (the user's whole photo library). Layers: the rclone remote's `access_scopes` are
+  read-only (Files.Read, Files.Read.All, Sites.Read.All, offline_access), so Microsoft refuses any write; graph.py
+  only makes GETs and only `rclone about` / `config dump|show` run (tests.test_photos `read_only()` enforces both);
+  nothing references the local sync folders (~/Library/CloudStorage/OneDrive-*), which mirror deletions to the cloud;
+  agent tasks always get `--disallowedTools` AGENT_DENY (rclone, rm, writes under CloudStorage, reading rclone.conf).
+  Never re-authorise rclone with wider scopes, and never point a task with a shell at the sync folder.
 - Photos: OneDrive sign-in is the rclone remote `onedrive` (read-only scopes; `rclone config reconnect onedrive:` if it
   lapses), so no Azure app is needed and it runs on a Pi. Only metadata is listed (Graph delta every 4h; the
   index lives in core's `media` tables, /v1/media/onedrive, not a JSON file). Judging uses ~800px thumbnails: the
