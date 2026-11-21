@@ -49,6 +49,8 @@ if (TV_MODE) {
 }
 const T212 = "sensor.trading212";
 const TASKS = "sensor.core_tasks"; // background tasks: counts and the latest few, from core
+const BONDS = "sensor.premium_bonds"; // NS&I prize checks (daily task) and the holding from portfolio/nsandi
+const LIBRARY = "sensor.photo_library"; // how much of the photo library has been looked at (hourly task)
 
 const APPS = {
   "com.netflix.ninja": ["Netflix", "229,9,20"],
@@ -101,6 +103,7 @@ const I = {
   pulse: svg(`<path d="M3 12h4l2-6 4 12 2-6h6"/>`),
   reactor: svg(`<circle cx="12" cy="12" r="9.2"/><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><path d="M12 2.8v3.2M12 18v3.2M4 7.4l2.8 1.6M17.2 15l2.8 1.6M4 16.6l2.8-1.6M17.2 9l2.8-1.6"/>`),
   piggy: svg(`<path d="M19 11c0-3.3-3.1-6-7-6S5 7.7 5 11c0 1.6.7 3 1.9 4.1V18h3v-1.2c.7.1 1.4.2 2.1.2s1.4-.1 2.1-.2V18h3v-2.9c.6-.5 1.1-1 1.5-1.6H21v-3h-2z"/><circle cx="15.5" cy="10.5" r=".6" fill="currentColor"/><path d="M9 7.5c.8-.9 2-1.2 3.2-1"/>`),
+  trophy: svg(`<path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5v1.5A3 3 0 0 0 8 10.5M16 6h3v1.5a3 3 0 0 1-3 3"/><path d="M12 13v3M9 20h6M10 16h4v4h-4z"/>`),
   chart: svg(`<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/>`),
   eye: svg(`<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`),
   eyeOff: svg(`<path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17.7 17.7 0 0 1-3.2 4.2M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>`),
@@ -564,12 +567,12 @@ section("#invest", () => [INVEST, ...Object.keys(S).filter((id) => id.startsWith
 
 // cash (Trading 212): balance and the interest it pays, hidden until revealed like the investments card
 let cashRange = "3M";
-section("#cash", () => [T212], () => {
+section("#cash", () => [T212, BONDS], () => {
   const e = S[T212];
   const eye = `<button class="eye" data-act="money" aria-pressed="${showMoney}" aria-label="${showMoney ? "Hide" : "Show"} values">${showMoney ? I.eye : I.eyeOff}</button>`;
   const head = (right) => `<div class="card-head"><div class="card-title">${I.piggy} Cash</div>${right}</div>`;
-  if (!e) return head(`<span class="kicker">Not connected</span>`) +
-    `<p class="empty-note">In the Trading 212 app create a <b>read-only</b> API key (Settings → API), then run <b>python -m investments setup-t212</b> and <b>python -m investments t212</b>.</p>`;
+  if (!e) return head(`<span class="kicker">${S[BONDS] ? "" : "Not connected"}</span>${S[BONDS] ? eye : ""}`) +
+    `<p class="empty-note">In the Trading 212 app create a <b>read-only</b> API key (Settings → API), then run <b>python -m investments setup-t212</b> and <b>python -m investments t212</b>.</p>` + bonds();
   const a = e.attributes, it = a.interest ?? {};
   const cash = parseFloat(e.state);
   const paused = a.status === "paused" ? `<p class="invest-paused"><b>Refresh paused</b> · ${esc(a.paused_reason ?? "")}<br>Fix the key, then run <b>python -m investments t212</b> by hand.</p>` : "";
@@ -595,8 +598,31 @@ section("#cash", () => [T212], () => {
         ${stat("This year", it.ytd)}${stat("All time", it.all_time)}
       </div>
       <p class="h-src">${it.est_month != null ? `At today's rate, about <span class="money">${gbp(it.est_month, 2)}</span> a month. ` : ""}Interest is paid daily${updated ? ` · updated ${hm(updated)}` : ""}.</p>
-    </div>`;
+    </div>` + bonds();
 });
+
+// Premium Bonds: the holding (from the finance session's portfolio/nsandi) and what the monthly draws paid
+const monthName = (ym) => ym ? new Date(`${ym}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "";
+function bonds() {
+  const e = S[BONDS];
+  if (!e) return "";
+  const a = e.attributes;
+  const next = a.next_check ? new Date(`${a.next_check}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null;
+  const result = e.state === "won" ? `<span class="delta up">Won in the ${esc(monthName(a.last_draw))} draw</span>`
+    : e.state === "no win" ? `<span class="delta">No prize in ${esc(monthName(a.last_draw))}</span>`
+    : e.state === "error" ? `<span class="delta down">Couldn't check NS&amp;I · trying again tomorrow</span>`
+    : `<span class="delta">Waiting for the first draw check</span>`;
+  const stat = (label, v, n) => `<div class="pos"><span>${label}${n ? ` · ${n}` : ""}</span><b class="money">${v == null ? "—" : gbp(v)}</b></div>`;
+  return `<div class="bonds ${showMoney ? "" : "private"}">
+      <div class="bonds-head"><span class="label">${I.trophy} Premium Bonds</span><b class="money">${a.holding != null ? gbp(a.holding) : "—"}</b></div>
+      <div class="invest-deltas">${result}</div>
+      <div class="positions cash-stats">
+        ${stat("Won this year", a.won_this_year_total ?? 0, a.won_this_year || "")}
+        ${a.unclaimed ? stat("Unclaimed", a.unclaimed_total, a.unclaimed) : ""}
+      </div>
+      <p class="h-src">${a.holding == null ? "Holding not recorded yet (the finance session writes it). " : ""}${next ? `Next check ${next}.` : ""}</p>
+    </div>`;
+}
 
 function renderHolding() {
   const dlg = $("#holding");
@@ -834,7 +860,7 @@ if (AMBIENT) setInterval(() => { quote = QUOTES[Math.floor(Math.random() * QUOTE
 const ago = (ms) => { const m = Math.round(ms / 60000); return !Number.isFinite(m) ? "no refresh yet" : m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 const upFor = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : m < 2880 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.floor(m / 1440)} d`; };
 const ageMs = (iso) => iso ? Date.now() - new Date(iso).getTime() : Infinity;
-section("#health", () => [HEALTH, INVEST, T212, TASKS, SYNC, MODE, HOME, WEATHER, TV, ...LIGHTS.map((l) => l.id), ...calIds()], () => {
+section("#health", () => [HEALTH, INVEST, T212, TASKS, BONDS, PHOTOS, LIBRARY, GUEST, SYNC, MODE, HOME, WEATHER, TV, ...LIGHTS.map((l) => l.id), ...calIds()], () => {
   const h = S[HEALTH];
   const ha = h?.attributes ?? {};
   const hAge = ageMs(ha.updated);
@@ -902,6 +928,7 @@ section("#health", () => [HEALTH, INVEST, T212, TASKS, SYNC, MODE, HOME, WEATHER
     svcTile("tasks", "Task worker", () => +st(TASKS) ? `Running ${st(TASKS)} task${+st(TASKS) > 1 ? "s" : ""}` : "Idle, ready", "Not running"),
     feedTile("Hargreaves Lansdown", INVEST, "investments", 180, 540),
     feedTile("Trading 212", T212, "investments", 90, 300),
+    photosTile(svcTile), bondsTile(),
     cal, weather, bulbs, tvTile,
   ];
   const bad = tiles.filter((t) => t[0] === "bad").length;
@@ -912,6 +939,24 @@ section("#health", () => [HEALTH, INVEST, T212, TASKS, SYNC, MODE, HOME, WEATHER
     <div class="tiles">${tiles.map(([lvl, name, detail]) => `<div class="tile ${lvl}"><i class="tdot"></i><div><b>${name}</b><span>${detail}</span></div></div>`).join("")}</div>
     ${taskList()}`;
 });
+
+// Photos: the set on screen, and how far the hourly task has got through the library
+function photosTile(svcTile) {
+  const lib = S[LIBRARY]?.attributes;
+  const progress = lib ? (lib.remaining ? ` · ${st(LIBRARY)}% of library looked at` : " · whole library looked at") : "";
+  return svcTile("photos", "Photos", () => {
+    const n = +st(PHOTOS) || 0;
+    return `${n ? `${n} ${is(GUEST, "on") ? "guest landscapes" : "on the frame"}` : "No set yet"}${progress}`;
+  }, "Not running");
+}
+function bondsTile() {
+  const e = S[BONDS];
+  if (!e) return ["idle", "Premium Bonds", "Not checked yet (needs PREMIUM_BOND_HOLDER in .env)"];
+  const a = e.attributes;
+  if (e.state === "error") return ["warn", "Premium Bonds", `Check failed · ${esc(String(a.last_error ?? "").slice(0, 90))}`];
+  if (e.state === "waiting") return ["idle", "Premium Bonds", "Waiting for the first draw check"];
+  return ["ok", "Premium Bonds", `${e.state === "won" ? "Prize" : "No prize"} in ${esc(monthName(a.last_draw))}${a.last_checked ? ` · checked ${ago(ageMs(a.last_checked))}` : ""}`];
+}
 
 // Background tasks under the health tiles: what's running, and what finished in the last day.
 function taskList() {
