@@ -112,7 +112,9 @@ find). Testing takes over the TV screen, so ask first.
   service sends `portfolio/hl` and `portfolio/t212` snapshots and pauses `hl` on a halt.
 - Portfolio writes are snapshots of a source's full state (never edits); manual holdings with units + an ISIN are
   revalued at read time from `fin_prices` (the investments service records FT prices hourly via
-  `GET /v1/portfolio/priceable` -> `PUT /v1/prices/<isin>`).
+  `GET /v1/portfolio/priceable` -> `PUT /v1/prices/<isin>`) and publishes each one's history as
+  `sensor.investment_<isin>` (in pence, like HL's) for the Hub's charts. A holding without an ISIN and units (e.g. a
+  purchase still settling) has no history until the finance session adds them.
 - Schema changes are new entries in `db.MIGRATIONS`, never edits to an applied one. The audit log stores counts, never
   amounts; logs too. The database and its backups are under data/ (git-ignored) and hold real figures: never commit,
   print or paste them. Tests use made-up numbers only.
