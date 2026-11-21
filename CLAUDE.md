@@ -132,6 +132,11 @@ find). Testing takes over the TV screen, so ask first.
   `live`, `PUT /v1/live/<entity>`), never POSTed to HA's /api/states: core mirrors them, retries, and re-sends after
   an HA restart. Exceptions: music sync's light frames stay direct UDP (timing); the supervisor posts
   `sensor.system_health` directly (it must work with core down). `core.client.CoreError` is an OSError.
+- Premium Bonds (`investments/premium_bonds.py`, the worker's daily `premium-bonds` task): the holder number is
+  `PREMIUM_BOND_HOLDER` in .env and goes only to NS&I's public "have I won" endpoint: never into logs, core, the
+  sensor, task results or the repo. Never sign in to NS&I or scrape the account. One request per due check (this
+  month's draw 3 days after the first working day; unclaimed every 30 days); failures are recorded, not retried,
+  and the next daily run tries again. The holding itself is the finance session's `portfolio/nsandi`, read only.
 
 ## Gotchas
 
