@@ -32,10 +32,15 @@ HALT = DATA / "HALTED"
 LOGGED_IN_PATHS = {"/my-accounts", "/my-accounts/portfolio_overview"}
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
+MAX_NOT_SENT = 6  # unusable login pages in a row (refreshes are hourly by day) before it halts
 
 
 class Halted(RuntimeError):
     """Logging in is paused until a person checks the credentials and clears it."""
+
+
+class NotSent(RuntimeError):
+    """The login page couldn't be used, before anything was sent: trying later can't count as a failed login."""
 
 
 class LoginFailed(RuntimeError):
@@ -133,6 +138,8 @@ def _num(text):
 
 
 class HL:
+    not_sent = 0  # unusable login pages in a row, before anything was sent
+
     def __init__(self):
         DATA.mkdir(parents=True, exist_ok=True)
         self.s = requests.Session()
@@ -170,9 +177,19 @@ class HL:
         if HALT.exists() and not manual:
             raise Halted(halted_reason())
 
-        # Stage 1: username + date of birth.
-        page = self._get("my-accounts/login-step-one")
-        token = self._token(page)
+        # Stage 1: username + date of birth. Until this is posted nothing has been sent, so a page that won't load
+        # or has no form token (HL down, a maintenance page, the network not up yet after boot) just skips this
+        # round. Only MAX_NOT_SENT in a row halts, since that looks like HL changed the page.
+        try:
+            page = self._get("my-accounts/login-step-one")
+            token = self._token(page, halt=False)
+        except (requests.RequestException, NotSent) as e:
+            HL.not_sent += 1
+            if HL.not_sent >= MAX_NOT_SENT:
+                HL.not_sent = 0
+                _halt(f"{e} ({MAX_NOT_SENT} times in a row); nothing was sent")
+            raise NotSent(f"{e}; nothing was sent, trying again later ({HL.not_sent}/{MAX_NOT_SENT})") from e
+        HL.not_sent = 0
         r = self.s.post(BASE + "my-accounts/login-step-one", timeout=30, data={
             "username": creds.username, "date-of-birth": creds.dob, "hl_vt": token})
         if self._path(r) != "/my-accounts/login-step-two":
@@ -204,13 +221,16 @@ class HL:
         self._save()
 
     @classmethod
-    def _token(cls, r):
+    def _token(cls, r, halt=True):
         soup = BeautifulSoup(r.text, "html.parser")
         tag = soup.find("input", attrs={"name": "hl_vt"})
         if not tag or not tag.get("value"):
             # Say which page came back: a maintenance or error page is temporary, a redesigned form isn't.
             title = soup.title.get_text(" ", strip=True)[:80] if soup.title else "no title"
-            _halt(f"login form has no hl_vt token (got {r.status_code} {cls._path(r)}, \"{title}\"); nothing was sent")
+            reason = f"login form has no hl_vt token (got {getattr(r, 'status_code', '?')} {cls._path(r)}, \"{title}\")"
+            if not halt:
+                raise NotSent(reason)
+            _halt(f"{reason}; nothing more was sent")
         return tag["value"]
 
     @staticmethod

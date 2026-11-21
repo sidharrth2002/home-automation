@@ -23,7 +23,7 @@ from pathlib import Path
 
 import keyring
 
-from .hl import DATA, HL, Credentials, Halted, halted_reason, save_json, _halt
+from .hl import DATA, HL, Credentials, Halted, NotSent, halted_reason, save_json, _halt
 from .prices import Prices, compact
 from . import t212 as t212mod
 
@@ -228,7 +228,7 @@ def refresh(hl: HL, *, manual=False):
         creds = credentials()
         try:
             hl.login(creds, manual=manual)
-        except Halted:
+        except (Halted, NotSent):  # NotSent: the login page was unusable and nothing went to HL; try next round
             raise
         except Exception as e:  # e.g. the connection dropped mid-login: it may have counted, so don't go again
             _halt(f"login interrupted ({type(e).__name__}: {e}); not retrying automatically")
@@ -271,6 +271,8 @@ def watch():
                 except Halted as e:
                     log.error("Hargreaves Lansdown halted: %s", e)
                     due["hl"] = now + 60
+                except NotSent as e:
+                    log.warning("Hargreaves Lansdown login skipped: %s", e)
                 except Exception as e:  # network or parsing trouble: not a login attempt, just try later
                     log.warning("refresh failed: %s", e)
         if t212_configured() and now >= due["t212"]:

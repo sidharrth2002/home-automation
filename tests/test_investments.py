@@ -20,13 +20,17 @@ class Resp:
 
 
 class FakeSession:
-    def __init__(self, stage1_to="my-accounts/login-step-two", stage2_page=None, stage2_to="my-accounts"):
+    def __init__(self, stage1_to="my-accounts/login-step-two", stage2_page=None, stage2_to="my-accounts",
+                 login_page=STAGE1):
         self.posts = []
         self.stage1_to, self.stage2_page, self.stage2_to = stage1_to, stage2_page or stage2(), stage2_to
+        self.login_page = login_page  # None: the page doesn't load at all
         self.cookies = mock.MagicMock()
         self.headers = {}
     def get(self, url, **kw):
-        return Resp("my-accounts/login-step-one", STAGE1)
+        if self.login_page is None:
+            raise hl.requests.ConnectionError("network is down")
+        return Resp("my-accounts/login-step-one", self.login_page)
     def post(self, url, data, **kw):
         self.posts.append(data)
         if url.endswith("login-step-one"):
@@ -104,6 +108,22 @@ def run():
         # a manual login is allowed to clear the halt
         s = FakeSession(); client(s, tmp).login(CREDS, manual=True)
         assert not hl.HALT.exists()
+
+        # an unusable login page (maintenance page, network not up after boot) sends nothing and doesn't halt...
+        for page in ("<title>Down for maintenance</title>", None):
+            s = FakeSession(login_page=page)
+            expect(hl.NotSent, lambda: client(s, tmp).login(CREDS))
+            assert s.posts == [] and not hl.HALT.exists()
+        # ...a good page resets the count...
+        client(FakeSession(), tmp).login(CREDS)
+        assert hl.HL.not_sent == 0
+        # ...but MAX_NOT_SENT in a row halts (HL probably changed the page), still without sending anything
+        s = FakeSession(login_page="<p>new login page</p>")
+        for _ in range(hl.MAX_NOT_SENT - 1):
+            expect(hl.NotSent, lambda: client(s, tmp).login(CREDS))
+        expect(hl.Halted, lambda: client(s, tmp).login(CREDS))
+        assert s.posts == [] and hl.HALT.exists()
+        hl.HALT.unlink()
     print("investments login safety OK")
 
 
