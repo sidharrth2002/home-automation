@@ -187,7 +187,8 @@ find). Testing takes over the TV screen, so ask first.
   Commons featured landscapes (`photos/guest.py`, face-checked, credited, cached in www/photos-guest) instead of mine,
   on the Hub and the TV screensaver. `sync_frame` runs every 2 s on its own thread (`keep_in_sync`, own Faces), so a
   click shows within seconds even mid-refresh; FRAME_LOCK keeps it and `publish` from posting at once. A refresh while
-  it's on saves my new set but doesn't post it. The sensor has a `guest` attribute, and the Hub's slideshow restarts
+  it's on saves my new set but doesn't post it. `sync_frame` reads the switch with `guest_switch()`, which raises while
+  it's unknown (HA unreachable or restarting): it skips that tick rather than swap the frame on a guess. The sensor has a `guest` attribute, and the Hub's slideshow restarts
   when the set changes (guest flag + first src) instead of waiting for its next tick.
 - Photos and DNS: originals download from my.microsoftpersonalcontent.com, which macOS's resolver sometimes refuses
   for hours on this DNS64/NAT64 network while the router answers fine, so `graph.py` falls back to `dig`. A failed
