@@ -167,7 +167,9 @@ def check(today: date | None = None, ask=ask, notify=notify) -> dict:
     """The daily task. Asks NS&I only when a result is due; never raises for NS&I trouble (recorded instead), so
     the task queue doesn't retry against NS&I."""
     holder = os.environ.get(ENV, "").strip()
-    if not holder:
+    if not holder:  # still show the card (and the holding, if the finance session wrote it) with what's missing
+        core.report(SENSOR, "not set up", {"friendly_name": "Premium Bonds", "icon": "mdi:trophy-outline",
+                                           "holding": holding(), "missing": ENV})
         raise NotConfigured(f"set {ENV} in .env to your Premium Bonds holder number (NS&I app or letters)")
     today = today or london_today()
     draw = draw_date(today.year, today.month)

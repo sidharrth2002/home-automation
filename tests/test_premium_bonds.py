@@ -90,6 +90,8 @@ def run():
         raise AssertionError("needs the holder number")
     except pb.NotConfigured:
         pass
+    state, attrs = fake.live[pb.SENSOR]
+    assert state == "not set up" and attrs["holding"] == 1000.0, "the Hub still shows the card and the holding"
     os.environ[pb.ENV] = HOLDER
     try:
         out = pb.check(date(2026, 11, 3), ask=ask, notify=lambda t, m: notes.append(m))  # before results are due
