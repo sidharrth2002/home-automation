@@ -2,7 +2,7 @@
 """Tiny client for the home core API (standard library only).
 
     home_state.py me | schema
-    home_state.py get <path>                       e.g. portfolio, portfolio/hsbc, state/finance/plan, audit?entity=portfolio
+    home_state.py get <path>                       e.g. portfolio, portfolio/hsbc, state/finance/plan, 'audit?entity=portfolio'
     home_state.py put <path> <file.json | ->       replace (a portfolio source: a new snapshot)
     home_state.py patch <path> '<json>'            merge fields
     home_state.py delete <path>

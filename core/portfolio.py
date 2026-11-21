@@ -21,6 +21,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+INVESTMENT_TYPES = {"isa", "gia", "sipp", "pension", "lisa", "other"}
 AccountType = Literal["isa", "gia", "sipp", "pension", "lisa", "savings", "premium_bonds", "current", "cash", "other"]
 
 
@@ -99,8 +100,8 @@ def merge(sources: list[dict], history: dict[str, float], today: str) -> tuple[f
             accounts.append({"name": acc["name"] if len(sources) == 1 else f"{doc['name']} {acc['name']}",
                              "total": acc.get("total"), "stock": acc.get("stock"), "cash": acc.get("cash"),
                              "type": acc.get("type"), "source": src, "in_total": counted})
-            if counted:
-                cash += acc.get("cash") or 0
+            if counted and acc.get("type", "other") in INVESTMENT_TYPES:
+                cash += acc.get("cash") or 0  # uninvested cash; savings and cash accounts are rows of their own
             for h in acc.get("holdings", []):
                 holdings.append({**{k: h.get(k) for k in ("name", "value", "cost", "gain", "gain_pct", "units",
                                                           "price_p", "unit_type", "day_change", "day_change_pct",

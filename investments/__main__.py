@@ -185,11 +185,16 @@ def publish_t212_paused(reason):
     post(state, {**attrs, "status": "paused", "paused_reason": reason}, entity=T212_SENSOR)
 
 
-def publish_paused(reason):
+def publish_paused(reason) -> bool:
     try:
         core.call("PATCH", "/v1/portfolio/hl", {"status": "paused", "paused_reason": reason})
+        return True
     except core.CoreError as e:
-        log.warning("couldn't mark HL paused in core: %s", e)  # e.g. no HL snapshot yet
+        log.warning("couldn't mark HL paused in core: %s", e)
+        return e.status == 404  # no HL snapshot yet: nothing to mark
+    except OSError as e:  # core not up yet: try again next round
+        log.warning("couldn't reach core to mark HL paused: %s", e)
+        return False
 
 
 def revalue(prices: Prices):
@@ -267,8 +272,8 @@ def watch():
                 due["hl"] = now + 60
                 if paused.get("hl") != reason:
                     log.warning("Hargreaves Lansdown paused: %s", reason)
-                    publish_paused(reason)
-                    paused["hl"] = reason
+                    if publish_paused(reason):
+                        paused["hl"] = reason
             else:
                 paused.pop("hl", None)
                 due["hl"] = now + next_delay()

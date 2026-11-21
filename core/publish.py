@@ -65,12 +65,13 @@ class Publisher:
                 self.dirty |= set(PUBLISHERS)
                 last_full = time.monotonic()
             for name in sorted(self.dirty):
+                self.dirty.discard(name)  # before reading the state: a write during the publish marks it again
                 try:
                     PUBLISHERS[name](self.db, self.post)
-                    self.dirty.discard(name)
                     self.last_ok[name] = time.strftime("%Y-%m-%dT%H:%M:%S")
                     backoff = 2
-                except Exception as e:  # Home Assistant down or restarting: stay dirty, try again
+                except Exception as e:  # Home Assistant down or restarting: dirty again, try again
+                    self.dirty.add(name)
                     log.warning("publishing %s failed (%s); retrying in %ds", name, e, backoff)
                     threading.Timer(backoff, self.wake.set).start()
                     backoff = min(backoff * 2, 60)

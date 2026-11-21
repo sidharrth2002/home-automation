@@ -77,7 +77,7 @@ def test_api(tmp: Path):
     s = p["summary"]
     # HL 10+600+300 = 910; bank GIA 50+200+100 = 350, saver 400; current account left out
     assert p["total"] == 1660.0, p["total"]
-    assert s["cash"] == 460.0 and s["day_change"] == 5.0
+    assert s["cash"] == 60.0 and s["day_change"] == 5.0  # uninvested cash only; the saver is its own row
     assert s["invested_cost"] == 1010.0 and s["gain"] == 90.0, (s["invested_cost"], s["gain"])
     assert {a["name"] for a in s["accounts"]} >= {"HL ISA", "Bank GIA", "Bank Saver", "Bank Current"}
     assert next(a for a in s["accounts"] if a["name"] == "Bank Current")["in_total"] is False

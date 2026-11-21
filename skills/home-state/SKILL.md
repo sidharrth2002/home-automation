@@ -17,7 +17,7 @@ python3 ~/.claude/skills/home-state/home_state.py get portfolio/hsbc
 python3 ~/.claude/skills/home-state/home_state.py put portfolio/hsbc file.json   # or - for stdin
 python3 ~/.claude/skills/home-state/home_state.py get state/finance/plan
 python3 ~/.claude/skills/home-state/home_state.py patch state/finance/plan '{"next_review": "2027-01-17"}'
-python3 ~/.claude/skills/home-state/home_state.py get audit?entity=portfolio
+python3 ~/.claude/skills/home-state/home_state.py get 'audit?entity=portfolio'   # quote paths with ? (zsh)
 python3 ~/.claude/skills/home-state/home_state.py schema             # the full OpenAPI description
 ```
 
@@ -59,4 +59,4 @@ merges top-level fields (null removes one); each write is a new version (`state/
 ## Before writing
 
 Show the user what you're about to change (old vs new figures), then write, then confirm with a `get`. Every write
-is recorded with this token's name in the audit log (`get audit`).
+is recorded with this token's name in the audit log (`get 'audit?entity=portfolio'`).
