@@ -158,7 +158,7 @@ find). Testing takes over the TV screen, so ask first.
   connection and mirrors the helpers; the controller takes one connection at a time, so its phone app can't connect
   while the service runs. Music sync gives it its own frame in the show (`Lights.outputs`) over UDP 127.0.0.1:38998;
   live frames win, and after 2 s without one it goes back to the helpers. The template light only gets `brightness`
-  in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has its colour row (swatches, hue, white-to-colour)
+  in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has a calm colour row (six muted presets; hue and white-to-colour sliders under "Custom")
   under the orbs, sending hs_color; brightness is the orb's slider. After a drop, macOS can keep a stale link to the
   strip inside the process (it then stops advertising, so rescans never see it; seen 2026-11-21, 2 h unreachable,
   doing its own effects): after 3 missed scans the service exits and the supervisor restarts it, which clears it.
@@ -183,6 +183,9 @@ find). Testing takes over the TV screen, so ask first.
   camera, focal length < 3.5mm, one face) and single-face close-ups score 0, and so does anything portrait (the user wants landscape only). Shown copies are re-encoded without
   metadata under random names in `homeassistant/config/www/photos/`. Never commit or screenshot personal photos into
   the repo; for README images use HUB_REDACT or hide `#photos`.
+- Hub music card: only shown while there's music (Spotify playing, or sync on in a non-TV mode); otherwise `#music` is
+  hidden and `html.no-music` gives the room and scenes the full row (each grid template has a no-music twin). Scene
+  tiles never wrap: names ellipsise and narrow tiles drop the subtitle (a container query).
 - The screensaver shows a random quote (a curated list in app.js, `QUOTES`; keep attributions accurate), changed
   every ten minutes.
 - Hub sections rebuild their HTML whenever an entity they depend on changes. Don't list fast-changing entities (e.g.

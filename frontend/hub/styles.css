@@ -79,6 +79,17 @@ body.dim .blob { opacity: .16; }
 /* Room + scenes share one column beside the music card; the room grows so nothing leaves a gap. */
 .stack { grid-area: stack; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .stack .room { flex: 1; }
+/* No music playing: the music card goes and the room and scenes take the whole row. */
+.music[hidden] { display: none; }
+.no-music .hub { grid-template-areas:
+    "top top top top top top top top top top top top"
+    "stack stack stack stack stack stack stack stack stack stack stack stack"
+    "calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar calendar"
+    "photos photos photos photos photos photos photos photos photos photos photos photos"
+    "invest invest invest invest invest invest invest invest invest cash cash cash"
+    "desk desk desk desk desk desk desk tv tv tv tv tv"
+    "health health health health health health health tv tv tv tv tv"
+    "foot foot foot foot foot foot foot foot foot foot foot foot"; }
 .top { grid-area: top; } .room { grid-area: room; } .scenes { grid-area: scenes; }
 .music { grid-area: music; } .desk { grid-area: desk; } .tv { grid-area: tv; }
 .health-card { grid-area: health; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .photos-card { grid-area: photos; } .invest-card { grid-area: invest; } .cash-card { grid-area: cash; }
@@ -87,10 +98,14 @@ body.dim .blob { opacity: .16; }
   .hub { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas:
     "top top" "room room" "scenes scenes" "calendar calendar" "photos photos" "invest invest" "cash cash" "music desk" "tv health" "foot foot"; }
   .stack { display: contents; }
+  .no-music .hub { grid-template-areas:
+    "top top" "room room" "scenes scenes" "calendar calendar" "photos photos" "invest invest" "cash cash" "desk desk" "tv health" "foot foot"; }
 }
 @media (max-width: 720px) {
   .hub { grid-template-columns: minmax(0, 1fr); grid-template-areas:
     "top" "room" "scenes" "music" "calendar" "photos" "invest" "cash" "desk" "tv" "health" "foot"; }
+  .no-music .hub { grid-template-areas:
+    "top" "room" "scenes" "calendar" "photos" "invest" "cash" "desk" "tv" "health" "foot"; }
   .chips { justify-content: flex-end; }
   .chips .chip:nth-child(3) { display: none; }
 }
@@ -197,18 +212,25 @@ h1 em { font-style: italic; color: rgb(var(--a1)); transition: color 2s var(--ea
 /* the cabinet strip's colour: swatches, a hue rainbow and a white-to-colour slider */
 .strip-ctl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: center; margin-top: 14px;
   padding-top: 14px; border-top: 1px solid rgba(255,255,255,.07); }
-.strip-ctl .slider { grid-column: 2; width: 100%; }
-.strip-swatches { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
-.swatch { width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; background: hsl(var(--h) var(--s) 58%);
-  box-shadow: 0 0 0 2px rgba(255,255,255,.08), 0 0 14px hsl(var(--h) var(--s) 50% / .35); transition: transform .2s var(--ease); }
-.swatch:hover { transform: scale(1.12); }
-.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff, 0 0 18px hsl(var(--h) var(--s) 55% / .7); }
-.slider.hue { --track: linear-gradient(90deg, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00); }
-.slider.sat { --track: linear-gradient(90deg, #fff, hsl(var(--h, 30) 100% 50%)); }
+.strip-ctl .slider { width: 100%; }
+.strip-swatches { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; }
+.swatch { width: 18px; height: 18px; border-radius: 50%; border: 0; cursor: pointer; background: hsl(var(--h) var(--s) 62% / .85);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); transition: transform .2s var(--ease), box-shadow .2s; }
+.swatch:hover { transform: scale(1.1); }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg, #111), 0 0 0 3.5px rgba(255,255,255,.7); }
+.strip-more { grid-column: 1 / -1; }
+.strip-more summary { cursor: pointer; color: var(--ink-2); font-size: 12px; list-style: none; width: max-content; }
+.strip-more summary::-webkit-details-marker { display: none; }
+.strip-more summary::before { content: "+ "; }
+.strip-more[open] summary::before { content: "− "; }
+.strip-more[open] { display: grid; gap: 10px; }
+.slider.hue { --track: linear-gradient(90deg, hsl(0 45% 60%), hsl(60 45% 60%), hsl(120 45% 60%), hsl(180 45% 60%),
+  hsl(240 45% 60%), hsl(300 45% 60%), hsl(360 45% 60%)); }
+.slider.sat { --track: linear-gradient(90deg, rgba(255,255,255,.75), hsl(var(--h, 30) 55% 58%)); }
 .slider.hue::-webkit-slider-runnable-track, .slider.sat::-webkit-slider-runnable-track { background: var(--track); }
 .slider.hue::-moz-range-track, .slider.sat::-moz-range-track { background: var(--track); }
 .slider.hue::-moz-range-progress, .slider.sat::-moz-range-progress { background: transparent; }
-@media (max-width: 720px) { .strip-ctl { grid-template-columns: 1fr; } .strip-ctl .slider { grid-column: 1; } }
+@media (max-width: 720px) { .strip-ctl { grid-template-columns: 1fr; } }
 
 .switch {
   position: relative; width: 52px; height: 30px; border-radius: 99px; flex: none;
@@ -259,8 +281,13 @@ h1 em { font-style: italic; color: rgb(var(--a1)); transition: color 2s var(--ea
 @keyframes arc-burst { to { transform: scale(70); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .arc-burst { display: none; } .scene.hero svg { animation: none; } }
 .scene svg { width: 26px; height: 26px; }
-.scene b { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
-.scene small { display: block; color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+.scene > div { min-width: 0; width: 100%; }
+.scene b, .scene small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scene b { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.scene small { color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+/* Narrow tiles keep just the name: a clipped subtitle reads worse than none. */
+.scene { container-type: inline-size; }
+@container (max-width: 130px) { .scene small { display: none; } }
 
 /* ── music ─────────────────────────────────────────────────────── */
 .music { display: flex; flex-direction: column; gap: 18px; }

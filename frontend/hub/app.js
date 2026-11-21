@@ -10,8 +10,10 @@ const LIGHTS = [
 ];
 const DESK = "light.desk_lamp";
 const STRIP = "light.tv_backlight"; // the cabinet LED strip: one colour, so the Room card gets colour controls for it
-const STRIP_COLOURS = [["Warm", 30, 55], ["Amber", 28, 90], ["Red", 0, 100], ["Pink", 330, 70],
-  ["Purple", 275, 85], ["Blue", 220, 100], ["Teal", 175, 90], ["Green", 120, 90]];
+// A few calm presets; anything else is under "Custom" so the card stays quiet.
+const STRIP_COLOURS = [["Candle", 30, 55], ["Amber", 28, 85], ["Rose", 345, 45], ["Lavender", 265, 40],
+  ["Ocean", 205, 55], ["Sage", 140, 30]];
+let stripCustom = false;
 const SYNC = "input_boolean.music_sync";
 const MODE = "input_select.music_sync_mode";
 const COLOURS = "input_select.music_sync_colours";
@@ -217,11 +219,13 @@ section("#room", () => [...LIGHTS.map((l) => l.id), SYNC, MODE], () => {
   const near = (a, b) => Math.abs(((a - b + 540) % 360) - 180) < 4;
   const strip = !S[STRIP] ? "" : `
     <div class="strip-ctl">
-      <span class="label">Cabinet colour</span>
+      <span class="label">Cabinet</span>
       <div class="strip-swatches">${STRIP_COLOURS.map(([n, sh, ss]) => `<button class="swatch" data-act="strip-hs" data-v="${sh},${ss}"
         aria-label="${n}" title="${n}" aria-pressed="${is(STRIP, "on") && near(h, sh) && Math.abs(s - ss) < 6}" style="--h:${sh};--s:${ss}%"></button>`).join("")}</div>
-      <input class="slider hue" type="range" min="0" max="359" value="${Math.round(h)}" data-act="strip-hue" aria-label="Cabinet hue">
-      <input class="slider sat" type="range" min="0" max="100" value="${Math.round(s)}" data-act="strip-sat" aria-label="Cabinet white to colour" style="--h:${Math.round(h)}">
+      <details class="strip-more" ${stripCustom ? "open" : ""}><summary>Custom</summary>
+        <input class="slider hue" type="range" min="0" max="359" value="${Math.round(h)}" data-act="strip-hue" aria-label="Cabinet hue">
+        <input class="slider sat" type="range" min="0" max="100" value="${Math.round(s)}" data-act="strip-sat" aria-label="Cabinet white to colour" style="--h:${Math.round(h)}">
+      </details>
     </div>`;
   return `
     <div class="card-head"><div class="card-title">${I.bulb} Room</div>
@@ -260,6 +264,11 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
   const art = at(NOW, "entity_picture");
   const palette = at(NOW, "palette") ?? [];
   const modes = at(MODE, "options") ?? ["auto", "calm", "party", "tv", "classic"];
+  // Only there while there's music: Spotify playing, or a show running off the room's sound. Scenes start it.
+  const shown = playing || (sync && mode !== "tv");
+  $("#music").hidden = !shown;
+  document.documentElement.classList.toggle("no-music", !shown);
+  if (!shown) return "";
   const colours = at(COLOURS, "options") ?? ["Album art", "Music key"];
   const nothing = !title || title === "Nothing playing";
   const sens = num(SENS, 1.35);
@@ -1014,6 +1023,7 @@ document.addEventListener("click", (ev) => {
 });
 document.addEventListener("toggle", (ev) => {
   if (ev.target.matches?.("details.tune")) tuneOpen = ev.target.open;
+  if (ev.target.matches?.("details.strip-more")) stripCustom = ev.target.open;
 }, true);
 document.addEventListener("input", (ev) => {
   const el = ev.target;
