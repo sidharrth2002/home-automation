@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-label="home-automation: three lamps glowing in shifting colours">
+  <style>
+    .drift-a { animation: drift-a 18s ease-in-out infinite alternate; }
+    .drift-b { animation: drift-b 22s ease-in-out infinite alternate; }
+    .hue { animation: hue 24s linear infinite; }
+    .orb { transform-box: fill-box; transform-origin: center; animation: breathe 4.8s ease-in-out infinite; }
+    .orb.two { animation-delay: -1.6s; }
+    .orb.three { animation-delay: -3.2s; }
+    .halo { transform-box: fill-box; transform-origin: center; animation: halo 4.8s ease-in-out infinite; }
+    .halo.two { animation-delay: -1.6s; }
+    .halo.three { animation-delay: -3.2s; }
+    @keyframes drift-a { from { transform: translate(0, 0); } to { transform: translate(120px, 30px); } }
+    @keyframes drift-b { from { transform: translate(0, 0); } to { transform: translate(-140px, -20px); } }
+    @keyframes hue { to { filter: hue-rotate(360deg); } }
+    @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+    @keyframes halo { 0%, 100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 0.9; transform: scale(1.12); } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+  <defs>
+    <clipPath id="card"><rect width="1280" height="440" rx="28"/></clipPath>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="60"/></filter>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="22"/></filter>
+    <radialGradient id="o1" cx="0.34" cy="0.28" r="0.75"><stop offset="0" stop-color="#ffd0dc"/><stop offset="0.35" stop-color="#ff5e7e"/><stop offset="1" stop-color="#7a1838"/></radialGradient>
+    <radialGradient id="o2" cx="0.34" cy="0.28" r="0.75"><stop offset="0" stop-color="#ffe6bf"/><stop offset="0.35" stop-color="#ffa44d"/><stop offset="1" stop-color="#7a3b0c"/></radialGradient>
+    <radialGradient id="o3" cx="0.34" cy="0.28" r="0.75"><stop offset="0" stop-color="#dcd6ff"/><stop offset="0.35" stop-color="#7b6cff"/><stop offset="1" stop-color="#261a78"/></radialGradient>
+    <radialGradient id="shine" cx="0.32" cy="0.24" r="0.32"><stop offset="0" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff8fa8"/><stop offset="0.5" stop-color="#ffb46a"/><stop offset="1" stop-color="#a99cff"/></linearGradient>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1280" height="440" fill="#07070b"/>
+    <g class="hue" opacity="0.55">
+      <circle class="drift-a" cx="300" cy="120" r="240" fill="#ff4f8b" filter="url(#soft)"/>
+      <circle class="drift-b" cx="1050" cy="360" r="260" fill="#5b4bff" filter="url(#soft)"/>
+      <circle class="drift-a" cx="760" cy="40" r="180" fill="#ff9a3d" filter="url(#soft)" opacity="0.7"/>
+    </g>
+
+    <!-- the three lamps -->
+    <g class="hue" style="animation-duration: 40s">
+      <circle class="halo" cx="884" cy="214" r="74" fill="#ff5e7e" filter="url(#glow)"/>
+      <circle class="halo two" cx="1026" cy="214" r="74" fill="#ffa44d" filter="url(#glow)"/>
+      <circle class="halo three" cx="1168" cy="214" r="74" fill="#7b6cff" filter="url(#glow)"/>
+      <g class="orb"><circle cx="884" cy="214" r="56" fill="url(#o1)"/><circle cx="884" cy="214" r="56" fill="url(#shine)"/></g>
+      <g class="orb two"><circle cx="1026" cy="214" r="56" fill="url(#o2)"/><circle cx="1026" cy="214" r="56" fill="url(#shine)"/></g>
+      <g class="orb three"><circle cx="1168" cy="214" r="56" fill="url(#o3)"/><circle cx="1168" cy="214" r="56" fill="url(#shine)"/></g>
+    </g>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" letter-spacing="2.4" fill="#f4f1ea" fill-opacity="0.45" text-anchor="middle">
+      <text x="884" y="310">TV · 1</text><text x="1026" y="310">STRIP</text><text x="1168" y="310">TV · 2</text>
+    </g>
+
+    <!-- words -->
+    <text x="72" y="120" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" letter-spacing="4.5" fill="#f4f1ea" fill-opacity="0.5">A ROOM IN LONDON, RUN BY CODE</text>
+    <text x="68" y="222" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif" font-size="104" fill="#f4f1ea" letter-spacing="-3">home</text>
+    <text x="70" y="314" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif" font-size="88" font-style="italic" fill="url(#word)" letter-spacing="-2">automation</text>
+    <text x="72" y="372" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" fill="#f4f1ea" fill-opacity="0.62">Lights on the beat, a lamp that follows the sky, and one Hub for all of it.</text>
+  </g>
+  <rect x="0.5" y="0.5" width="1279" height="439" rx="27.5" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
+</svg>
