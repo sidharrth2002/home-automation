@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <!-- The demo's album cover: made for this repo, free to use. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1140"/>
+      <stop offset="0.55" stop-color="#7b3a8f"/>
+      <stop offset="1" stop-color="#ff7a59"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd38a"/>
+      <stop offset="0.6" stop-color="#ff8a5c"/>
+      <stop offset="1" stop-color="#ff5e7e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fd0c9"/>
+      <stop offset="1" stop-color="#140c33"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="600" fill="url(#sky)"/>
+  <circle cx="300" cy="330" r="190" fill="url(#sun)"/>
+  <circle cx="300" cy="330" r="96" fill="#ffc27a"/>
+  <rect y="360" width="600" height="240" fill="url(#sea)"/>
+  <g fill="#ffd9a0" opacity="0.75">
+    <rect x="236" y="384" width="128" height="6" rx="3"/>
+    <rect x="252" y="408" width="96" height="5" rx="2.5"/>
+    <rect x="268" y="430" width="64" height="4" rx="2"/>
+    <rect x="282" y="450" width="36" height="3" rx="1.5"/>
+  </g>
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2">
+    <path d="M0 500 Q150 470 300 500 T600 500"/>
+    <path d="M0 540 Q150 515 300 540 T600 540"/>
+  </g>
+  <text x="40" y="76" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="8" fill="#ffffff" fill-opacity="0.9">NEON TIDE</text>
+  <text x="40" y="110" font-family="Helvetica, Arial, sans-serif" font-size="16" letter-spacing="5" fill="#ffffff" fill-opacity="0.6">THE MIDNIGHT ARCS</text>
+</svg>

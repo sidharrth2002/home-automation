@@ -1,87 +1,108 @@
-<p align="center"><img src="docs/icon.png" width="96" alt=""></p>
-
-<h1 align="center">home-automation</h1>
+<p align="center"><img src="docs/banner.svg" width="100%" alt="home-automation: three lamps glowing in shifting colours"></p>
 
 <p align="center">
-The setup that runs my room in London: three WiZ bulbs, a TCL Google TV and a Mac, glued together with Home
-Assistant, a handful of Python services and a dashboard I built for it.
+  <b>The setup that runs my room in London.</b><br>
+  Three WiZ bulbs, an LED strip, a TCL Google TV and a Mac, tied together with Home Assistant,<br>
+  a handful of Python services, a central state API, and a dashboard built from scratch.
 </p>
 
 <p align="center">
-<img src="https://img.shields.io/badge/home%20assistant-docker-18BCF2?logo=homeassistant&logoColor=white" alt="">
-<img src="https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white" alt="">
-<img src="https://img.shields.io/badge/android%20tv-app-3DDC84?logo=android&logoColor=white" alt="">
-<img src="https://img.shields.io/badge/macOS-14.2%2B-111?logo=apple&logoColor=white" alt="">
+  <img src="https://img.shields.io/badge/Home_Assistant-Docker-18BCF2?style=flat-square&labelColor=15151c&logo=homeassistant&logoColor=white" alt="Home Assistant">
+  <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&labelColor=15151c&logo=python&logoColor=white" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/FastAPI-SQLite-009688?style=flat-square&labelColor=15151c&logo=fastapi&logoColor=white" alt="FastAPI and SQLite">
+  <img src="https://img.shields.io/badge/OpenTelemetry-Grafana-F46800?style=flat-square&labelColor=15151c&logo=opentelemetry&logoColor=white" alt="OpenTelemetry and Grafana">
+  <img src="https://img.shields.io/badge/Claude-MCP_+_skills-D97757?style=flat-square&labelColor=15151c&logo=claude&logoColor=white" alt="Claude">
+  <img src="https://img.shields.io/badge/Android_TV-app-3DDC84?style=flat-square&labelColor=15151c&logo=android&logoColor=white" alt="Android TV">
 </p>
 
-<p align="center"><img src="docs/hero.jpg" width="900" alt="The Hub's screensaver on the TV, and the Hub on a phone"></p>
+<p align="center">
+  <a href="#an-evening-with-it">Tour</a> &nbsp;·&nbsp;
+  <a href="#the-hub">The Hub</a> &nbsp;·&nbsp;
+  <a href="#everything-it-does">Features</a> &nbsp;·&nbsp;
+  <a href="#how-it-fits-together">Architecture</a> &nbsp;·&nbsp;
+  <a href="#running-it">Run it</a> &nbsp;·&nbsp;
+  <a href="#deep-dives">Deep dives</a>
+</p>
+
+<br>
+
+<p align="center"><img src="docs/hero.jpg" width="100%" alt="The TV's screensaver, a photo frame with a clock and what's playing, next to the Hub on a phone"></p>
+<p align="center"><sub>The TV's screensaver and the Hub on a phone. Every picture here is the Hub's demo mode: made-up data, nothing of mine.</sub></p>
+
+<br>
 
 ## An evening with it
 
-- I get in and tap **Welcome home**. The lamps by the TV come up in blue, settle to warm white, and the TV wakes
-  up and says "Welcome home, Sid."
-- I put Spotify on and the two TV lamps follow the beat, in colours taken from the album cover.
-- I switch to Netflix and they drop to a dim warm glow that barely moves, so I stop noticing them.
-- The desk lamp has been following the sky all day. By half ten it's down to candle colour.
-- If I leave the TV alone for a minute it turns into a clock showing what's playing and which lamps are on.
+<table>
+  <tr><td align="right" valign="top" nowrap><b>18:40</b></td><td>I get in and tap <b>Welcome home</b>. The lamps by the TV come up in blue, settle to warm white, and the TV wakes up and says <i>"Welcome home, Sid."</i></td></tr>
+  <tr><td align="right" valign="top" nowrap><b>19:15</b></td><td>I put Spotify on. The two TV lamps and the strip behind the cabinet land on the beat, in colours taken from the album cover.</td></tr>
+  <tr><td align="right" valign="top" nowrap><b>20:30</b></td><td>I switch to Netflix. They drop to a dim warm glow that barely moves, so I stop noticing them.</td></tr>
+  <tr><td align="right" valign="top" nowrap><b>22:30</b></td><td>The desk lamp has been following the sky all day. By now it's down to candle colour.</td></tr>
+  <tr><td align="right" valign="top" nowrap><b>any time</b></td><td>Leave the TV alone for a minute and it becomes a photo frame with a clock, what's playing and which lamps are on.</td></tr>
+</table>
 
-## Three screens
+## The Hub
 
-<p align="center"><img src="docs/hub.png" width="880" alt="The Hub on a laptop"></p>
+<p align="center"><img src="docs/hub.jpg" width="100%" alt="The Hub: the lamps as glowing orbs, music sync with the album cover, scenes and the week's calendar"></p>
 
-**The Hub** is the dashboard: plain HTML and JavaScript on Home Assistant's websocket API, with no build step.
-The orbs are the bulbs in whatever colour they are right now, and the background takes its colour from the lights
-and the album art. Around them: now playing with controls, the week's calendar, my investments and the cash at
-Trading 212 (blurred until I tap the eye), the desk lamp's view of the sky, a remote for the TV, and a health card
-that says what's running and how fresh everything is.
+The dashboard is plain HTML and JavaScript on Home Assistant's websocket API, with no build step. The orbs are the
+lamps in whatever colour they are right now, and the whole page takes its light from them and the album art. Below
+the fold: the photo frame, every account in one place, the desk lamp's view of the sky, a remote for the TV and a
+health card that says what's running and how fresh everything is.
 
-<p align="center"><img src="docs/tv-app.jpg" width="820" alt="The Hub as an app on the TV"></p>
+<table>
+  <tr>
+    <td width="62%" valign="top"><img src="docs/hub-money.jpg" alt="The Investments card: totals, a chart, asset class and regional exposure, every account by provider, and holdings"></td>
+    <td width="38%" valign="top"><img src="docs/hub-health.jpg" alt="The System health card: every service, feed and device, and the background tasks"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Money.</b> Every account from every provider, what it's invested in and where in the world, and each fund's price history. Blurred until I tap the eye.</td>
+    <td valign="top"><b>Health.</b> Every service, data feed and device, and the background jobs Claude is running for me.</td>
+  </tr>
+</table>
 
-**On the TV** it's an Android TV app with its own tile in the launcher. The Hub notices it's on a TV and lays itself
-out for the sofa: the remote's arrows move a glowing ring to whatever is nearest in that direction, OK presses it,
-and Back closes things. The same app is the TV's **screensaver**, which is the clock at the top of this page.
+<img src="docs/tv.jpg" width="100%" alt="The Hub as an app on the TV">
 
-<img src="docs/hub-phone.png" width="230" align="right" alt="The Hub on a phone">
+**On the TV** the Hub is an Android TV app with its own tile in the launcher. It notices it's on a TV and lays itself
+out for the sofa: the remote's arrows move a glowing ring to whatever is nearest in that direction, OK presses it, and
+Back closes things. The same app is the TV's **screensaver**, at the top of this page.
 
-**On the phone** the Hub is a home-screen web app. There's also an iPhone widget in the same style (glowing orbs,
-what's playing, the TV and the weather) and a set of Shortcuts, so I can flip a lamp without opening anything.
-Neither holds a Home Assistant password: they read a small feed and call single-purpose webhooks that only work
-on my home network.
+**On the phone** it's a home-screen web app, with an iPhone widget in the same style and a set of Shortcuts, so I can
+flip a lamp without opening anything. Neither holds a Home Assistant password: they read a small feed and call
+single-purpose webhooks that only work on my home network.
 
-And I can just ask Claude. Home Assistant's MCP server gives it the lights, the TV, the scenes and the calendar,
-so "turn the TV lamps blue" or "lights out" just works.
+**And I can just ask Claude.** Home Assistant's MCP server gives it the lights, the TV, the scenes and the calendar,
+so *"turn the TV lamps blue"* or *"lights out"* just works. Another set of tools gives it the home state itself, so
+a Claude session looking after my finances can update the portfolio the Hub shows.
 
-<br clear="right">
+## Everything it does
 
-## What's in here
-
-- **Music sync.** Real beat tracking (onsets, tempo, and a beat grid it can predict ahead of time), so the lights
-  land on the kick instead of lagging behind it. It listens to the Mac directly, or through the mic when the music
-  is coming out of the TV.
-- **TV mode.** Bias lighting for watching things: warm white, very dim, no colour, nothing flashes. If the TV is
-  playing music instead, it goes back to the show.
-- **Desk lamp.** Sets its own colour temperature and brightness from the sun, cloud cover and rain, and stays low,
-  because these three lamps are the only lights in the room. If I change it by hand it leaves it alone for two hours.
-- **Welcome home.** One button: lights, the TV, and a spoken hello through the TV in a British voice.
-- **Investments.** Holdings from Hargreaves Lansdown, which has no API (so it logs in like the website does, written
-  so it can't lock the account), price history from the FT, and the daily interest on my cash at Trading 212.
-- **Cabinet light.** A Bluetooth LED strip behind a cabinet, which only came with a phone app. The Mac holds the
-  Bluetooth connection, so to everything else it's just another light, and it joins the music shows with a part of
-  its own.
-- **Photos.** A few good ones from the thousands in my OneDrive, chosen on the Mac by looking at faces: me with
-  other people first, no lone selfies. They go round in the Hub and on the TV's screensaver. With visitors, one
-  Guest switch swaps them for generic landscapes from Wikimedia Commons.
-- **Central state.** One local database behind an API (`core/`) holds the app's state: my portfolio from every
-  source (HL and Trading 212 fetched automatically, the rest written by another Claude session over the API), plus
-  any other app data. It keeps every version, tells Home Assistant when something changes, and backs itself up.
-- **Background tasks.** I can hand off work ("go through these spreadsheets", "find a few good restaurants near
-  X") and it runs in the background as a headless Claude Code session, tracked in the central state with its
-  progress, log and result, and listed on the Hub. Recurring jobs run the same way on schedules.
-- **Logs, metrics and traces in one place.** Every service sends them over OpenTelemetry to a local Grafana
-  (`localhost:3000`): one dashboard with each service's health, warnings and errors, the API's traffic and latency,
-  and every log line, searchable. Moving it to a hosted backend later is a change of URL.
-- **One switch.** `./home up` and `./home down` start and stop everything, and a supervisor restarts anything that
-  falls over.
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/icons/music.svg" width="40"><br><b>Music sync</b><br><sub>Real beat tracking, a beat grid predicted ahead, so the lights land on the kick instead of lagging it. Listens to the Mac, or through the mic when the music comes out of the TV.</sub></td>
+    <td width="50%" valign="top"><img src="docs/icons/tv.svg" width="40"><br><b>TV mode</b><br><sub>Bias lighting for watching things: warm white, very dim, nothing flashes. Brighter in a bright room, following the sun and the clouds.</sub></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/icons/desk.svg" width="40"><br><b>A desk lamp that follows the sky</b><br><sub>Colour and brightness from the sun, cloud and rain, winding down to candle light at night. Change it by hand and it leaves it alone for two hours.</sub></td>
+    <td valign="top"><img src="docs/icons/welcome.svg" width="40"><br><b>Welcome home, and a voice</b><br><sub>One button: lights, the TV, and a spoken hello through the TV in a British voice. Any automation can say something the same way.</sub></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/icons/strip.svg" width="40"><br><b>A Bluetooth strip, made a real light</b><br><sub>It only came with a phone app. The Mac holds the connection, so to everything else it's just another light, and it plays its own part in the music shows.</sub></td>
+    <td valign="top"><img src="docs/icons/photos.svg" width="40"><br><b>Photos worth a wall</b><br><sub>A few good ones from 18,000 in OneDrive, picked on the Mac by looking at faces: people first, no lone selfies. Read-only, by construction and by test.</sub></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/icons/money.svg" width="40"><br><b>Money in one place</b><br><sub>Hargreaves Lansdown (no API, so it logs in like the website, built so it can't lock the account), Trading 212, the bank, Premium Bonds prize checks, and each fund's asset and regional exposure.</sub></td>
+    <td valign="top"><img src="docs/icons/core.svg" width="40"><br><b>One state, one API</b><br><sub>A local database behind FastAPI holds everything the screens show, versioned and backed up, with scoped tokens for anything that writes to it.</sub></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/icons/tasks.svg" width="40"><br><b>Background jobs</b><br><sub>"Go through these spreadsheets", "find a few good restaurants near X": each runs as a headless Claude Code session, tracked with its progress and result. Recurring jobs too.</sub></td>
+    <td valign="top"><img src="docs/icons/claude.svg" width="40"><br><b>Claude, everywhere</b><br><sub>Ask for the lights in plain English, or let another Claude session read and update the home state through a skill or an MCP server.</sub></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/icons/telemetry.svg" width="40"><br><b>Logs, metrics and traces</b><br><sub>Every service reports over OpenTelemetry to a local Grafana: health, errors, API latency and every log line, searchable.</sub></td>
+    <td valign="top"><img src="docs/icons/switch.svg" width="40"><br><b>One switch</b><br><sub><code>./home up</code> and <code>./home down</code> start and stop everything, and a supervisor restarts anything that falls over.</sub></td>
+  </tr>
+</table>
 
 ## How it fits together
 
@@ -149,7 +170,7 @@ bin/ha call script.turn_on script.welcome_home
 tv-app/deploy                                    # build the TV app and install it on the TV
 ```
 
-## Notes
+## Deep dives
 
 <details>
 <summary><b>Music sync</b></summary>
@@ -299,8 +320,15 @@ balance and the interest paid on it. If it ever refuses the key, it stops and do
 ```
 
 The fetched holdings go to the central state service as snapshots (`portfolio/hl`, `portfolio/t212`), next to the
-sources I keep up to date by hand, and core merges them into what the Hub shows. Hourly, holdings written by hand
-with units and an ISIN are revalued from FT prices.
+sources a Claude session keeps up to date for me, and core merges them into what the Hub shows. Hourly, holdings
+written by hand with units and an ISIN are revalued from FT prices, with their price history for the charts.
+
+**Exposure.** Once a week each fund's asset allocation and regional weightings come from its FT factsheet, and core
+weights them by what I hold (savings and Premium Bonds count as cash), so the Hub can say how much is in shares,
+bonds and cash, and where in the world the shares are.
+
+**Premium Bonds.** NS&I's public prize checker is asked once each month's draw results are out, with only the holder
+number, never a sign-in. A win shows on the Hub and raises a quiet notification.
 
 None of it is exposed to Home Assistant's Claude or shown on the screensaver or the widget. `tests/test_investments.py` and
 `tests/test_t212.py` run every safety rule against fakes.
@@ -316,8 +344,9 @@ fifteen copies of the same sunset. `photos/` finds the few worth putting on a wa
 
 1. **List, don't download.** Microsoft Graph's delta query returns every photo's metadata (date, camera, size, lens)
    once, then only what changed. Screenshots, small images and anything without a camera are dropped here.
-2. **Look at thumbnails.** For 150 new candidates per run it fetches the ~800px thumbnail and runs face detection
-   and recognition locally with OpenCV (YuNet and SFace). The thumbnail is thrown away; only the numbers are kept.
+2. **Look at thumbnails.** A background job looks at 150 new candidates an hour: it fetches the ~800px thumbnail and
+   runs face detection and recognition locally with OpenCV (YuNet and SFace). The thumbnail is thrown away; only the
+   numbers are kept, in the central state, so the whole library gets looked at once, over a few days.
 3. **Score.** Photos of me with other people come first, then other group photos, then everything else. A selfie
    only counts if someone's in it with me, and so does a single big face. Blurry, very dark and blown-out shots are out, and so is anything portrait.
 4. **Pick.** About 40, at most two from any day, with a share from this month in past years, chosen at random by
@@ -332,6 +361,31 @@ rclone config                                   # add a OneDrive remote called "
 .venv/bin/python -m photos learn-me <photo>     # a photo of you, to recognise you
 .venv/bin/python -m photos once                 # or let ./home run it every four hours
 ```
+
+</details>
+
+<details>
+<summary><b>The central state, background jobs and Claude's tools</b></summary>
+<br>
+
+`core/` is one local service that owns the shared state: SQLite behind a FastAPI app on `127.0.0.1:8790`, with
+interactive docs at `/docs`. Services report what they know to it, and it mirrors what the screens need into Home
+Assistant, retrying until it lands and re-sending after a restart. Portfolio writes are immutable snapshots; other
+state is versioned documents; every change is in an audit log that never holds amounts. It backs itself up daily and
+checks its own integrity.
+
+Background jobs are a queue in the same database, worked by `python -m core.worker`: leases, heartbeats, retries with
+backoff, cancelling, schedules. An `agent` job is a headless `claude -p` in its own folder that can read only what
+the job names and write only in its folder, with no shell unless asked and never anything that could touch OneDrive.
+
+```sh
+bin/task run "Summarise the spreadsheets in this folder" --dir ~/Documents/Budget
+bin/install-skill claude 'doc/*' 'portfolio/*' 'price/*'    # the home-state skill for Claude Code, with a scoped token
+bin/install-mcp                                             # the same tools in Claude Desktop's chat
+```
+
+[docs/core.md](docs/core.md) has the design, the schema and the API; [docs/telemetry.md](docs/telemetry.md) the
+logs and metrics.
 
 </details>
 
@@ -413,24 +467,24 @@ home                ./home up | down | reload | status | logs
 stack/              the supervisor behind ./home, and the health it reports
 music_sync/         audio capture, analysis, light show, now playing
 announce/           the voice: speaks home_say events on the Mac or the TV
-telemetry/          OpenTelemetry setup shared by every service, and the Grafana dashboard
-core/               the central state service: SQLite, the API, publishing to Home Assistant, and the task worker
-investments/        Hargreaves Lansdown, FT prices, Trading 212
+backlight/          the Bluetooth LED strip behind the cabinet
+photos/             OneDrive photos: index, judge, pick, show
+investments/        Hargreaves Lansdown, Trading 212, FT prices, fund exposure, Premium Bonds
+core/               the central state: SQLite, the API, publishing to Home Assistant, the task worker
 skills/home-state/  the Claude Code skill other sessions use to read and write the state
 home_mcp/           the same for Claude Desktop's chat (a local MCP server; bin/install-mcp)
-backlight/          the Bluetooth LED strip behind the cabinet
-photos/             OneDrive photos: pick, judge, show
+telemetry/          OpenTelemetry setup shared by every service, and the Grafana dashboard
 widget/             the iPhone widget, its feed, webhooks and Shortcuts
 tv-app/             the Android TV app and screensaver, and the scripts that deploy them
 homeassistant/      Home Assistant config as code, and apply.py
-frontend/hub/       the Hub, plus screenshot.py
+frontend/hub/       the Hub (demo.js is its demo mode), plus screenshot.py and readme_images.py
 presence/           phone on the Wi-Fi -> home or away
 bin/                audiotee, ha, task, install-skill, install-mcp, check-commit, ha-mcp-headers
-tests/
+tests/              one suite per part: python -m tests.test_<part>
 ```
 
-Tests: `python -m tests.test_analysis` (a synthetic 128 BPM track: tempo, beat timing, drops, TV mode, palettes),
-`tests.test_core`, `tests.test_investments`, `tests.test_t212`, `tests.test_widget` and `tests.test_announce`, and
-`node tests/widget_smoke.js`.
+Every picture in this README comes from the Hub's demo mode (`?demo=1`, made-up data, nothing connected) and is
+rebuilt with `.venv/bin/python frontend/readme_images.py`. The landscapes are from Wikimedia Commons, each credited on
+screen under its own licence.
 
-`CLAUDE.md` has the working rules for this repo, the main one being that it's public, so nothing personal goes in.
+<p align="center"><sub>Built for one room. Public so others can borrow ideas; <a href="CLAUDE.md">CLAUDE.md</a> has the rules that keep anything personal out of it.</sub></p>

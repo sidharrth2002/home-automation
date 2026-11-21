@@ -41,6 +41,7 @@ const GUEST = "input_boolean.guest_photos"; // guest mode: landscapes instead of
 const TV_MODE = /HomeHubTV/.test(navigator.userAgent) || new URLSearchParams(location.search).has("tv");
 // Ambient mode: the TV's screensaver (?ambient=1). A quiet, glanceable screen, never finances.
 const AMBIENT = new URLSearchParams(location.search).has("ambient");
+const DEMO = new URLSearchParams(location.search).has("demo"); // made-up data, no Home Assistant (demo.js)
 if (AMBIENT) document.documentElement.classList.add("ambient-mode");
 if (TV_MODE) {
   document.documentElement.classList.add("tv-mode");
@@ -141,6 +142,7 @@ const hexToRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const hueOf = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 
 async function call(domain, service, data) {
+  if (DEMO) return toast("Demo: nothing here is connected");
   try {
     await callService(conn, domain, service, data);
   } catch (err) {
@@ -427,7 +429,7 @@ section("#calendar", () => calIds(), () => {
 });
 
 // investments (Hargreaves Lansdown): hidden until revealed on this device
-let showMoney = (() => { try { return localStorage.hubShowMoney === "1"; } catch { return false; } })();
+let showMoney = DEMO || (() => { try { return localStorage.hubShowMoney === "1"; } catch { return false; } })(); // demo figures are made up
 let invRange = "1Y";
 let invAll = false;
 let invSrc = "all"; // holdings filter: "all" or a portfolio source id
@@ -1283,6 +1285,23 @@ window.hubBack = () => {
 };
 
 // ── boot ──────────────────────────────────────────────────────────
+async function startDemo() {
+  const { demo } = await import("./demo.js");
+  const { entities, events } = demo();
+  try { // the guest landscapes (freely licensed), if this machine has fetched them
+    const set = await (await fetch("../photos-guest/set.json")).json();
+    entities[PHOTOS].attributes.photos = set;
+    entities[PHOTOS].state = String(set.length);
+  } catch { /* no photos card */ }
+  S = entities;
+  conn = { connected: true, haVersion: "demo" };
+  calEvents = events;
+  calFetchedAt = Date.now();
+  setLive(true);
+  renderAll(true);
+  startPhotos();
+}
+
 async function connect() {
   const auth = await getAuth({
     hassUrl: location.origin,
@@ -1305,6 +1324,7 @@ function setLive(ok) {
   setInterval(tick, 1000);
   setInterval(ambient, 60_000);
   for (const { sel } of sections) $(sel).innerHTML = `<span class="skeleton">Loading…</span>`;
+  if (DEMO) return startDemo();
   try {
     conn = await connect();
   } catch (err) {

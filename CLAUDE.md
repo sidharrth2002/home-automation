@@ -244,8 +244,12 @@ find). Testing takes over the TV screen, so ask first.
 - TV-mode arrow navigation scrolls just enough to show the focused control, except when the control would fit on
   screen with the page at the very top or bottom, where it scrolls all the way (the header has nothing focusable, so
   it was left cut off).
-- README images are public. Take them with `HUB_REDACT=1` (blurs calendar text, including the calendar's "Next"
-  line), keep money blurred (the default), never use the user's photo, and look at every image before committing.
+- README images are public and come only from the Hub's demo mode (`?demo=1`, frontend/hub/demo.js: invented
+  portfolio, calendar, tasks and track; no HA connection; controls do nothing): `.venv/bin/python
+  frontend/readme_images.py` rebuilds docs/hero.jpg, hub.jpg, hub-money.jpg, hub-health.jpg and tv.jpg. Never put a
+  screenshot of the real Hub in the repo. When the Hub gains a card or the README a section, extend demo.js and
+  rerun it. Look at every image before committing. The README's look: docs/banner.svg (animated, CSS, honours
+  reduced motion), feature icons in docs/icons/ (the Hub's own icon paths on gradient tiles).
 - The TV app adds `?app=<timestamp>` when it loads the Hub, because HA caches `/local/` pages for a long time.
 - `tv-app/app/src/debug/res/` is a git-ignored overlay for personal resources (the launcher banner with the user's
   photo). The committed banner in `src/main` must stay generic. Personal photos (`*.heic`) are git-ignored and blocked
