@@ -157,7 +157,10 @@ sequenceDiagram
 - `agent` tasks run `claude -p` in their own folder, `data/tasks/<id>/`. They can read that folder and any `dirs`
   the task names, search and fetch the web, and write only inside their folder; no shell unless the task adds a
   tool (e.g. `Bash(python3:*)` for spreadsheets). The answer is in `result.md`, with the full transcript beside it.
-- Built-in kinds: `revalue` (FT prices for hand-written holdings; scheduled hourly). New kinds are a function in
+- Built-in kinds: `revalue` (FT prices for hand-written holdings; scheduled hourly) and `premium-bonds` (daily:
+  NS&I's public prize checker with the holder number from .env, asked only once a month's results are due, 3
+  days after the draw, plus unclaimed prizes every 30 days; results in `doc finance/premium_bonds` and
+  `sensor.premium_bonds`, beside the holding in `portfolio/nsandi`; a win raises a silent HA notification). New kinds are a function in
   `core/worker.py`'s HANDLERS.
 
 ```sh

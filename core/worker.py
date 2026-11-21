@@ -6,6 +6,7 @@ It only talks to the API (never the database file), so a worker can run on anoth
   workspace and any `dirs` the task names, search and fetch the web, and write only in its workspace; nothing else
   unless the task lists more `tools`. The final answer, the transcript and any files it wrote stay in the workspace.
 - revalue: today's FT prices for hand-written holdings (investments.revalue).
+- premium-bonds: has the holder number won? (investments.premium_bonds; asks NS&I only when a result is due).
 """
 import json
 import logging
@@ -163,7 +164,13 @@ def run_revalue(ctx: Context):
     return {"priced": revalue(Prices())}
 
 
-HANDLERS = {"agent": run_agent, "revalue": run_revalue}
+def run_premium_bonds(ctx: Context):
+    from investments.premium_bonds import check
+    ctx.progress(0.1, "checking")
+    return check()
+
+
+HANDLERS = {"agent": run_agent, "revalue": run_revalue, "premium-bonds": run_premium_bonds}
 FINISHED = telemetry.meter().create_counter("home.tasks.finished", description="tasks finished, by kind and outcome")
 DURATION = telemetry.meter().create_histogram("home.task.duration", unit="s", description="how long tasks took")
 
