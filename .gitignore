@@ -6,9 +6,6 @@ homeassistant/config/
 __pycache__/
 music_sync.log
 data/
-NetflixViewingHistory*.csv
-ViewingActivity*.csv
-netflix.log
 presence.log
 .home.pid
 home.log
