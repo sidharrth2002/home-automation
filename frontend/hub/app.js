@@ -458,6 +458,36 @@ function allocation(accounts) {
       <div class="alloc-legend">${segs.map((s) => `<span><i style="background:${ALLOC[s.slot]}"></i>${esc(s.label)} <b>${share(s.v)}</b></span>`).join("")}</div>
     </div>`;
 }
+// Exposure: what the money is in (asset class, of everything) and where the shares are (by region), from each
+// fund's FT breakdown weighted by what's held (core/exposure.py). Ranked bars in one neutral ink: length carries it.
+function exposureBlock(ex) {
+  if (!ex || !(ex.asset ?? []).length) return "";
+  const pctOf = (v, sum) => (sum ? (v / sum) * 100 : 0);
+  const fmtPct = (p) => `${p < 10 ? p.toFixed(1) : Math.round(p)}%`;
+  const bar = (name, v, sum, cls = "") => {
+    const p = pctOf(v, sum);
+    return `<div class="xrow ${cls}" title="${esc(name)}: ${fmtPct(p)}${showMoney ? ` · ${gbp(v)}` : ""}">
+        <span>${esc(name)}</span><i class="xbar"><i style="width:${Math.max(p, 0.6).toFixed(2)}%"></i></i>
+        <b>${fmtPct(p)}</b><em class="money">${gbp(v)}</em></div>`;
+  };
+  const assets = ex.asset.filter((x) => x.value > 0);
+  const assetSum = assets.reduce((s, x) => s + x.value, 0);
+  const regions = ex.regions ?? [];
+  const shareSum = regions.reduce((s, x) => s + x.value, 0);
+  const groups = [...new Set(regions.map((r) => r.group))]
+    .map((g) => ({ g, v: regions.filter((r) => r.group === g).reduce((s, r) => s + r.value, 0) }))
+    .sort((p, q) => q.v - p.v);
+  const geo = groups.map(({ g, v }) => bar(g, v, shareSum, "group") +
+    regions.filter((r) => r.group === g && pctOf(r.value, shareSum) >= 1).map((r) => bar(r.name, r.value, shareSum, "sub")).join("")).join("");
+  const note = `${ex.analysed < ex.funds ? `${ex.analysed} of ${ex.funds} funds analysed · ` : ""}from the funds' FT factsheets${ex.as_of ? `, ${esc(shortDate(ex.as_of))}` : ""}`;
+  return `<div class="exposure">
+      <div class="xhead"><span class="kicker">Asset class</span><span class="kicker">of everything</span></div>
+      ${[...assets].sort((p, q) => q.value - p.value).map((x) => bar(x.name, x.value, assetSum)).join("")}
+      ${groups.length ? `<div class="xhead"><span class="kicker">Shares by region</span><span class="kicker">of your shares</span></div>${geo}` : ""}
+      <p class="h-src">${note}.</p>
+    </div>`;
+}
+
 // Trading 212 pays interest daily on its cash (sensor.trading212, from the investments service).
 function t212Note() {
   const e = S[T212];
@@ -646,6 +676,7 @@ section("#invest", () => [INVEST, T212, BONDS, ...Object.keys(S).filter((id) => 
           ${a.gain != null ? `<span class="delta ${a.gain >= 0 ? "up" : "down"}"><span class="money">${signed(a.gain, gbp)}</span>${a.gain_pct != null ? ` · ${pct(a.gain_pct)}` : ""} all time</span>` : ""}
         </div>
         ${chart}
+        ${exposureBlock(a.exposure)}
       </div>
       <div class="invest-where">
         <span class="kicker">Where it is</span>

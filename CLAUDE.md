@@ -133,7 +133,12 @@ find). Testing takes over the TV screen, so ask first.
   the process. Off when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
   Nothing may call `logging.config.dictConfig` after setup (it flushes the OTel handler under the logging lock:
   a 30 s deadlock); that's why core runs uvicorn with `log_config=None`.
-- Hub Investments card: overview + chart | "Where it is" (allocation bar by account type, then one group per portfolio
+- Exposure: the worker's daily `exposure` task (investments/exposure.py) fetches each held fund's asset allocation,
+  regional weightings and sectors from the FT's public holdings page (fund symbols only; refetched after 7 days) into
+  core docs `fund_exposure/<holding id>`; core/exposure.py weights them by value (+ savings/Premium Bonds/cash as
+  Cash; regions cover shares only) into `sensor.investments` attribute `exposure`. Hub: ranked neutral bars
+  (asset class; shares by region) under the chart. FT resolve takes a SEDOL, an ISIN, or searches by name (slugs).
+- Hub Investments card: overview + chart (+ exposure) | "Where it is" (allocation bar by account type, then one group per portfolio
   source with its accounts; rate/maturity/"not in total"; Trading 212's interest and the Premium Bonds checks as notes
   under their groups) | holdings (All/per-source tabs, source tag, "Settling" badge). No separate Cash card. Account
   type colours are fixed palette slots (ACCOUNT_TYPES/ALLOC in app.js), consecutive in bar order: re-run the dataviz

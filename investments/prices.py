@@ -6,6 +6,7 @@ never holdings or amounts. Each fund is fetched at most once a day and cached un
 """
 import json
 import logging
+import re
 import time
 from datetime import date, datetime, timedelta
 
@@ -53,7 +54,9 @@ class Prices:
         then the fund's name."""
         if sedol in self.ids:
             return self.ids[sedol]
-        hit = self._search(sedol if len(sedol) == 12 else gb_isin(sedol)) or self._search(name)
+        code = sedol if re.fullmatch(r"[A-Z]{2}[0-9A-Z]{10}", sedol) else (
+            gb_isin(sedol) if re.fullmatch(r"[0-9A-Z]{7}", sedol) else None)  # else a name slug: search by name
+        hit = (code and self._search(code)) or self._search(name)
         entry = {"xid": hit["xid"], "symbol": hit["symbol"], "ft_name": hit["name"]} if hit else None
         self.ids[sedol] = entry
         IDS.write_text(json.dumps(self.ids, indent=1))

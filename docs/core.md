@@ -204,7 +204,9 @@ sequenceDiagram
 - Whatever a task asks for, it is denied `rclone`, `rm`, writes under `~/Library/CloudStorage` (the OneDrive sync
   folders) and reading the rclone sign-in (`AGENT_DENY` in core/worker.py).
 - Built-in kinds: `revalue` (FT prices for hand-written holdings; scheduled hourly), `photos-look` (a batch of
-  photos for faces; hourly) and `premium-bonds` (daily: NS&I's public prize checker with the holder number from
+  photos for faces; hourly) `exposure` (daily: each held fund's asset
+  allocation and regional weightings from the FT, refreshed weekly, into `fund_exposure/<holding id>`, weighted into
+  `sensor.investments`' `exposure` by core/exposure.py) and `premium-bonds` (daily: NS&I's public prize checker with the holder number from
   the core (`finance/premium_bonds_holder`; setting it queues a check at once), asked only once a month's results are due, 3 days after the draw, plus unclaimed prizes every 30 days;
   results in `doc finance/premium_bonds` and `sensor.premium_bonds`, beside the holding in `portfolio/nsandi`; a
   win raises a silent HA notification). New kinds are a function in
