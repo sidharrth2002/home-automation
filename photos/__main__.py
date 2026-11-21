@@ -1,7 +1,8 @@
 """Photos for the Hub and the TV screensaver, picked from OneDrive through Microsoft's API.
 
   python -m photos --watch             the service (run by ./home up)
-  python -m photos once                index, look at a batch, pick and publish now
+  python -m photos once                index, pick and publish now
+  python -m photos look                look at a batch now (normally the hourly `photos-look` task)
   python -m photos learn-me <photo>    your reference face, from a photo of you
   python -m photos status
 
@@ -12,7 +13,8 @@ How it picks without downloading the library:
    marks the front camera: a selfie, which is kept only if there are other people in it.
 3. Look, a batch at a time (ANALYSE_PER_RUN): fetch the ~800px thumbnail (~150 KB) and find faces on this machine
    (photos/faces.py). "With people" means two or more faces big enough to be the subject; ones with you in rank
-   highest. Results are cached, so the whole library gets looked at once, over a few days.
+   highest. This is a background task (`photos-look`, hourly, run by the core's task worker), and results are kept
+   in the core, so the whole library gets looked at once, over a few days.
 4. Pick about PHOTOS_PER_SET: people first, you highest, at most two from any one day, a share from this month in
    past years.
 5. Show: download the original of just those (full resolution), re-encode as JPEG with no metadata (no location
@@ -20,7 +22,8 @@ How it picks without downloading the library:
    names. sensor.photo_frame lists them for the Hub. Each set avoids the photos in the one before.
 
 PHOTOS_DIRS in .env: OneDrive folders to use, separated by ";" (default "Pictures/Camera Roll").
-Everything it keeps (index, models, your face embedding, the served copies) is git-ignored.
+The index (metadata, what was found, what was shown) lives in the core's database (/v1/media/onedrive); the face
+models, your face embedding and the served copies stay on disk. All of it is git-ignored.
 """
 import io
 import json
@@ -33,6 +36,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
@@ -53,17 +57,21 @@ register_heif_opener()  # iPhone originals are HEIC
 log = logging.getLogger("photos")
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "photos"
-INDEX = DATA / "index.json"
+INDEX = DATA / "index.json"  # before the index moved into the core; migrated once, then set aside
 PUBLISHED = DATA / "published.json"  # the set on screen, to put back when Home Assistant restarts and forgets it
 OUT = ROOT / "homeassistant" / "config" / "www" / "photos"
 GUEST_OUT = ROOT / "homeassistant" / "config" / "www" / "photos-guest"
 SENSOR = "sensor.photo_frame"
+SOURCE = "onedrive"  # the core's media source
+ANALYSER = "faces"   # the core's name for what faces.py finds
+CORE_FIELDS = {"name": "name", "folder": "folder", "taken": "taken_at", "make": "camera", "focal": "focal_mm",
+               "w": "width", "h": "height", "size": "bytes"}  # this module's record -> the core's media columns
 HA_HTTP = os.environ.get("HA_HTTP", "http://localhost:8123")
 EXTENSIONS = (".jpg", ".jpeg", ".heic", ".png")
 PHOTOS_PER_SET = 40
 TV_COVER = (2080, 1170)  # the TV's copy: covers 1920x1080 through the slow zoom (the TV can't decode 24 MP smoothly)
 FETCHERS = 6  # downloads at once; Graph is happy with a handful
-ANALYSE_PER_RUN = 150  # thumbnails looked at per refresh (~150 KB each)
+ANALYSE_PER_RUN = 150  # thumbnails looked at per hourly task (~150 KB each)
 SAME_MONTH_SHARE = 0.4
 MAX_PER_DAY = 2
 FRONT_CAMERA_MM = 3.5  # phone front cameras are ~2-3 mm; main cameras ~4-7 mm (selfies are fine, but not alone)
@@ -86,17 +94,49 @@ def folder_names() -> list[str]:
     return [n.strip().strip("/") for n in os.environ.get("PHOTOS_DIRS", "Pictures/Camera Roll").split(";") if n.strip()]
 
 
-# ── 1. index ─────────────────────────────────────────────────────
-def load_index() -> dict:
-    return json.loads(INDEX.read_text()) if INDEX.exists() else {"items": {}, "delta": {}}
+# ── 1. index (kept in the core: /v1/media/onedrive) ─────────────
+def to_core(item_id: str, rec: dict) -> dict:
+    return {"id": item_id, **{c: rec.get(k) for k, c in CORE_FIELDS.items()}}
 
 
-def save_index(index: dict):
-    DATA.mkdir(parents=True, exist_ok=True)
-    tmp = INDEX.with_suffix(".tmp")
-    tmp.write_text(json.dumps(index))
-    tmp.chmod(0o600)
-    tmp.replace(INDEX)
+def from_core(item: dict) -> dict:
+    return {**{k: item.get(c) for k, c in CORE_FIELDS.items()}, "look": item.get("analysis")}
+
+
+def load_index(analysed: bool | None = None) -> dict:
+    """The library from the core: {"items": {id: record}, "shown": [ids on screen now]}. `analysed` keeps only the
+    photos already looked at (True) or not yet (False)."""
+    items, after = {}, ""
+    while after is not None:
+        q = {"analyser": ANALYSER, "after": after} | ({} if analysed is None else {"analysed": str(analysed).lower()})
+        page = core.call("GET", f"/v1/media/{SOURCE}/items?{urllib.parse.urlencode(q)}", timeout=60)
+        items.update((it["id"], from_core(it)) for it in page["items"])
+        after = page["next"]
+    return {"items": items, "shown": core.call("GET", f"/v1/media/{SOURCE}")["last_shown"]}
+
+
+def save_looks(looks: dict[str, dict]):
+    core.call("PUT", f"/v1/media/{SOURCE}/analysis/{ANALYSER}", {"results": looks}, timeout=60)
+
+
+def migrate():
+    """Once: move the old JSON index (data/photos/index.json) into the core, then set it aside."""
+    if not INDEX.exists() or core.call("GET", f"/v1/media/{SOURCE}")["items"]:
+        return
+    old = json.loads(INDEX.read_text())
+    ids = list(old["items"])
+    for i in range(0, len(ids), 2000):
+        core.call("PUT", f"/v1/media/{SOURCE}/items",
+                  {"items": [to_core(k, old["items"][k]) for k in ids[i:i + 2000]]}, timeout=120)
+    looks = [(k, r["look"]) for k, r in old["items"].items() if r.get("look") is not None]
+    for i in range(0, len(looks), 2000):
+        save_looks(dict(looks[i:i + 2000]))
+    for folder, link in old.get("delta", {}).items():  # last: until it's saved, the next listing starts over
+        core.call("PUT", f"/v1/media/{SOURCE}/items", {"cursor": {"key": folder, "value": link}})
+    if old.get("shown"):
+        core.call("POST", f"/v1/media/{SOURCE}/shown", {"ids": old["shown"]})
+    INDEX.rename(INDEX.with_suffix(".json.migrated"))
+    log.info("moved the photo index into the core: %d photos, %d looked at", len(ids), len(looks))
 
 
 def record(item: dict) -> dict | None:
@@ -109,27 +149,31 @@ def record(item: dict) -> dict | None:
             "w": image.get("width"), "h": image.get("height"), "size": item.get("size"), "look": None}
 
 
-def update_index(graph: Graph, index: dict) -> int:
+def update_index(graph: Graph) -> int:
+    """Send the library's changes since the last listing to the core (which drops what it knew about a photo whose
+    file changed). The listing's cursor is saved with the last batch, so an interrupted run starts over safely."""
+    cursors = core.call("GET", f"/v1/media/{SOURCE}")["cursors"]
     changed = 0
     for folder in folder_names():
-        link = index["delta"].get(folder)
-        items = graph.delta(folder, link)
+        found, gone = [], []
+        listing = graph.delta(folder, cursors.get(folder))
         while True:
             try:
-                item = next(items)
+                item = next(listing)
             except StopIteration as done:
-                index["delta"][folder] = done.value
+                link = done.value
                 break
             if item.get("deleted"):
-                changed += index["items"].pop(item["id"], None) is not None
-                continue
-            rec = record(item)
-            if rec:
-                old = index["items"].get(item["id"])
-                if old and old.get("size") == rec["size"]:
-                    rec["look"] = old.get("look")  # same file: keep what we already know about it
-                index["items"][item["id"]] = rec
-                changed += 1
+                gone.append(item["id"])
+            elif rec := record(item):
+                found.append(to_core(item["id"], rec))
+            if len(found) + len(gone) >= 2000:
+                changed += core.call("PUT", f"/v1/media/{SOURCE}/items", {"items": found, "deleted": gone},
+                                     timeout=120)["changed"]
+                found, gone = [], []
+        changed += core.call("PUT", f"/v1/media/{SOURCE}/items", {"items": found, "deleted": gone,
+                                                                   "cursor": {"key": folder, "value": link}},
+                             timeout=120)["changed"]
     return changed
 
 
@@ -153,7 +197,9 @@ def taken(rec: dict) -> date | None:
 
 
 # ── 3. look at a batch ───────────────────────────────────────────
-def look_at_batch(graph: Graph, faces: Faces, index: dict, today: date, budget: int = ANALYSE_PER_RUN, rng=random) -> int:
+def look_at_batch(graph: Graph, faces: Faces, index: dict, today: date, budget: int = ANALYSE_PER_RUN, rng=random,
+                  save=lambda looks: None, progress=lambda fraction, message: None, cancelled=lambda: False) -> int:
+    """Look at up to `budget` photos not yet looked at (this month in past years first), saving as it goes."""
     pending = [(i, r) for i, r in index["items"].items() if r.get("look") is None and worth_a_look(r)]
     same_month = [p for p in pending if (d := taken(p[1])) and d.month == today.month and d.year < today.year]
     others = [p for p in pending if p not in same_month]
@@ -166,13 +212,31 @@ def look_at_batch(graph: Graph, faces: Faces, index: dict, today: date, budget: 
             log.debug("couldn't fetch %s: %s", item_id, e)
             return None
 
-    looked = 0
+    looked, looks = 0, {}
     batch = (same_month + others)[:budget]
     with ThreadPoolExecutor(FETCHERS) as pool:  # downloads in parallel; the face models stay on this thread
-        for (item_id, rec), jpeg in zip(batch, pool.map(fetch, (i for i, _ in batch))):
-            rec["look"] = faces.analyse(jpeg) if jpeg else {"ok": False}
+        for n, ((item_id, rec), jpeg) in enumerate(zip(batch, pool.map(fetch, (i for i, _ in batch))), 1):
+            if cancelled():
+                break
+            rec["look"] = looks[item_id] = faces.analyse(jpeg) if jpeg else {"ok": False}
             looked += jpeg is not None
+            if len(looks) >= 25:
+                save(looks)
+                looks = {}
+            progress(n / len(batch), f"looked at {n} of {len(batch)}")
+    if looks:
+        save(looks)
     return looked
+
+
+def look(budget: int = ANALYSE_PER_RUN, progress=lambda fraction, message: None, cancelled=lambda: False) -> dict:
+    """One batch, as a background task (the worker's `photos-look`, scheduled hourly)."""
+    index = load_index(analysed=False)
+    looked = look_at_batch(Graph(), Faces(), index, date.today(), budget, save=save_looks, progress=progress,
+                           cancelled=cancelled)
+    remaining = sum(1 for r in index["items"].values() if r.get("look") is None and worth_a_look(r))
+    log.info("looked at %d photos; %d still to look at", looked, remaining)
+    return {"looked": looked, "remaining": remaining}
 
 
 # ── 4. pick ──────────────────────────────────────────────────────
@@ -342,7 +406,7 @@ def show(graph: Graph, index: dict, chosen: list[str], today: date) -> int:
         log.warning("couldn't download %d of %d photos (e.g. %s)", len(failed), len(chosen), failed[0])
     if not entries:
         return 0  # keep the set already on screen rather than blank it
-    index["shown"] = [i for i, e in zip(chosen, made) if e]
+    core.call("POST", f"/v1/media/{SOURCE}/shown", {"ids": [i for i, e in zip(chosen, made) if e]})
     publish(entries)
     time.sleep(120)  # let a slideshow that's mid-photo finish with the old set
     for f in old:
@@ -350,16 +414,14 @@ def show(graph: Graph, index: dict, chosen: list[str], today: date) -> int:
     return len(entries)
 
 
-def refresh(graph: Graph, faces: Faces):
+def refresh(graph: Graph):
+    """List the library's changes and show a new set. Looking at photos is a separate hourly task (look())."""
     today = date.today()
-    index = load_index()
-    changed = update_index(graph, index)
-    save_index(index)
-    looked = look_at_batch(graph, faces, index, today)
-    save_index(index)
+    migrate()
+    changed = update_index(graph)
+    index = load_index(analysed=True)  # only looked-at photos can score
     shown = show(graph, index, pick(index, today), today)
-    save_index(index)  # remembers what's on screen, for the next set
-    log.info("index: %d photos (%d changed); looked at %d; showing %d", len(index["items"]), changed, looked, shown)
+    log.info("index: %d changed; %d looked at; showing %d", changed, len(index["items"]), shown)
 
 
 def status():
@@ -391,13 +453,16 @@ def main():
         (DATA / "me-source.jpg").unlink(missing_ok=True)
         print("learned your face" if ok else "no face found in that photo")
     elif cmd == "once":
-        refresh(Graph(), Faces())
+        refresh(Graph())
+    elif cmd == "look":
+        print(look())
     elif cmd == "--watch":
-        graph, faces = Graph(), Faces()
+        graph = Graph()
+        core.ready(wait_s=120)  # started alongside the core
         threading.Thread(target=keep_in_sync, daemon=True, name="frame-sync").start()
         while True:
             try:
-                refresh(graph, faces)
+                refresh(graph)
             except Exception:
                 log.exception("photo refresh failed")
             time.sleep(REFRESH_S)

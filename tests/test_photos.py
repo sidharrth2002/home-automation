@@ -57,6 +57,34 @@ def run():
     assert ph.label(date(2023, 5, 1), today) == "May 2023"
     print("photo picking OK")
 
+    # the core's media columns and back
+    r = rec("IMG_9.HEIC", faces=2)
+    sent = ph.to_core("abc", r)
+    assert sent["id"] == "abc" and sent["camera"] == "Apple" and sent["width"] == 4032 and "look" not in sent
+    back = ph.from_core({**sent, "analysis": r["look"]})
+    assert back == r
+
+    # looking: saves as it goes (in batches), reports progress, stops when cancelled
+    class Graph:
+        def thumbnail(self, item_id, size):
+            return b"jpeg"
+
+    class Faces:
+        def analyse(self, jpeg):
+            return {"ok": True, "faces": 2}
+
+    index = {"items": {f"p{i}": {**rec(f"p{i}"), "look": None} for i in range(60)}}
+    saved, seen = [], []
+    n = ph.look_at_batch(Graph(), Faces(), index, today, budget=55, save=lambda looks: saved.append(dict(looks)),
+                         progress=lambda f, m: seen.append(f))
+    assert n == 55 and [len(s) for s in saved] == [25, 25, 5] and seen[-1] == 1.0
+    assert sum(1 for r in index["items"].values() if r["look"]) == 55
+    stop = iter([False] * 10 + [True] * 100)
+    saved.clear()
+    assert ph.look_at_batch(Graph(), Faces(), index, today, save=lambda looks: saved.append(looks),
+                            cancelled=lambda: next(stop)) == 5 and [len(s) for s in saved] == [5]
+    print("photo looking OK")
+
 
 if __name__ == "__main__":
     run()

@@ -6,6 +6,7 @@ It only talks to the API (never the database file), so a worker can run on anoth
   workspace and any `dirs` the task names, search and fetch the web, and write only in its workspace; nothing else
   unless the task lists more `tools`. The final answer, the transcript and any files it wrote stay in the workspace.
 - revalue: today's FT prices for hand-written holdings (investments.revalue).
+- photos-look: look at a batch of photos for faces (photos.look), results into /v1/media/onedrive.
 """
 import json
 import logging
@@ -163,7 +164,13 @@ def run_revalue(ctx: Context):
     return {"priced": revalue(Prices())}
 
 
-HANDLERS = {"agent": run_agent, "revalue": run_revalue}
+def run_photos_look(ctx: Context):
+    from photos.__main__ import look
+    inp = ctx.task["input"] or {}
+    return look(int(inp.get("budget") or 150), progress=ctx.progress, cancelled=ctx.cancelled.is_set)
+
+
+HANDLERS = {"agent": run_agent, "revalue": run_revalue, "photos-look": run_photos_look}
 FINISHED = telemetry.meter().create_counter("home.tasks.finished", description="tasks finished, by kind and outcome")
 DURATION = telemetry.meter().create_histogram("home.task.duration", unit="s", description="how long tasks took")
 

@@ -70,7 +70,7 @@ node tests/widget_smoke.js                    # widget script against a strict S
 HARNESS_FEED=<feed.json> WIDGET_JS=data/widget/Home.js node tests/widget_smoke.js   # which taps a fresh draw gets
 .venv/bin/python -m widget install --copy     # widget script with the private addresses filled in, to the clipboard
 .venv/bin/python -m widget shortcuts          # signed Shortcuts for the lamps (into data/widget/shortcuts/)
-.venv/bin/python -m photos status | once | learn-me <photo>   # the photo frame (runs as a service, every 4h)
+.venv/bin/python -m photos status | once | look | learn-me <photo>   # the photo frame (service every 4h; look = one batch)
 tv-app/deploy                                 # build the TV app and install it over adb (TV_HOST in .env)
 .venv/bin/python frontend/screenshot.py <out> [selector]   # headless screenshots; HUB_REDACT=1 blurs calendar
 ```
@@ -186,15 +186,16 @@ find). Testing takes over the TV screen, so ask first.
   when the set changes (guest flag + first src) instead of waiting for its next tick.
 - Photos and DNS: originals download from my.microsoftpersonalcontent.com, which macOS's resolver sometimes refuses
   for hours on this DNS64/NAT64 network while the router answers fine, so `graph.py` falls back to `dig`. A failed
-  set keeps the old one on screen and logs a warning. `sensor.photo_frame` is set over REST, which HA forgets on
-  restart; the watcher re-posts `data/photos/published.json` within a minute when it's gone.
+  set keeps the old one on screen and logs a warning. `sensor.photo_frame` goes through core (live state), which
+  re-sends it after an HA restart; `data/photos/published.json` is my set, put back when guest mode ends.
 - Photos: OneDrive sign-in is the rclone remote `onedrive` (read-only scopes; `rclone config reconnect onedrive:` if it
-  lapses), so no Azure app is needed and it runs on a Pi. Only metadata is listed (Graph delta, cached in
-  `data/photos/index.json`). Judging uses ~800px thumbnails (150 new photos per run). Showing uses the originals
+  lapses), so no Azure app is needed and it runs on a Pi. Only metadata is listed (Graph delta every 4h; the
+  index lives in core's `media` tables, /v1/media/onedrive, not a JSON file). Judging uses ~800px thumbnails: the
+  worker's `photos-look` task, hourly, 150 a run, results saved every 25 as analyser `faces`. Showing uses the originals
   at full resolution (the user asked for that), but only for the 40 in each set (`Graph.original`, via the
   pre-signed downloadUrl, which rejects a bearer token); never clone the library. HEIC is decoded with pillow-heif
   and saved as JPEG (browsers can't show HEIC). The TV gets its own ~2080px copy (`tv` in each entry, used in TV mode):
-  decoding 24 MP images every few seconds made Spotify (cast to the TV) stall. Each set avoids the previous one (`index["shown"]`). Judging is local (OpenCV YuNet + SFace; models and the user's face embedding
+  decoding 24 MP images every few seconds made Spotify (cast to the TV) stall. Each set avoids the previous one (`media_shown`). Judging is local (OpenCV YuNet + SFace; models and the user's face embedding
   `me.npy` live in git-ignored `data/photos/`). The user wants photos of them *with people*: solo selfies (front
   camera, focal length < 3.5mm, one face) and single-face close-ups score 0, and so does anything portrait (the user wants landscape only). Shown copies are re-encoded without
   metadata under random names in `homeassistant/config/www/photos/`. Never commit or screenshot personal photos into
