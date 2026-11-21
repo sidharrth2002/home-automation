@@ -2,7 +2,7 @@
 Claude session, a script) can read exactly what each call takes.
 
 Every route but /v1/health needs "Authorization: Bearer <token>". Every token reads everything; writes are limited
-to its scopes ("doc/<collection>/<key>", "portfolio/<source>", "price/<instrument>", "live/<entity>", or "*"). Document writes take
+to its scopes ("doc/<collection>/<key>", "portfolio/<source>", "price/<instrument>", "live/<entity>", "media/<source>", or "*"). Document writes take
 "If-Match: <version>" and fail with 409 if the document has moved on.
 """
 import logging
@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from . import finance, live, portfolio, tasks
+from . import finance, live, media, portfolio, tasks
 from .db import DB, Conflict, Forbidden, NotFound, Principal
 
 log = logging.getLogger("core.server")
@@ -80,6 +80,37 @@ def _version(if_match: str | None) -> int | None:
 class LiveState(BaseModel):
     state: Any = Field(description="what Home Assistant shows as the entity's state (at most 255 characters there)")
     attributes: dict[str, Any] = {}
+
+
+class MediaItem(BaseModel):
+    id: str = Field(description="the item's id in its source")
+    name: str
+    folder: str | None = None
+    taken_at: str | None = None
+    camera: str | None = None
+    focal_mm: float | None = None
+    width: int | None = None
+    height: int | None = None
+    bytes: int | None = None
+
+
+class Cursor(BaseModel):
+    key: str
+    value: str
+
+
+class MediaBatch(BaseModel):
+    items: list[MediaItem] = Field([], max_length=5000)
+    deleted: list[str] = Field([], max_length=5000)
+    cursor: Cursor | None = Field(None, description="where the source's listing got to, saved with the batch")
+
+
+class Analysis(BaseModel):
+    results: dict[str, dict[str, Any]] = Field(description="analyser result by item id", max_length=5000)
+
+
+class Shown(BaseModel):
+    ids: list[str] = Field(max_length=500)
 
 
 def create_app(db: DB, admin_token: str, health=lambda: {}, on_live=lambda entity: None) -> FastAPI:
@@ -285,5 +316,33 @@ def create_app(db: DB, admin_token: str, health=lambda: {}, on_live=lambda entit
         p.check(f"live/{entity}")
         live.delete(db, entity)
         return {"deleted": entity}
+
+    # -- media ------------------------------------------------------------------------
+    @app.get("/v1/media/{source}", tags=["media"], summary="Counts, listing cursors and the set shown last")
+    def media_summary(source: str, p: Principal = Depends(who)):
+        return media.summary(db, source)
+
+    @app.get("/v1/media/{source}/items", tags=["media"],
+             summary="A page of items; with `analyser`, each carries its result (`analysed` filters on having one)")
+    def media_items(source: str, analyser: str | None = None, analysed: bool | None = None, after: str = "",
+                    limit: int = Query(media.PAGE, ge=1, le=media.PAGE), p: Principal = Depends(who)):
+        page, nxt = media.items(db, source, analyser, analysed, after, limit)
+        return {"items": page, "next": nxt}
+
+    @app.put("/v1/media/{source}/items", tags=["media"], summary="Add, update and remove items (a listing's changes)")
+    def media_upsert(source: str, body: MediaBatch, p: Principal = Depends(who)):
+        p.check(f"media/{source}")
+        return {"changed": media.upsert(db, source, [i.model_dump() for i in body.items], body.deleted,
+                                        body.cursor.model_dump() if body.cursor else None, p.name)}
+
+    @app.put("/v1/media/{source}/analysis/{analyser}", tags=["media"], summary="Record what an analyser found")
+    def media_analysis(source: str, analyser: str, body: Analysis, p: Principal = Depends(who)):
+        p.check(f"media/{source}")
+        return {"recorded": media.record_analysis(db, source, analyser, body.results, p.name)}
+
+    @app.post("/v1/media/{source}/shown", tags=["media"], summary="A set went on screen")
+    def media_shown(source: str, body: Shown, p: Principal = Depends(who)):
+        p.check(f"media/{source}")
+        return {"recorded": media.record_shown(db, source, body.ids, p.name)}
 
     return app

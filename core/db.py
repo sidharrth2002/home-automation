@@ -106,6 +106,22 @@ MIGRATIONS = [
         entity TEXT PRIMARY KEY, state TEXT NOT NULL, attrs TEXT NOT NULL, updated_by TEXT NOT NULL,
         updated_at TEXT NOT NULL);
     """,
+    # 4: media: the photo library's metadata, what each analyser found, and what was shown (core/media.py)
+    """
+    CREATE TABLE media (
+        id INTEGER PRIMARY KEY, source TEXT NOT NULL, source_id TEXT NOT NULL, name TEXT NOT NULL, folder TEXT,
+        taken_at TEXT, camera TEXT, focal_mm REAL, width INTEGER, height INTEGER, bytes INTEGER,
+        updated_at TEXT NOT NULL, UNIQUE (source, source_id));
+    CREATE TABLE media_analysis (
+        media_id INTEGER NOT NULL REFERENCES media (id) ON DELETE CASCADE, analyser TEXT NOT NULL,
+        result TEXT NOT NULL, analysed_at TEXT NOT NULL, PRIMARY KEY (media_id, analyser)) WITHOUT ROWID;
+    CREATE TABLE media_shown (
+        shown_at TEXT NOT NULL, media_id INTEGER NOT NULL REFERENCES media (id) ON DELETE CASCADE,
+        PRIMARY KEY (shown_at, media_id)) WITHOUT ROWID;
+    CREATE INDEX media_shown_media ON media_shown (media_id);
+    CREATE TABLE media_cursors (
+        source TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (source, key)) WITHOUT ROWID;
+    """,
 ]
 
 

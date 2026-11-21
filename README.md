@@ -107,7 +107,7 @@ flowchart LR
         sync -->|"show frames<br/>(local UDP)"| strip_svc
         inv -->|"snapshots"| core
         sync -->|"now playing"| core
-        photos -->|"photo frame"| core
+        photos -->|"library index,<br/>photo frame"| core
         worker <-->|"claim, progress"| core
         sup -.-> sync & strip_svc & photos & voice & core & worker & inv & widget
     end

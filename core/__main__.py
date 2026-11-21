@@ -63,6 +63,7 @@ def migrate_legacy(db: DB):
 
 DEFAULT_SCHEDULES = [  # name, kind, title, every_s; created once, then edited over the API
     ("revalue", "revalue", "Revalue hand-written holdings from FT prices", 3600),
+    ("photos-look", "photos-look", "Look at a batch of photos", 3600),
 ]
 
 
