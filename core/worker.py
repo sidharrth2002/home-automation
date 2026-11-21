@@ -7,6 +7,7 @@ It only talks to the API (never the database file), so a worker can run on anoth
   unless the task lists more `tools`. The final answer, the transcript and any files it wrote stay in the workspace.
 - revalue: today's FT prices for hand-written holdings (investments.revalue).
 - photos-look: look at a batch of photos for faces (photos.look), results into /v1/media/onedrive.
+- exposure: each held fund's asset allocation and regional weightings from the FT (investments.exposure).
 - premium-bonds: has the holder number won? (investments.premium_bonds; asks NS&I only when a result is due).
 """
 import json
@@ -181,8 +182,13 @@ def run_premium_bonds(ctx: Context):
     return check()
 
 
+def run_exposure(ctx: Context):
+    from investments.exposure import refresh
+    return refresh(progress=ctx.progress)
+
+
 HANDLERS = {"agent": run_agent, "revalue": run_revalue, "photos-look": run_photos_look,
-            "premium-bonds": run_premium_bonds}
+            "premium-bonds": run_premium_bonds, "exposure": run_exposure}
 FINISHED = telemetry.meter().create_counter("home.tasks.finished", description="tasks finished, by kind and outcome")
 DURATION = telemetry.meter().create_histogram("home.task.duration", unit="s", description="how long tasks took")
 

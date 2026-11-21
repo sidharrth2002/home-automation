@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from datetime import date
 
-from . import finance, live, portfolio, tasks
+from . import exposure, finance, live, portfolio, tasks
 from .db import DB, NotFound
 
 log = logging.getLogger("core.publish")
@@ -37,6 +37,7 @@ def publish_investments(db: DB, post=post_state):
         return
     today = date.today().isoformat()
     total, attrs = portfolio.merge(sources, finance.valuations(db), today)
+    attrs["exposure"] = exposure.compute(sources, exposure.breakdowns(db))
     finance.record_valuation(db, today, total, {
         s["id"]: round(sum(a["total"] or 0 for a in s["data"]["accounts"] if a.get("in_total", True) is not False), 2)
         for s in sources})
@@ -125,6 +126,9 @@ class Publisher:
         while True:
             for c in self.db.changes_since(seq, wait=30):
                 seq = c["seq"]
-                if c["entity"] in TRIGGERS:
+                if c["entity"] == "doc" and c["key"].startswith("fund_exposure/"):  # a fund's breakdown
+                    self.dirty.add("investments")
+                    self.wake.set()
+                elif c["entity"] in TRIGGERS:
                     self.dirty.add(TRIGGERS[c["entity"]])
                     self.wake.set()

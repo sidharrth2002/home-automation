@@ -65,6 +65,7 @@ DEFAULT_SCHEDULES = [  # name, kind, title, every_s; created once, then edited o
     ("revalue", "revalue", "Revalue hand-written holdings from FT prices", 3600),
     ("photos-look", "photos-look", "Look at a batch of photos", 3600),
     ("premium-bonds", "premium-bonds", "Check Premium Bonds prizes", 86400),
+    ("exposure", "exposure", "Fetch the funds' asset and regional breakdowns", 86400),
 ]
 
 
