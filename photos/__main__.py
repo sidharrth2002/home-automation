@@ -43,6 +43,8 @@ import telemetry
 from PIL import Image, ImageFilter, ImageOps
 from pillow_heif import register_heif_opener
 
+from core import client as core
+
 from . import guest
 from .faces import Faces
 from .graph import Graph
@@ -252,12 +254,10 @@ def publish(entries: list[dict]):
 
 
 def post(entries: list[dict], guest: bool):
-    body = {"state": len(entries), "attributes": {"friendly_name": "Photo frame", "icon": "mdi:image-multiple",
-                                                   "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
-                                                   "guest": guest, "photos": entries}}
-    req = urllib.request.Request(f"{HA_HTTP}/api/states/{SENSOR}", method="POST", data=json.dumps(body).encode(),
-                                 headers={"Authorization": f"Bearer {os.environ['TOKEN']}", "Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=10).close()
+    """The set on screen, through the core (which mirrors it into Home Assistant and puts it back after a restart)."""
+    core.report(SENSOR, len(entries), {"friendly_name": "Photo frame", "icon": "mdi:image-multiple",
+                                       "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
+                                       "guest": guest, "photos": entries})
 
 
 def _state(entity_id: str) -> dict | None:
@@ -280,13 +280,12 @@ def guest_on() -> bool:
 
 
 def sync_frame(faces: Faces):
-    """Keep the frame showing the right set: landscapes while guest mode is on, otherwise mine. Also puts the set
-    back after a Home Assistant restart, since states set over REST don't survive one."""
+    """Keep the frame showing the right set: landscapes while guest mode is on, otherwise mine."""
     with FRAME_LOCK:  # publish() may be posting a new set of mine from the refresh thread
         try:
-            frame, want_guest = _state(SENSOR), guest_on()
+            frame, want_guest = core.live(SENSOR), guest_on()
         except OSError:
-            return  # Home Assistant isn't up yet; try again next time
+            return  # the core isn't up yet; try again next time
         showing_guest = bool(frame and frame["attributes"].get("guest"))
         if frame and showing_guest == want_guest:
             return

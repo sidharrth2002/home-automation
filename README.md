@@ -106,6 +106,8 @@ flowchart LR
         spotify --> sync
         sync -->|"show frames<br/>(local UDP)"| strip_svc
         inv -->|"snapshots"| core
+        sync -->|"now playing"| core
+        photos -->|"photo frame"| core
         worker <-->|"claim, progress"| core
         sup -.-> sync & strip_svc & photos & voice & core & worker & inv & widget
     end
@@ -127,11 +129,12 @@ flowchart LR
     sync <-->|"websocket<br/>(modes, TV paused)"| ha
     strip_svc <-- websocket --> ha
     strip_svc -- BLE --> strip
-    core -- REST --> ha
+    core -->|"every sensor<br/>(REST, retried)"| ha
+    sup -->|"system health"| ha
     sup -. "OpenTelemetry<br/>(every service)" .-> grafana
     widget -- REST --> ha
     agents -->|"API, scoped token"| core
-    photos -->|"REST + image files"| ha
+    photos -->|"image files"| ha
     onedrive -.->|"Graph API,<br/>read-only"| photos
     money -. read-only .-> inv
     voice -- cast --> tv

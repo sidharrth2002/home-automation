@@ -17,7 +17,6 @@ import logging
 import os
 import sys
 import time
-import urllib.request
 from datetime import date, datetime
 from pathlib import Path
 
@@ -40,7 +39,6 @@ T212_KEYCHAIN = "home-automation.trading212"
 T212_SENSOR = "sensor.trading212"
 LOGINS = DATA / "auto_logins.json"
 MAX_AUTO_LOGINS = 8
-HA_HTTP = os.environ.get("HA_HTTP", "http://localhost:8123")
 
 
 def load_env():
@@ -105,12 +103,9 @@ def setup_t212():
 
 
 # ── publishing ───────────────────────────────────────────────────
-def post(state, attrs, entity=SENSOR):
-    req = urllib.request.Request(f"{HA_HTTP}/api/states/{entity}", method="POST",
-                                 data=json.dumps({"state": state, "attributes": attrs}).encode(),
-                                 headers={"Authorization": f"Bearer {os.environ['TOKEN']}",
-                                          "Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=10).close()
+def post(state, attrs, entity):
+    """Through the core, which mirrors it into Home Assistant."""
+    core.report(entity, state, attrs)
 
 
 HOLDING_FIELDS = ("name", "value", "cost", "gain", "gain_pct", "units", "price_p", "unit_type", "day_change",
@@ -178,9 +173,7 @@ def refresh_t212():
 
 def publish_t212_paused(reason):
     try:
-        last = json.loads(urllib.request.urlopen(urllib.request.Request(
-            f"{HA_HTTP}/api/states/{T212_SENSOR}", headers={"Authorization": f"Bearer {os.environ['TOKEN']}"}),
-            timeout=10).read())
+        last = core.live(T212_SENSOR)
         state, attrs = last["state"], last["attributes"]
     except Exception:
         state, attrs = "unknown", {"friendly_name": "Trading 212", "icon": "mdi:piggy-bank", "unit_of_measurement": "GBP"}

@@ -2,7 +2,7 @@
 Claude session, a script) can read exactly what each call takes.
 
 Every route but /v1/health needs "Authorization: Bearer <token>". Every token reads everything; writes are limited
-to its scopes ("doc/<collection>/<key>", "portfolio/<source>", "price/<instrument>", or "*"). Document writes take
+to its scopes ("doc/<collection>/<key>", "portfolio/<source>", "price/<instrument>", "live/<entity>", or "*"). Document writes take
 "If-Match: <version>" and fail with 409 if the document has moved on.
 """
 import logging
@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from . import finance, portfolio, tasks
+from . import finance, live, portfolio, tasks
 from .db import DB, Conflict, Forbidden, NotFound, Principal
 
 log = logging.getLogger("core.server")
@@ -77,7 +77,12 @@ def _version(if_match: str | None) -> int | None:
         raise HTTPException(400, "If-Match must be a version number") from None
 
 
-def create_app(db: DB, admin_token: str, health=lambda: {}) -> FastAPI:
+class LiveState(BaseModel):
+    state: Any = Field(description="what Home Assistant shows as the entity's state (at most 255 characters there)")
+    attributes: dict[str, Any] = {}
+
+
+def create_app(db: DB, admin_token: str, health=lambda: {}, on_live=lambda entity: None) -> FastAPI:
     app = FastAPI(title="Home core", version="1", description=__doc__)
     bearer = HTTPBearer(auto_error=False)
 
@@ -256,5 +261,29 @@ def create_app(db: DB, admin_token: str, health=lambda: {}) -> FastAPI:
     def put_schedule(name: str, body: Schedule, p: Principal = Depends(who)):
         p.check(f"schedule/{name}")
         return tasks.set_schedule(db, name, body.kind, body.title, body.every_s, body.input, body.enabled, p.name)
+
+    # -- live entity state ----------------------------------------------------------
+    @app.get("/v1/live", tags=["live"], summary="Every entity the services report (attributes with ?attributes=1)")
+    def list_live(attributes: bool = False, p: Principal = Depends(who)):
+        return {"entities": live.listing(db, attributes)}
+
+    @app.get("/v1/live/{entity}", tags=["live"])
+    def get_live(entity: str, p: Principal = Depends(who)):
+        return live.get(db, entity)
+
+    @app.put("/v1/live/{entity}", tags=["live"], summary="Report an entity's state; mirrored into Home Assistant")
+    def put_live(entity: str, body: LiveState, p: Principal = Depends(who)):
+        p.check(f"live/{entity}")
+        changed = live.put(db, entity, body.state, body.attributes, p.name)
+        if changed:
+            on_live(entity)
+        return {"entity": entity, "changed": changed}
+
+    @app.delete("/v1/live/{entity}", tags=["live"], summary="Stop keeping an entity (Home Assistant keeps its last "
+                                                                "state until it restarts)")
+    def delete_live(entity: str, p: Principal = Depends(who)):
+        p.check(f"live/{entity}")
+        live.delete(db, entity)
+        return {"deleted": entity}
 
     return app

@@ -3,17 +3,19 @@
 Runs on its own thread, following the change feed, so a write never waits on (or fails because of) Home Assistant.
 A change marks its publisher dirty; it's published shortly after (a burst of writes becomes one publish), retried
 until it lands, and re-published every few minutes because Home Assistant forgets REST-set states on restart.
+Live entities (core/live.py: what the services report) are marked one by one as they change.
 """
 import json
 import logging
 import os
 import threading
 import time
+import urllib.error
 import urllib.request
 from datetime import date
 
-from . import finance, portfolio, tasks
-from .db import DB
+from . import finance, live, portfolio, tasks
+from .db import DB, NotFound
 
 log = logging.getLogger("core.publish")
 REPUBLISH_S = 300
@@ -50,38 +52,73 @@ def publish_tasks(db: DB, post=post_state):
                                         "counts": s["counts"], "recent": s["recent"]})
 
 
+def publish_live(db: DB, entity: str, post=post_state):
+    try:
+        row = live.get(db, entity)
+    except NotFound:  # deleted since it was marked
+        return
+    state = row["state"]
+    if isinstance(state, str):
+        state = state[:255]  # Home Assistant's limit; it refuses longer
+    post(entity, state, row["attributes"])
+
+
 PUBLISHERS = {"investments": publish_investments, "tasks": publish_tasks}
 TRIGGERS = {"portfolio": "investments", "price": "investments", "task": "tasks"}  # audit entity -> publisher
+LIVE = "live:"  # the dirty mark for one live entity is LIVE + its id
 
 
 class Publisher:
     def __init__(self, db: DB, post=post_state):
         self.db, self.post = db, post
-        self.dirty = set(PUBLISHERS)  # everything once at start
+        self.dirty = self.everything()  # everything once at start
         self.wake = threading.Event()
         self.wake.set()
         self.last_ok: dict[str, str] = {}
+        self.backoff = 2
+
+    def everything(self) -> set[str]:
+        return set(PUBLISHERS) | {LIVE + e for e in live.entities(self.db)}
+
+    def live_changed(self, entity: str):
+        """A service reported a new state: publish it shortly."""
+        self.dirty.add(LIVE + entity)
+        self.wake.set()
 
     def run(self):
-        backoff, last_full = 2, time.monotonic()
+        last_full = time.monotonic()
         while True:
             self.wake.wait(timeout=REPUBLISH_S)
             time.sleep(DEBOUNCE_S)
             self.wake.clear()
             if time.monotonic() - last_full >= REPUBLISH_S:
-                self.dirty |= set(PUBLISHERS)
+                self.dirty |= self.everything()
                 last_full = time.monotonic()
             for name in sorted(self.dirty):
                 self.dirty.discard(name)  # before reading the state: a write during the publish marks it again
                 try:
-                    PUBLISHERS[name](self.db, self.post)
-                    self.last_ok[name] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                    backoff = 2
+                    if name.startswith(LIVE):
+                        publish_live(self.db, name[len(LIVE):], self.post)
+                    else:
+                        PUBLISHERS[name](self.db, self.post)
+                    # one freshness figure for all live entities
+                    self.last_ok["live" if name.startswith(LIVE) else name] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    self.backoff = 2
+                except urllib.error.HTTPError as e:
+                    if e.code >= 500:
+                        self._retry(name, e)
+                        break
+                    log.error("Home Assistant refused %s (%s); skipped until it changes or the next full re-send",
+                              name, e)  # retrying now won't help
                 except Exception as e:  # Home Assistant down or restarting: dirty again, try again
-                    self.dirty.add(name)
-                    log.warning("publishing %s failed (%s); retrying in %ds", name, e, backoff)
-                    threading.Timer(backoff, self.wake.set).start()
-                    backoff = min(backoff * 2, 60)
+                    self._retry(name, e)
+                    break  # the rest stay marked: no point timing out on each while it's down
+
+    def _retry(self, name: str, e: Exception):
+        self.dirty.add(name)
+        log.warning("publishing %s failed (%s); retrying in %ds", name, e, self.backoff)
+        threading.Timer(self.backoff, self.wake.set).start()
+        self.backoff = min(self.backoff * 2, 60)
 
     def follow(self):
         seq = self.db.last_seq()

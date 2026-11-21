@@ -5,7 +5,9 @@ import urllib.error
 import urllib.request
 
 
-class CoreError(RuntimeError):
+class CoreError(OSError):
+    """The API refused a call. An OSError, like the connection errors, so `except OSError` covers both."""
+
     def __init__(self, status, message):
         super().__init__(f"core API {status}: {message}")
         self.status = status
@@ -26,7 +28,7 @@ def call(method: str, path: str, body=None, token: str | None = None, if_version
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
         try:
-            message = json.loads(e.read()).get("error", e.reason)
+            message = json.loads(e.read()).get("detail", e.reason)
         except ValueError:
             message = e.reason
         raise CoreError(e.code, message) from None
@@ -47,3 +49,18 @@ def patch(collection: str, doc_id: str, fields: dict) -> dict:
 def put_source(source: str, doc: dict) -> dict:
     """A portfolio source's full current state (a new snapshot unless it's unchanged)."""
     return call("PUT", f"/v1/portfolio/{source}", doc)
+
+
+def report(entity: str, state, attributes: dict, timeout=10) -> bool:
+    """A service's entity state, which the core mirrors into Home Assistant. Returns whether it changed."""
+    return call("PUT", f"/v1/live/{entity}", {"state": state, "attributes": attributes}, timeout=timeout)["changed"]
+
+
+def live(entity: str) -> dict | None:
+    """An entity's last reported state; None if nothing has reported it."""
+    try:
+        return call("GET", f"/v1/live/{entity}")
+    except CoreError as e:
+        if e.status == 404:
+            return None
+        raise
