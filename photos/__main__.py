@@ -30,6 +30,7 @@ import random
 import secrets
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -64,7 +65,8 @@ MAX_PER_DAY = 2
 FRONT_CAMERA_MM = 3.5  # phone front cameras are ~2-3 mm; main cameras ~4-7 mm (selfies are fine, but not alone)
 MIN_SIDE = 1200
 REFRESH_S = 4 * 3600
-CHECK_S = 20  # how often to check the frame shows the right set (guest mode, or HA forgot it on restart)
+CHECK_S = 2  # how often to check the frame shows the right set (guest mode, or HA forgot it on restart)
+FRAME_LOCK = threading.Lock()  # the sync thread and a refresh both post the set
 
 
 def load_env():
@@ -241,9 +243,10 @@ def prepare(jpeg: bytes) -> tuple[Image.Image, Image.Image] | None:
 
 def publish(entries: list[dict]):
     """Remember a new set of mine and put it on screen, unless guest mode is showing landscapes instead."""
-    PUBLISHED.write_text(json.dumps(entries))
-    if not guest_on():
-        post(entries, guest=False)
+    with FRAME_LOCK:
+        PUBLISHED.write_text(json.dumps(entries))
+        if not guest_on():
+            post(entries, guest=False)
 
 
 def post(entries: list[dict], guest: bool):
@@ -277,22 +280,34 @@ def guest_on() -> bool:
 def sync_frame(faces: Faces):
     """Keep the frame showing the right set: landscapes while guest mode is on, otherwise mine. Also puts the set
     back after a Home Assistant restart, since states set over REST don't survive one."""
-    try:
-        frame, want_guest = _state(SENSOR), guest_on()
-    except OSError:
-        return  # Home Assistant isn't up yet; try again next time
-    showing_guest = bool(frame and frame["attributes"].get("guest"))
-    if frame and showing_guest == want_guest:
-        return
-    if want_guest:
-        entries = guest.build(GUEST_OUT, faces, prepare, TV_COVER)
-    elif PUBLISHED.exists():
-        entries = [e for e in json.loads(PUBLISHED.read_text()) if (OUT / Path(e["src"]).name).exists()]
-    else:
-        entries = []
-    if entries:
-        post(entries, guest=want_guest)
-        log.info("photo frame: %d %s", len(entries), "guest landscapes" if want_guest else "of mine")
+    with FRAME_LOCK:  # publish() may be posting a new set of mine from the refresh thread
+        try:
+            frame, want_guest = _state(SENSOR), guest_on()
+        except OSError:
+            return  # Home Assistant isn't up yet; try again next time
+        showing_guest = bool(frame and frame["attributes"].get("guest"))
+        if frame and showing_guest == want_guest:
+            return
+        if want_guest:
+            entries = guest.build(GUEST_OUT, faces, prepare, TV_COVER)
+        elif PUBLISHED.exists():
+            entries = [e for e in json.loads(PUBLISHED.read_text()) if (OUT / Path(e["src"]).name).exists()]
+        else:
+            entries = []
+        if entries:
+            post(entries, guest=want_guest)
+            log.info("photo frame: %d %s", len(entries), "guest landscapes" if want_guest else "of mine")
+
+
+def keep_in_sync():
+    """Check the Guest switch every CHECK_S, on its own thread, so a click shows within seconds even mid-refresh."""
+    faces = Faces()  # its own: OpenCV's networks aren't safe to share with the refresh thread
+    while True:
+        try:
+            sync_frame(faces)
+        except Exception:
+            log.exception("couldn't check the photo frame")
+        time.sleep(CHECK_S)
 
 
 def show(graph: Graph, index: dict, chosen: list[str], today: date) -> int:
@@ -377,18 +392,13 @@ def main():
         refresh(Graph(), Faces())
     elif cmd == "--watch":
         graph, faces = Graph(), Faces()
+        threading.Thread(target=keep_in_sync, daemon=True, name="frame-sync").start()
         while True:
             try:
-                sync_frame(faces)  # guest mode first: a refresh takes minutes
                 refresh(graph, faces)
             except Exception:
                 log.exception("photo refresh failed")
-            for _ in range(REFRESH_S // CHECK_S):
-                try:
-                    sync_frame(faces)
-                except Exception:
-                    log.exception("couldn't check the photo frame")
-                time.sleep(CHECK_S)
+            time.sleep(REFRESH_S)
     else:
         raise SystemExit(__doc__)
 

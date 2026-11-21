@@ -766,8 +766,12 @@ function slideshow(root, every) {
     img.onerror = () => setTimeout(next, 1000); // the set was just replaced; move on
     img.src = url;
   }
-  return { start() { if (!timer) { next(); timer = setInterval(next, every); } } };
+  return {
+    start() { if (!timer) { next(); timer = setInterval(next, every); } },
+    restart() { if (timer) { clearInterval(timer); timer = null; } this.start(); }, // a new set: show it now
+  };
 }
+let photoSet = null;
 const frameShow = slideshow($("#photoframe"), 15_000);
 const cardShow = slideshow($("#photos"), 10_000);
 function startPhotos() {
@@ -777,8 +781,12 @@ function startPhotos() {
   document.documentElement.classList.toggle("has-photos", any);
   $("#photos").hidden = !any || AMBIENT;
   if (!any) return;
-  if (AMBIENT) frameShow.start();
-  else cardShow.start();
+  const show = AMBIENT ? frameShow : cardShow;
+  // Guest mode on/off (or a fresh set) swaps the list; don't leave the old picture up until the next tick.
+  const set = `${at(PHOTOS, "guest")}|${photoList()[0]?.src}`;
+  if (photoSet !== null && set !== photoSet) show.restart();
+  else show.start();
+  photoSet = set;
 }
 
 // A quote on the screensaver, a different one every ten minutes. Only well-sourced attributions.
