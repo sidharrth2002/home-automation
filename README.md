@@ -444,6 +444,7 @@ telemetry/          OpenTelemetry setup shared by every service, and the Grafana
 core/               the central state service: SQLite, the API, publishing to Home Assistant, and the task worker
 investments/        Hargreaves Lansdown, FT prices, Trading 212
 skills/home-state/  the Claude Code skill other sessions use to read and write the state
+home_mcp/           the same for Claude Desktop's chat (a local MCP server; bin/install-mcp)
 backlight/          the Bluetooth LED strip behind the cabinet
 photos/             OneDrive photos: pick, judge, show
 widget/             the iPhone widget, its feed, webhooks and Shortcuts
@@ -451,7 +452,7 @@ tv-app/             the Android TV app and screensaver, and the scripts that dep
 homeassistant/      Home Assistant config as code, and apply.py
 frontend/hub/       the Hub, plus screenshot.py
 presence/           phone on the Wi-Fi -> home or away
-bin/                audiotee, ha, task, install-skill, check-commit, ha-mcp-headers
+bin/                audiotee, ha, task, install-skill, install-mcp, check-commit, ha-mcp-headers
 tests/
 ```
 

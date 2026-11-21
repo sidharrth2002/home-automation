@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Add the home-state MCP server (home_mcp) to Claude Desktop, so its chat can read and update the home state.
+
+    bin/install-mcp            then quit and reopen Claude Desktop
+
+Uses the token bin/install-skill made (~/.config/home-core/token). Only the "home-state" entry in
+claude_desktop_config.json is added or replaced; the rest of the file is kept, and a backup is written beside it.
+"""
+import json
+import shutil
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CONFIG = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+TOKEN = Path.home() / ".config" / "home-core" / "token"
+
+
+def main():
+    if not TOKEN.exists():
+        sys.exit(f"no token at {TOKEN}: run bin/install-skill first")
+    python = ROOT / ".venv" / "bin" / "python"
+    entry = {"command": str(python if python.exists() else shutil.which("python3")), "args": [str(ROOT / "home_mcp")]}
+    config = json.loads(CONFIG.read_text()) if CONFIG.exists() else {}
+    if CONFIG.exists():
+        shutil.copy2(CONFIG, CONFIG.with_suffix(".json.bak"))
+    config.setdefault("mcpServers", {})["home-state"] = entry
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG.write_text(json.dumps(config, indent=2) + "\n")
+    print(f"added home-state to {CONFIG}\nquit Claude Desktop (Cmd-Q) and reopen it; the tools appear under the + menu")
+
+
+if __name__ == "__main__":
+    main()
