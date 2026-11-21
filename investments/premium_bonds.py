@@ -123,7 +123,8 @@ def holding() -> float | None:
         if e.status == 404:
             return None
         raise
-    totals = [a.get("total") or 0 for a in src["data"].get("accounts", []) if "premium" in a.get("name", "").lower()]
+    totals = [a.get("total") or 0 for a in src["data"].get("accounts", [])
+              if a.get("type") == "premium_bonds" or "premium" in a.get("name", "").lower()]
     return round(sum(totals), 2) if totals else None
 
 
