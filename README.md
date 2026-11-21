@@ -56,7 +56,7 @@ health card that says what's running and how fresh everything is.
     <td width="38%" valign="top"><img src="docs/hub-health.jpg" alt="The System health card: every service, feed and device, and the background tasks"></td>
   </tr>
   <tr>
-    <td valign="top"><b>Money.</b> Every account from every provider, what it's invested in and where in the world, and each fund's price history. Blurred until I tap the eye.</td>
+    <td valign="top"><b>Money.</b> Every account from every provider, what it's invested in and where in the world, and each fund's price history. Every amount stays blurred until I tap the eye, as it is here.</td>
     <td valign="top"><b>Health.</b> Every service, data feed and device, and the background jobs Claude is running for me.</td>
   </tr>
 </table>
