@@ -100,6 +100,12 @@ MIGRATIONS = [
         name TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, input TEXT, every_s INTEGER NOT NULL,
         enabled INTEGER NOT NULL DEFAULT 1, next_run TEXT NOT NULL, last_task_id INTEGER);
     """,
+    # 3: live entity state the services report (core/live.py)
+    """
+    CREATE TABLE live (
+        entity TEXT PRIMARY KEY, state TEXT NOT NULL, attrs TEXT NOT NULL, updated_by TEXT NOT NULL,
+        updated_at TEXT NOT NULL);
+    """,
 ]
 
 

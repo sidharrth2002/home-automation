@@ -1,4 +1,4 @@
-"""Is anyone home? Publishes binary_sensor.someone_home to Home Assistant.
+"""Is anyone home? Reports binary_sensor.someone_home through the core, which mirrors it into Home Assistant.
 
 Home means either:
 - the phone was seen on the home Wi-Fi in the last PRESENCE_AWAY_AFTER_MIN minutes (default 15). Phones
@@ -11,18 +11,17 @@ Home means either:
   python -m presence          # needs PRESENCE_PHONE_MAC in .env (Settings > Wi-Fi > (i) > Wi-Fi Address)
 """
 import errno
-import json
 import logging
 import os
 import re
 import socket
 import subprocess
 import time
-import urllib.request
 
 import telemetry
 
-from music_sync.service import HA_HTTP, load_env
+from core import client as core
+from music_sync.service import load_env
 
 log = logging.getLogger("presence")
 SENSOR = "binary_sensor.someone_home"
@@ -62,12 +61,8 @@ def mac_idle_s():
 
 
 def publish(state, attrs):
-    req = urllib.request.Request(
-        f"{HA_HTTP}/api/states/{SENSOR}", method="POST",
-        data=json.dumps({"state": "on" if state else "off", "attributes": {
-            "friendly_name": "Someone home", "device_class": "presence", **attrs}}).encode(),
-        headers={"Authorization": f"Bearer {os.environ['TOKEN']}", "Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=5).close()
+    core.report(SENSOR, "on" if state else "off",
+                {"friendly_name": "Someone home", "device_class": "presence", **attrs}, timeout=5)
 
 
 def main():

@@ -113,8 +113,10 @@ find). Testing takes over the TV screen, so ask first.
   amounts; logs too. The database and its backups are under data/ (git-ignored) and hold real figures: never commit,
   print or paste them. Tests use made-up numbers only.
 - Tokens: the admin token is only for this repo's services; anything else gets `python -m core token add <name>
-  <scopes>` (scopes are globs over `doc/<collection>/<key>`, `portfolio/<source>`, `price/<instrument>`).
-- `tests.test_core` covers the API, scopes, snapshots, revaluation, publishing, maintenance, tasks and the agent runner.
+  <scopes>` (scopes are globs over `doc/<collection>/<key>`, `portfolio/<source>`, `price/<instrument>`,
+  `live/<entity>`).
+- `tests.test_core` covers the API, scopes, snapshots, revaluation, publishing, maintenance, tasks, the agent runner
+  and live state (incl. publish retry while HA is down).
 - Background work: when the user asks for something to be done in the background ("go investigate…", "process these
   files", "find restaurants…"), queue it with `bin/task run "<prompt>" [--dir <folder>] [--tool …]` and tell them
   the task number; check with `bin/task show <id>`. Agent tasks are headless `claude -p` runs in data/tasks/<id>/
@@ -126,7 +128,10 @@ find). Testing takes over the TV screen, so ask first.
   `telemetry.gauge(...)` / `telemetry.meter()`; names start `home.`. Never log amounts or secrets: logs now leave
   the process. Off when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
 - Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries
-  state to the screens. Exception: music sync's light frames stay direct UDP (timing), its control/state doesn't.
+  state to the screens. A service's sensors are reported with `core.client.report(entity, state, attrs)` (table
+  `live`, `PUT /v1/live/<entity>`), never POSTed to HA's /api/states: core mirrors them, retries, and re-sends after
+  an HA restart. Exceptions: music sync's light frames stay direct UDP (timing); the supervisor posts
+  `sensor.system_health` directly (it must work with core down). `core.client.CoreError` is an OSError.
 
 ## Gotchas
 

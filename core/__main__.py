@@ -119,7 +119,8 @@ def main():
         for target, name in ((publisher.run, "publish"), (publisher.follow, "follow"), (maintenance.run, "maintenance"),
                              (lambda: scheduler(db), "scheduler")):
             threading.Thread(target=target, daemon=True, name=name).start()
-        app = create_app(db, admin, health=lambda: {"maintenance": maintenance.status, "published": publisher.last_ok})
+        app = create_app(db, admin, health=lambda: {"maintenance": maintenance.status, "published": publisher.last_ok},
+                         on_live=publisher.live_changed)
         instrument(app, db, publisher)
         host, port = os.environ.get("CORE_BIND", "127.0.0.1"), int(os.environ.get("CORE_PORT", "8790"))
         log.info("core API on http://%s:%d (docs at /docs)", host, port)

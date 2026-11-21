@@ -8,13 +8,16 @@ which carries it to the Hub, the TV and the widget.
 flowchart LR
     hlsvc["investments service<br/>(HL, Trading 212, FT prices)"] -->|"PUT portfolio/hl, t212<br/>PUT prices"| api
     agent["another Claude session<br/>(home-state skill)"] -->|"PUT portfolio/hsbc<br/>PUT state/finance/..."| api
+    svcs["music sync, photos,<br/>presence, investments"] -->|"PUT live/&lt;entity&gt;<br/>(now playing, photo frame, ...)"| api
     subgraph core["core (python -m core serve)"]
         api["FastAPI<br/>/v1/..."] --> db[("SQLite<br/>data/core/core.db")]
         db --> feed["change feed<br/>(audit log)"]
         feed --> pub["publisher"]
+        api -->|"live change"| pub
         maint["maintenance<br/>(backup, integrity)"] --> db
     end
-    pub -->|"sensor.investments"| ha["Home Assistant"]
+    pub -->|"sensor.investments, sensor.core_tasks,<br/>every live entity"| ha["Home Assistant"]
+    stack["supervisor"] -->|"sensor.system_health<br/>(direct: must work with core down)"| ha
     ha --> hub["Hub, TV, widget"]
 ```
 
@@ -58,11 +61,13 @@ erDiagram
     documents { text collection PK text key PK text data int version text updated_by }
     document_versions { text collection PK text key PK int version PK text data "null = deleted" }
     audit_log { int seq PK text ts text principal text action text entity text key }
+    live { text entity PK text state text attrs text updated_by text updated_at }
     principals { int id PK text name text token_hash text scopes text revoked_at }
 ```
 
 `schema_migrations` records which numbered migrations in `core/db.py` have run; new tables arrive as new
-migrations, applied at start. Migration 2 added `tasks`, `task_events` and `schedules` (below). Planned next: media
+migrations, applied at start. Migration 2 added `tasks`, `task_events` and `schedules` (below); migration 3 `live`
+(the latest state of each entity the services report: no history, no audit, since it changes often). Planned next: media
 tables for the photos (metadata and analysis results; the image files stay on disk, named by content hash).
 
 ## The API
@@ -78,6 +83,8 @@ FastAPI, so `/docs` is interactive and `/openapi.json` describes every call. Eve
 | `GET /v1/portfolio/<source>/snapshots[/<id>]` | its history |
 | `PUT /v1/prices/<instrument>` | a price in GBP for a day |
 | `GET/PUT/PATCH/DELETE /v1/state/<collection>/<key>` | any other app state, versioned; `If-Match` for safe edits |
+| `PUT /v1/live/<entity>` | a service reports `{"state", "attributes"}`; mirrored into Home Assistant (unchanged: nothing sent) |
+| `GET /v1/live[/<entity>]` | what the services last reported |
 | `GET /v1/changes?since=&wait=` | the change feed (long-poll) |
 | `GET /v1/audit` | who changed what |
 
@@ -87,7 +94,7 @@ The portfolio format is `core.portfolio.Source` (in `/openapi.json`, and in the 
 
 - The services use `CORE_TOKEN` from `.env`, which may write anything.
 - Every other client gets its own token with write scopes, matched against `doc/<collection>/<key>`,
-  `portfolio/<source>` and `price/<instrument>`: `python -m core token add finance 'portfolio/hsbc*' 'doc/finance/*'`.
+  `portfolio/<source>`, `price/<instrument>` and `live/<entity>`: `python -m core token add finance 'portfolio/hsbc*' 'doc/finance/*'`.
   Tokens are stored hashed, can be revoked, and every write is logged under the token's name.
 - It listens on 127.0.0.1 by default. On a Pi serving other devices, set `CORE_BIND` to its LAN address.
 
@@ -101,6 +108,25 @@ python -m core token list
 
 Every hour it backs up the database (one file a day in `data/core/backups/`, 14 kept), runs an integrity check, and
 optimises and checkpoints SQLite. `/v1/health` shows the results and when each publisher last succeeded.
+
+## Live state: everything goes through the core
+
+The services report what they know (`sensor.music_sync_now_playing`, `sensor.music_sync_tempo`, `sensor.photo_frame`,
+`binary_sensor.someone_home`, `sensor.trading212`, `sensor.investment_<sedol>`) with `core.client.report(entity,
+state, attributes)`. The core keeps the latest of each and its publisher mirrors it into Home Assistant: a burst
+becomes one publish, a failure is retried with backoff, and everything is re-sent every 5 minutes and when the core
+starts, so a Home Assistant restart no longer blanks a sensor until its service next reports. A report that changes
+nothing is a no-op. Services read back their own state with `core.client.live(entity)` (photos uses this to decide
+whether the frame shows the right set).
+
+Deliberately not routed through the core:
+
+- **Music sync's light frames** go straight to the bulbs and the strip over UDP, dozens a second: an extra hop
+  would put the lights behind the beat. Its now-playing and tempo do go through the core.
+- **The supervisor's `sensor.system_health`** is posted directly, because it has to report the core itself being
+  down.
+- **Reads of Home Assistant-owned state** (switches, the TV, weather, lights) stay with Home Assistant, the device
+  layer. The Hub keeps reading Home Assistant until the API has a sign-in for browsers.
 
 ## Background tasks
 

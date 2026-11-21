@@ -13,10 +13,10 @@ import logging
 import os
 import signal
 import time
-import urllib.request
 from pathlib import Path
 
 import telemetry
+from core import client as core
 
 import numpy as np
 import websockets
@@ -337,11 +337,8 @@ class Controller:
         task.add_done_callback(self._bg.discard)
 
     def _post_state(self, entity_id, body):
-        req = urllib.request.Request(f"{HA_HTTP}/api/states/{entity_id}", data=json.dumps(body).encode(),
-                                     method="POST", headers={"Authorization": f"Bearer {self.token}",
-                                                             "Content-Type": "application/json"})
-        try:
-            urllib.request.urlopen(req, timeout=3).close()
+        try:  # through the core, which mirrors it into Home Assistant
+            core.report(entity_id, body["state"], body["attributes"], timeout=3)
         except OSError as e:
             log.debug("could not publish %s: %s", entity_id, e)
 
