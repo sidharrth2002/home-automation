@@ -196,6 +196,8 @@ sequenceDiagram
 - `agent` tasks run `claude -p` in their own folder, `data/tasks/<id>/`. They can read that folder and any `dirs`
   the task names, search and fetch the web, and write only inside their folder; no shell unless the task adds a
   tool (e.g. `Bash(python3:*)` for spreadsheets). The answer is in `result.md`, with the full transcript beside it.
+- Whatever a task asks for, it is denied `rclone`, `rm`, writes under `~/Library/CloudStorage` (the OneDrive sync
+  folders) and reading the rclone sign-in (`AGENT_DENY` in core/worker.py).
 - Built-in kinds: `revalue` (FT prices for hand-written holdings; scheduled hourly), `photos-look` (a batch of
   photos for faces; hourly) and `premium-bonds` (daily: NS&I's public prize checker with the holder number from
   .env, asked only once a month's results are due, 3 days after the draw, plus unclaimed prizes every 30 days;
