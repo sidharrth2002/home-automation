@@ -99,7 +99,9 @@ def merge(sources: list[dict], history: dict[str, float], today: str) -> tuple[f
             counted = acc.get("in_total", True) is not False
             accounts.append({"name": acc["name"] if len(sources) == 1 else f"{doc['name']} {acc['name']}",
                              "total": acc.get("total"), "stock": acc.get("stock"), "cash": acc.get("cash"),
-                             "type": acc.get("type"), "source": src, "in_total": counted})
+                             "type": acc.get("type"), "source": src, "in_total": counted,
+                             "provider": doc["name"], "label": acc["name"], "interest_pct": acc.get("interest_pct"),
+                             "matures": acc.get("matures")})
             if counted and acc.get("type", "other") in INVESTMENT_TYPES:
                 cash += acc.get("cash") or 0  # uninvested cash; savings and cash accounts are rows of their own
             for h in acc.get("holdings", []):

@@ -5,9 +5,10 @@ home-state skill (skills/home-state) that Claude Code sessions use.
 
 Standard library only (the MCP SDK's dependencies clash with the core's FastAPI pins). It speaks MCP's stdio
 transport: one JSON-RPC message per line on stdin/stdout; anything else goes to stderr. It uses the token in
-~/.config/home-core/token (made by bin/install-skill: the `claude` token,
-writing doc/*, portfolio/*, price/*, live/*, media/*, task/*, schedule/*), so it can read everything and write only what that token allows. The portfolio format and the
-rules for writing come from skills/home-state/SKILL.md, so the two stay the same.
+~/.config/home-core/token (made by bin/install-skill: the `claude` token, writing doc/*, portfolio/*, price/*,
+live/*, media/*, task/*, schedule/*), so it can view and change anything but the task worker's endpoints; HL and
+Trading 212 are refused too (they're fetched automatically). The portfolio format and the rules for writing come
+from skills/home-state/SKILL.md, so the two stay the same.
 """
 import json
 import os
