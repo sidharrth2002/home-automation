@@ -9,3 +9,19 @@ services:
       - ./homeassistant/config:/config
     ports:
       - "8123:8123"
+
+  # Logs, metrics and traces from every service (OpenTelemetry): Grafana with Loki, Prometheus and Tempo in one
+  # container. Grafana: http://localhost:3000 (the "Home" dashboard). Only reachable from this machine.
+  telemetry:
+    image: grafana/otel-lgtm:0.11.0
+    container_name: telemetry
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - ./data/telemetry:/data
+      - ./telemetry/grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/home.yaml:ro
+      - ./telemetry/grafana/home.json:/otel-lgtm/home-dashboards/home.json:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:4318:4318"

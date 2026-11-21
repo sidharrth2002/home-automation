@@ -120,6 +120,11 @@ find). Testing takes over the TV screen, so ask first.
   the task number; check with `bin/task show <id>`. Agent tasks are headless `claude -p` runs in data/tasks/<id>/
   with read access to their folder and named dirs, web search/fetch, and writes only in their folder; only add
   tools (e.g. Bash) the task really needs. Results (result.md) can be personal: they stay under data/.
+- Telemetry: every service calls `telemetry.setup("<name>")` after logging.basicConfig (logs, metrics, traces over
+  OTLP to the `telemetry` container; Grafana at localhost:3000, dashboard "Home" from telemetry/grafana/home.json,
+  provisioned read-only: edit the JSON, then `docker restart telemetry`). A new service must call it too. Metrics:
+  `telemetry.gauge(...)` / `telemetry.meter()`; names start `home.`. Never log amounts or secrets: logs now leave
+  the process. Off when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
 - Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries
   state to the screens. Exception: music sync's light frames stay direct UDP (timing), its control/state doesn't.
 

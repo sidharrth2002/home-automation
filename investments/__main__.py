@@ -21,6 +21,8 @@ import urllib.request
 from datetime import date, datetime
 from pathlib import Path
 
+import telemetry
+
 import keyring
 
 from core import client as core
@@ -263,6 +265,15 @@ def t212_delay():
     return 1800 if 7 <= datetime.now().hour < 22 else 2 * 3600
 
 
+def core_ready() -> bool:
+    """Is the core API up? Checked before each refresh, so a restart race doesn't cost an hour's refresh."""
+    try:
+        core.call("GET", "/v1/health", timeout=3)
+        return True
+    except Exception:
+        return False
+
+
 def watch():
     """Two independent sources on their own timers: a problem with one never delays or unblocks the other."""
     hl = HL()
@@ -270,6 +281,11 @@ def watch():
     paused = {}  # source -> halt reason already published, so a halt is announced once, not every tick
     while True:
         now = time.time()
+        if (configured() and now >= due["hl"]) or (t212_configured() and now >= due["t212"]):
+            if not core_ready():  # nothing to publish to yet: look again shortly, without touching HL
+                due = {k: max(v, now + 30) for k, v in due.items()}
+                time.sleep(15)
+                continue
         if configured() and now >= due["hl"]:
             reason = halted_reason()
             if reason:  # wait for a successful manual `login`; checking again in a minute
@@ -314,6 +330,7 @@ def watch():
 def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("investments")
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "setup":
         setup()

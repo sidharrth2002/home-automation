@@ -38,6 +38,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from pathlib import Path
 
+import telemetry
+
 from PIL import Image, ImageFilter, ImageOps
 from pillow_heif import register_heif_opener
 
@@ -375,6 +377,7 @@ def status():
 def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("photos")
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "status":
         status()

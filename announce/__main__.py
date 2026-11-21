@@ -22,6 +22,8 @@ import time
 import wave
 from pathlib import Path
 
+import telemetry
+
 import websockets
 
 from music_sync.service import HA, load_env
@@ -176,6 +178,7 @@ async def listen(ha: HA, lock: asyncio.Lock):
 async def main():
     load_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    telemetry.setup("announce")
     token = os.environ["TOKEN"]
     log.info("voice: %s", pick_voice(installed_voices()) or "system default")
     clean_old_audio()

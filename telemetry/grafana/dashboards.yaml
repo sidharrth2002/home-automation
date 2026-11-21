@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: Home
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /otel-lgtm/home-dashboards

@@ -77,6 +77,9 @@ so "turn the TV lamps blue" or "lights out" just works.
 - **Background tasks.** I can hand off work ("go through these spreadsheets", "find a few good restaurants near
   X") and it runs in the background as a headless Claude Code session, tracked in the central state with its
   progress, log and result, and listed on the Hub. Recurring jobs run the same way on schedules.
+- **Logs, metrics and traces in one place.** Every service sends them over OpenTelemetry to a local Grafana
+  (`localhost:3000`): one dashboard with each service's health, warnings and errors, the API's traffic and latency,
+  and every log line, searchable. Moving it to a hosted backend later is a change of URL.
 - **One switch.** `./home up` and `./home down` start and stop everything, and a supervisor restarts anything that
   falls over.
 
@@ -108,6 +111,7 @@ flowchart LR
     end
 
     ha["Home Assistant<br/>(Docker)"]
+    grafana["Grafana: logs, metrics,<br/>traces (Docker)"]
     bulbs(("WiZ bulbs"))
     strip(("cabinet<br/>LED strip"))
     tv["TCL Google TV<br/>app + screensaver<br/>+ Cast"]
@@ -124,6 +128,7 @@ flowchart LR
     strip_svc <-- websocket --> ha
     strip_svc -- BLE --> strip
     core -- REST --> ha
+    sup -. "OpenTelemetry<br/>(every service)" .-> grafana
     widget -- REST --> ha
     agents -->|"API, scoped token"| core
     photos -->|"REST + image files"| ha
@@ -432,6 +437,7 @@ home                ./home up | down | reload | status | logs
 stack/              the supervisor behind ./home, and the health it reports
 music_sync/         audio capture, analysis, light show, now playing
 announce/           the voice: speaks home_say events on the Mac or the TV
+telemetry/          OpenTelemetry setup shared by every service, and the Grafana dashboard
 core/               the central state service: SQLite, the API, publishing to Home Assistant, and the task worker
 investments/        Hargreaves Lansdown, FT prices, Trading 212
 skills/home-state/  the Claude Code skill other sessions use to read and write the state
