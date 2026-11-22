@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Home</string>
-    <string name="home_button_description">Opens the Hub when you press the Home button on the remote. It only listens for that button and never reads the screen.</string>
+    <string name="home_button_description">Makes the Hub the home screen: opens it when you press Home, and when Google TV\'s home comes up uninvited (at power-on or after leaving an app). It only sees the Home button and Google TV\'s launcher, never what is on screen.</string>
 </resources>

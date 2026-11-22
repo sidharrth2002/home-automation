@@ -98,7 +98,7 @@ private fun Lamp(ctx: Ctx, id: String, name: String, tag: String, syncing: Boole
         Spacer(Modifier.height(8.dp))
         Pressable(onClick = { ctx.act.callService("light", "toggle", data("entity_id" to id)) }, shape = CircleShape, scale = 1.08f, glow = color,
             modifier = if (focus != null) Modifier.focusRequester(focus) else Modifier) {
-            Canvas(Modifier.size(74.dp)) {
+            Canvas(Modifier.size(104.dp)) {
                 val r = size.minDimension / 2
                 drawCircle(Brush.radialGradient(listOf(color.copy(alpha = glow), Color.Transparent), center, r * 1.0f), r)
                 val core = r * 0.78f
@@ -140,13 +140,18 @@ fun ScenesRow(ctx: Ctx) {
             Pressable(onClick = {
                 if (sc.id == "welcome_home") ctx.toast("Welcome home, Sid")
                 ctx.act.callService("script", "turn_on", data("entity_id" to "script.${sc.id}"))
-            }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp), glow = sc.glow, scale = 1.07f) {
-                Box(Modifier.fillMaxWidth().height(64.dp).background(Brush.linearGradient(sc.colours.map { it.copy(alpha = if (sc.active) 1f else .72f) }))
-                    .then(if (sc.active) Modifier.border(2.dp, sc.glow, RoundedCornerShape(18.dp)) else Modifier).padding(11.dp)) {
-                    HubIcon(sc.icon, Color.White, 16.dp)
-                    Column(Modifier.align(Alignment.BottomStart)) {
-                        Text(sc.name, style = Hub.text(11.sp, Color.White, 600), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(sc.sub, style = Hub.text(8.sp, Color.White.copy(alpha = .75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp), glow = sc.glow, scale = 1.05f) {
+                // calm: dark glass and a small tinted icon; the scene that's on gets a soft outline in its colour
+                Row(Modifier.fillMaxWidth().height(52.dp).background(if (sc.active) sc.glow.copy(alpha = .10f) else Hub.glass)
+                    .border(1.dp, if (sc.active) sc.glow.copy(alpha = .55f) else Hub.line, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(26.dp).clip(CircleShape).background(sc.glow.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+                        HubIcon(sc.icon, sc.glow.copy(alpha = .9f), 13.dp)
+                    }
+                    Spacer(Modifier.width(9.dp))
+                    Column {
+                        Text(sc.name, style = Hub.text(10.5.sp, Hub.ink, 500), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(sc.sub, style = Hub.text(7.5.sp, Hub.ink3), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -280,13 +285,14 @@ fun rememberBanner(pkg: String): androidx.compose.ui.graphics.ImageBitmap? {
 }
 
 @Composable
-fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, onAllApps: () -> Unit = {}) {
+fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.focus.FocusRequester? = null, onAllApps: () -> Unit = {}) {
     val context = LocalContext.current
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        for (app in TV_APPS) {
+        for ((i, app) in TV_APPS.withIndex()) {
             val banner = rememberBanner(app.pkg)
             Pressable(onClick = { if (!launch(context, app.pkg)) ctx.toast("${app.name} isn't installed") },
-                modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp), glow = app.brand, scale = 1.08f) {
+                modifier = Modifier.weight(1f).then(if (i == 0 && first != null) Modifier.focusRequester(first) else Modifier),
+                shape = RoundedCornerShape(14.dp), glow = app.brand, scale = 1.08f) {
                 Box(Modifier.fillMaxWidth().height(66.dp).background(Brush.linearGradient(listOf(app.brand, app.brand.copy(alpha = .55f)))),
                     contentAlignment = Alignment.Center) {
                     if (banner != null) androidx.compose.foundation.Image(banner, app.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -297,7 +303,7 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, onAllApps: () -> Unit = {})
         // the rest: Google TV's own home (every other app), and the TV's settings
         for ((label, icon, open) in listOf<Triple<String, androidx.compose.ui.graphics.vector.ImageVector, () -> Boolean>>(
             Triple("All apps", HubIcons.tv) { onAllApps(); true },
-            Triple("Google TV", HubIcons.home) { launch(context, "com.google.android.apps.tv.launcherx") },
+            Triple("Google TV", HubIcons.home) { com.sid.home.HomeRedirect.chooseGoogleTv(); launch(context, com.sid.home.HomeRedirect.GOOGLE_TV) },
             Triple("Settings", HubIcons.reactor) { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess },
         )) {
