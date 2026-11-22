@@ -23,6 +23,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.drawscope.withTransform
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -117,25 +120,35 @@ private fun rememberBands(active: Boolean): androidx.compose.runtime.State<Bands
 private const val RESTING_BPM = 72.0 // while the beat is still being found
 private const val RIBBONS = 5
 private const val MOTES = 34
+/** Frames drawn per frame offered (60 Hz): every other one. Steady 30 fps reads smoother than a 60 this TV can't hold. */
+private const val EVERY = 2
+/** The radius the aurora's gradients are made at once; each light is scaled from it as it swells. */
+private const val UNIT_R = 1000f
 
 /**
  * Light that moves with the music, calm by design: everything is translucent and slow, colours blend rather than
  * flash, and the beat is a swell, never a strobe. Bass breathes the aurora, the middle shapes the ribbons, the top
  * end makes the dust glint. Without the TV's sound, a soft swell on each beat of the Mac's tempo drives it. When the
  * music stops, it slows to a drift and dims.
+ *
+ * Cost, on a TV's weak GPU and CPU: it draws at a steady 30 fps (the motion is slow), nothing recomposes per frame
+ * (the clock and bands live in draw-only state; the Visualizer's bands are read by the frame loop, not composition),
+ * the gradients are made once per palette (moved and scaled by the canvas, not rebuilt each frame), and it stops
+ * while the screensaver covers it.
  */
 @Composable
 private fun SoundLight(ctx: Ctx, colours: List<Color>) {
     val now = ctx.s[Ids.NOW]
     val playing = now?.str("player_state") == "playing" || (ctx.on(Ids.SYNC) && ctx.st(Ids.MODE) != "tv")
     val bpm = ctx.s[Ids.TEMPO]?.number?.takeIf { it in 40.0..220.0 }
-    val heard by rememberBands(playing)
-    val latest by rememberUpdatedState(heard)
+    val covered = LocalCovered.current
+    val bands = rememberBands(playing && !covered.value)
+    val hearing by remember { androidx.compose.runtime.derivedStateOf { bands.value != null } }
     val beatS by rememberUpdatedState((60.0 / (bpm ?: RESTING_BPM)).toFloat())
     val presence by animateFloatAsState(if (playing) 1f else .3f, tween(1500), label = "presence")
     val speed by rememberUpdatedState(if (playing) 1f else .25f)
 
-    // the clock and the smoothed bands live in draw-only state: the canvas redraws each frame, nothing recomposes
+    // what the canvas draws, written together every EVERY frames: one redraw, no recomposition
     val time = remember { mutableFloatStateOf(0f) }
     val bass = remember { mutableFloatStateOf(.3f) }
     val mid = remember { mutableFloatStateOf(.3f) }
@@ -143,74 +156,95 @@ private fun SoundLight(ctx: Ctx, colours: List<Color>) {
     LaunchedEffect(Unit) {
         var last = 0L
         var beat = 0f
-        while (true) withFrameNanos { t ->
-            val dt = if (last == 0L) 0f else ((t - last) / 1e9f).coerceAtMost(.1f)
-            last = t
-            time.floatValue += dt * speed
-            beat = (beat + dt / beatS) % 1f
-            val b = latest
-            // no sound to hear: a soft swell on each beat (rises fast, falls over the beat), the rest breathing slowly
-            val env = exp(-3.2f * beat)
-            val tb = b?.bass ?: (.22f + .38f * env)
-            val tm = b?.mid ?: (.32f + .12f * sin(time.floatValue * .7f))
-            val th = b?.high ?: (.18f + .1f * env)
-            fun ease(s: androidx.compose.runtime.MutableFloatState, target: Float, up: Float, down: Float) {
-                s.floatValue += (target - s.floatValue) * min(1f, dt * if (target > s.floatValue) up else down)
+        var n = 0
+        var t = 0f; var lb = bass.floatValue; var lm = mid.floatValue; var lh = high.floatValue
+        while (true) {
+            if (covered.value) { snapshotFlow { covered.value }.first { !it }; last = 0L }
+            withFrameNanos { ns ->
+                val dt = if (last == 0L) 0f else ((ns - last) / 1e9f).coerceAtMost(.1f)
+                last = ns
+                t += dt * speed
+                beat = (beat + dt / beatS) % 1f
+                val b = bands.value
+                // no sound to hear: a soft swell on each beat (rises fast, falls over the beat), the rest breathing slowly
+                val env = exp(-3.2f * beat)
+                val tb = b?.bass ?: (.22f + .38f * env)
+                val tm = b?.mid ?: (.32f + .12f * sin(t * .7f))
+                val th = b?.high ?: (.18f + .1f * env)
+                fun ease(v: Float, target: Float, up: Float, down: Float) = v + (target - v) * min(1f, dt * if (target > v) up else down)
+                lb = ease(lb, tb, 9f, 2.2f); lm = ease(lm, tm, 5f, 1.6f); lh = ease(lh, th, 8f, 2.5f)
+                if (++n % EVERY == 0) { time.floatValue = t; bass.floatValue = lb; mid.floatValue = lm; high.floatValue = lh }
             }
-            ease(bass, tb, 9f, 2.2f); ease(mid, tm, 5f, 1.6f); ease(high, th, 8f, 2.5f)
         }
     }
 
     val cols = colours.ifEmpty { listOf(Hub.accent) }
-    val ribbon = remember { Path() }
+    val art = remember(cols) { Art(cols) }
     Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize()) {
             val t = time.floatValue
-            aurora(cols, t, bass.floatValue, presence)
-            ribbons(ribbon, cols, t, bass.floatValue, mid.floatValue, presence)
+            aurora(art, t, bass.floatValue, presence)
+            ribbons(art, t, bass.floatValue, mid.floatValue, presence)
             motes(cols, t, high.floatValue, presence)
         }
-        NowLabel(ctx, playing, bpm, heard != null, Modifier.align(Alignment.BottomStart).padding(22.dp))
+        NowLabel(ctx, playing, bpm, hearing, Modifier.align(Alignment.BottomStart).padding(22.dp))
     }
 }
 
+/** The brushes and the ribbon's path, made once per palette and reused every frame. */
+private class Art(val cols: List<Color>) {
+    val lights = List(4) { i -> val c = cols[i % cols.size]
+        Brush.radialGradient(listOf(c.copy(alpha = .30f), c.copy(alpha = .08f), Color.Transparent), Offset.Zero, UNIT_R) }
+    val ribbons = List(RIBBONS) { j -> val a = cols[j % cols.size].copy(alpha = .62f - j * .08f); val b = cols[(j + 1) % cols.size].copy(alpha = .62f - j * .08f)
+        Brush.horizontalGradient(listOf(Color.Transparent, a, b, Color.Transparent)) }
+    val path = Path()
+    /** The ribbons' taper at each point across the width, worked out once per width. */
+    var taperW = -1f
+    var taper = FloatArray(0)
+}
+
 /** Four big soft lights drifting on slow, never-repeating paths, blended additively; the bass swells them. */
-private fun DrawScope.aurora(cols: List<Color>, t: Float, bass: Float, presence: Float) {
+private fun DrawScope.aurora(art: Art, t: Float, bass: Float, presence: Float) {
     val dim = size.minDimension
     for (i in 0 until 4) {
-        val c = cols[i % cols.size]
         val x = size.width * (.5f + .34f * sin(t * .061f * (i + 1) + i * 1.7f))
         val y = size.height * (.46f + .26f * sin(t * .047f * (i + 2) + i * 2.3f + 1f))
         val r = dim * (.42f + .08f * (i % 2)) * (1f + .22f * bass)
-        drawCircle(Brush.radialGradient(listOf(c.copy(alpha = .30f * presence), c.copy(alpha = .08f * presence), Color.Transparent),
-            Offset(x, y), r), r, Offset(x, y), blendMode = BlendMode.Plus)
+        val k = r / UNIT_R
+        withTransform({ translate(x, y); scale(k, k, Offset.Zero) }) {
+            drawCircle(art.lights[i], UNIT_R, Offset.Zero, alpha = presence, blendMode = BlendMode.Plus)
+        }
     }
 }
 
 /** Silky waves across the middle: two sines each, tapered at the ends; the middle of the sound sets their height. */
-private fun DrawScope.ribbons(path: Path, cols: List<Color>, t: Float, bass: Float, mid: Float, presence: Float) {
+private fun DrawScope.ribbons(art: Art, t: Float, bass: Float, mid: Float, presence: Float) {
     val w = size.width
     val cy = size.height * .5f
-    val step = 6.dp.toPx()
+    val step = 8.dp.toPx()
+    val points = (w / step).toInt() + 2
+    if (art.taperW != w) {
+        art.taperW = w
+        // (sin(π) in floats is a hair below 0, and a negative to the 1.6 is NaN, which would void the whole path)
+        art.taper = FloatArray(points) { sin(PI.toFloat() * (it * step / w).coerceIn(0f, 1f)).coerceAtLeast(0f).pow(1.6f) }
+    }
+    val path = art.path
+    val glow = Stroke(10.dp.toPx(), cap = StrokeCap.Round)
     for (j in 0 until RIBBONS) {
         val amp = size.height * (.05f + .2f * mid * (1f - j * .13f) + .06f * bass) * presence
         val k1 = (1.6f + j * .45f) * 2 * PI.toFloat() / w
         val k2 = (3.1f + j * .7f) * 2 * PI.toFloat() / w
+        val p1 = t * (.55f + .12f * j) + j * 1.3f
+        val p2 = -t * (.8f + .1f * j) + j * 2.1f
         path.reset()
-        var x = 0f
-        while (x <= w + step) {
-            // (sin(π) in floats is a hair below 0, and a negative to the 1.6 is NaN, which would void the whole path)
-            val taper = sin(PI.toFloat() * (x / w).coerceIn(0f, 1f)).coerceAtLeast(0f).pow(1.6f)
-            val y = cy + amp * taper * (.62f * sin(x * k1 + t * (.55f + .12f * j) + j * 1.3f) + .38f * sin(x * k2 - t * (.8f + .1f * j) + j * 2.1f))
-            if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
-            x += step
+        for (i in 0 until points) {
+            val x = i * step
+            val y = cy + amp * art.taper[i] * (.62f * sin(x * k1 + p1) + .38f * sin(x * k2 + p2))
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        val a = cols[j % cols.size]; val b = cols[(j + 1) % cols.size]
-        val alpha = (.62f - j * .08f) * presence
-        val brush = Brush.horizontalGradient(listOf(Color.Transparent, a.copy(alpha = alpha), b.copy(alpha = alpha), Color.Transparent))
         // a wide faint pass for the glow, then the thin line itself
-        drawPath(path, brush, alpha = .16f, style = Stroke(10.dp.toPx(), cap = StrokeCap.Round), blendMode = BlendMode.Plus)
-        drawPath(path, brush, style = Stroke((2.2f - j * .25f).dp.toPx(), cap = StrokeCap.Round), blendMode = BlendMode.Plus)
+        drawPath(path, art.ribbons[j], alpha = .16f * presence, style = glow, blendMode = BlendMode.Plus)
+        drawPath(path, art.ribbons[j], alpha = presence, style = Stroke((2.2f - j * .25f).dp.toPx(), cap = StrokeCap.Round), blendMode = BlendMode.Plus)
     }
 }
 

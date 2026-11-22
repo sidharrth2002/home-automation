@@ -83,7 +83,7 @@ fun SettingsPage(ctx: Ctx, connected: Boolean) {
             }
             SettingRow(HubIcons.pulse, "Connection", (if (connected) "Live · " else "Offline · ") + BuildConfig.HA_URL.removePrefix("http://"), null) {}
             Spacer(Modifier.height(2.dp))
-            Text("Home app ${runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""}",
+            Text("Home app ${com.sid.home.BuildConfig.VERSION_NAME}",
                 style = Hub.text(8.sp, Hub.ink3), modifier = Modifier.padding(start = 4.dp))
         }
     }

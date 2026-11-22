@@ -31,6 +31,9 @@ had_home=$("$ADB" -s "$SERIAL" shell settings get secure enabled_accessibility_s
 "$ADB" -s "$SERIAL" install -r "$APK"
 # the Music page's Visualizer reads the TV's own output (never the mic), which Android files under RECORD_AUDIO
 "$ADB" -s "$SERIAL" shell pm grant com.sid.home android.permission.RECORD_AUDIO || true
+# compile it ahead of time now: an adb install leaves it at "verify" (interpreted, JIT-compiled again in every fresh
+# process, and this TV kills it often for memory) until the TV's idle-time dexopt gets round to it, maybe days later
+"$ADB" -s "$SERIAL" shell cmd package compile -m speed -f com.sid.home >/dev/null || true
 # an update can drop the Home button service from Android's list; put it back if it was on
 if [[ $had_home != 0 ]] && ! "$ADB" -s "$SERIAL" shell settings get secure enabled_accessibility_services | grep -q HomeButtonService; then
   ./home on >/dev/null

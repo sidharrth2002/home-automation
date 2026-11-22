@@ -63,6 +63,11 @@ class HomeState {
     }
     fun put(e: Entity) = _entities.update { it + (e.id to e) }
     fun remove(id: String) = _entities.update { it - id }
+
+    /** Several changes as one new map (null: the entity is gone). */
+    fun apply(changes: Map<String, Entity?>) = _entities.update { m ->
+        LinkedHashMap(m).apply { for ((id, e) in changes) if (e == null) remove(id) else put(id, e) }
+    }
 }
 
 val json = Json { ignoreUnknownKeys = true }
@@ -109,6 +114,8 @@ class HaClient(private val baseUrl: String, private val token: String, private v
 
     fun start() = connect()
 
+    private companion object { const val BATCH_MS = 100L }
+
     private fun connect() {
         val ws = baseUrl.replaceFirst("http", "ws") + "/api/websocket"
         socket = http.newWebSocket(Request.Builder().url(ws).build(), object : WebSocketListener() {
@@ -152,8 +159,29 @@ class HaClient(private val baseUrl: String, private val token: String, private v
                 val d = m["event"]?.jsonObject?.get("data")?.jsonObject ?: return
                 val id = d["entity_id"]?.jsonPrimitive?.content ?: return
                 val new = d["new_state"]
-                if (new == null || new is JsonNull) home.remove(id) else home.put(entityFrom(new.jsonObject))
+                stage(id, if (new == null || new is JsonNull) null else entityFrom(new.jsonObject))
             }
+        }
+    }
+
+    private val staged = LinkedHashMap<String, Entity?>()
+    private var flushing = false
+
+    /**
+     * Changes are applied together every BATCH_MS instead of one by one: during music sync Home Assistant sends dozens
+     * of events a second, and each one copied the whole entity map (hundreds of entries): garbage the TV's collector
+     * then had to clear, pausing the UI thread. The screens only look 5 times a second anyway.
+     */
+    private fun stage(id: String, e: Entity?) {
+        synchronized(staged) {
+            staged[id] = e
+            if (flushing) return
+            flushing = true
+        }
+        scope.launch {
+            delay(BATCH_MS)
+            val batch = synchronized(staged) { flushing = false; LinkedHashMap(staged).also { staged.clear() } }
+            home.apply(batch)
         }
     }
 

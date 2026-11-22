@@ -40,10 +40,9 @@ import java.time.format.DateTimeFormatter
  */
 @Composable
 fun Screensaver(ctx: Ctx, colours: List<Color>, connected: Boolean, onClose: () -> Unit) {
-    val context = LocalContext.current
-    val photos = photoList(ctx).let { all -> if (connected) all else all.filter { p -> photoUrl(p)?.let { PhotoCache.isCached(context, it) } == true } }
-    var now by remember { mutableStateOf(LocalDateTime.now()) }
-    LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(1000) } }
+    val photos = rememberShownPhotos(ctx, connected)
+    // it shows hours and minutes only, so it changes once a minute: nothing here asks for a frame in between
+    val now by rememberMinute()
     // the words drift a little each minute, so nothing sits on one spot of the screen for hours
     val drift = (now.minute % 6) * 6
     val focus = remember { FocusRequester() }

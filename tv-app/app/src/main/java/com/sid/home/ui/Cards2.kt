@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +44,9 @@ import androidx.tv.material3.Switch
 import androidx.tv.material3.SwitchDefaults
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import coil.imageLoader
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.layout.onSizeChanged
 import coil.request.ImageRequest
 import com.sid.home.BuildConfig
 import com.sid.home.ha.data
@@ -154,13 +158,41 @@ fun photoUrl(p: JsonObject): String? {
     return if (path.startsWith("http")) path else BuildConfig.HA_URL + path
 }
 
-/** A cross-fading photo frame (the Hub's Memories card, and the screensaver's background). */
+/**
+ * The frame's photos; offline, only those already on the TV's disk (a blank frame is worse than the quote). That check
+ * reads the disk, so it runs off the main thread.
+ */
+@Composable
+fun rememberShownPhotos(ctx: Ctx, connected: Boolean): List<JsonObject> {
+    val all = photoList(ctx)
+    if (connected) return all
+    val context = LocalContext.current
+    return produceState(emptyList<JsonObject>(), all) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            all.filter { p -> photoUrl(p)?.let { PhotoCache.isCached(context, it) } == true }
+        }
+    }.value
+}
+
+/**
+ * A cross-fading photo frame (the Hub's Memories card, and the screensaver's background). The next photo is decoded
+ * ahead, at the frame's size, so each cross-fade starts from a ready picture (it used to fade towards an empty frame
+ * and pop the photo in mid-fade, while the TV decoded it).
+ */
 @Composable
 fun PhotoFrame(photos: List<JsonObject>, every: Long, modifier: Modifier = Modifier, label: Boolean = true) {
     var i by remember(photos) { mutableIntStateOf((0 until maxOf(photos.size, 1)).random()) }
-    LaunchedEffect(photos) { while (photos.isNotEmpty()) { delay(every); i = (i + 1) % photos.size } }
     val context = LocalContext.current
-    Box(modifier) {
+    var px by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    LaunchedEffect(photos, px) {
+        while (photos.isNotEmpty()) {
+            if (px != androidx.compose.ui.unit.IntSize.Zero) photoUrl(photos[(i + 1) % photos.size])?.let { url ->
+                context.imageLoader.enqueue(ImageRequest.Builder(context).data(url).size(px.width, px.height).scale(coil.size.Scale.FILL).build())
+            }
+            delay(every); i = (i + 1) % photos.size
+        }
+    }
+    Box(modifier.onSizeChanged { px = it }) {
         Crossfade(photos.getOrNull(i), animationSpec = tween(1600), label = "photo") { p ->
             if (p != null) AsyncImage(ImageRequest.Builder(context).data(photoUrl(p)).crossfade(false).build(), null,
                 contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

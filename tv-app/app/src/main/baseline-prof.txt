@@ -1,0 +1,4 @@
+# The app's own code, compiled ahead of time when the profile is installed (profileinstaller), instead of interpreted
+# and JIT-compiled again in every fresh process (this TV kills the app often for memory). The libraries ship their own.
+HSPLcom/sid/home/**->**(**)**
+Lcom/sid/home/**;
