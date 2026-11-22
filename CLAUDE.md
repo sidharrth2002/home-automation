@@ -165,6 +165,10 @@ find). Testing takes over the TV screen, so ask first.
   guard app (com.tcl.guard), which only the user can change. Android string resources need apostrophes escaped (\'):
   an unescaped one fails the resource merge, and a filter on "^e:" hides that error; check the APK's timestamp. The old WebView
   (MainActivity, HubDream screensaver) remains until the native screensaver replaces it.
+- Calm by default, in every UI: the user is easily overstimulated. Low saturation (dark surfaces; colour only as small
+  accents, like a tinted icon or a soft outline on the active item), little motion (slow and subtle at most; no
+  pulsing, flashing or big focus zooms), few things per screen (secondary controls on their own page). Prefer removing
+  to adding; check new UI against this before showing it.
 - Keep every UI in sync, in the same PR: the Hub (desktop + phone), the TV app's TV layout (`?tv=1`, 1280 canvas;
   every new control must be reachable with the remote's arrows: they're buttons, so FOCUSABLE picks them up, but
   check) and screensaver (`?ambient=1`), the iPhone widget where it applies, and the README pictures (demo mode,
