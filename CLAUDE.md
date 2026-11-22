@@ -176,6 +176,11 @@ find). Testing takes over the TV screen, so ask first.
   palette in a gradient, 2026-11-22) killed it too and Android postponed its restart by up to an hour. So HomeRedirect's
   state is files in filesDir, read by both processes; after a Hub crash (HubCrash handler) the service leaves Google
   TV up for 10 min instead of reopening a Hub that crashes on launch. Brushes need 2+ colours: pad data-driven lists.
+  Even in its own process the TV's low-memory killer takes it (it kills down to the foreground app when starved); two
+  kills close together and Android files it under "Crashed services" and never rebinds it (process alive, `Bound
+  services:{}`, accessibility_enabled 0) until it's toggled. So the Mac runs `home_button` (supervised, with TV_HOST
+  set): every 30 s over adb, if it's enabled but crashed/unbound, it takes it out of enabled_accessibility_services
+  and puts it back. dumpsys lists a bound service by android:label ("Hub Home button"), not class: keep them in step.
 - TV app performance (a weak TCL: 4 slow cores, ~2.4 GB RAM, already swapping; 48% janky frames before 2026-11-22):
   one long-lived `Ctx` over `LiveEntities` (ui/Live.kt: a snapshot state per entity, fed at most 5×/s), so a card
   recomposes only for entities it reads; never build a new Ctx/map per update, and read entities inside the composable
