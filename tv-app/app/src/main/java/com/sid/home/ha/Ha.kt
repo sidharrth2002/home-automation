@@ -49,8 +49,18 @@ class HomeState {
     val connected = MutableStateFlow(false)
     val events = MutableStateFlow<List<JsonObject>>(emptyList())
     val demo = MutableStateFlow(false)
+    /** When the state shown was saved on the TV (null: it's live from Home Assistant). */
+    val savedAt = MutableStateFlow<Long?>(null)
+    /** Changes waiting for Home Assistant to come back. */
+    val pending = MutableStateFlow(0)
 
     fun replace(all: Map<String, Entity>) { _entities.value = all }
+
+    /** Show a change before Home Assistant confirms it (it's offline; the queue sends it when it's back). */
+    fun optimistic(id: String, state: String, attrs: JsonObject? = null) = _entities.update { m ->
+        val e = m[id] ?: return@update m
+        m + (id to e.copy(state = state, attrs = if (attrs == null) e.attrs else JsonObject(e.attrs + attrs.filterKeys { it != "entity_id" })))
+    }
     fun put(e: Entity) = _entities.update { it + (e.id to e) }
     fun remove(id: String) = _entities.update { it - id }
 }
@@ -87,6 +97,10 @@ interface Actions {
  * happens. Reconnects with backoff, forever; while it's down the screens keep showing the last state, marked offline.
  */
 class HaClient(private val baseUrl: String, private val token: String, private val home: HomeState) : Actions {
+    private val queue = OfflineQueue(home)
+    @Volatile private var authed = false
+    /** Tells the person when something can't be done right now (a toast). */
+    var notice: ((String) -> Unit)? = null
     private val http = OkHttpClient.Builder().pingInterval(30, TimeUnit.SECONDS).readTimeout(0, TimeUnit.MILLISECONDS).build()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val ids = AtomicInteger(10)
@@ -105,6 +119,7 @@ class HaClient(private val baseUrl: String, private val token: String, private v
     }
 
     private fun retry() {
+        authed = false
         home.connected.value = false
         socket = null
         scope.launch {
@@ -119,6 +134,9 @@ class HaClient(private val baseUrl: String, private val token: String, private v
             "auth_required" -> ws.send(buildJsonObject { put("type", "auth"); put("access_token", token) }.toString())
             "auth_ok" -> {
                 backoffMs = 1000L
+                authed = true
+                // back: send what was changed while away, then take Home Assistant's whole state as the truth
+                for ((d, sv, data) in queue.drain()) send(ws, d, sv, data)
                 ws.send(buildJsonObject { put("id", 1); put("type", "get_states") }.toString())
                 ws.send(buildJsonObject { put("id", 2); put("type", "subscribe_events"); put("event_type", "state_changed") }.toString())
                 home.connected.value = true
@@ -127,6 +145,7 @@ class HaClient(private val baseUrl: String, private val token: String, private v
             "result" -> if (m["id"]?.jsonPrimitive?.intOrNull == 1) {
                 val all = m["result"]?.jsonArray?.map { entityFrom(it.jsonObject) } ?: emptyList()
                 home.replace(all.associateBy { it.id })
+                home.savedAt.value = null
                 scope.launch { refreshCalendars() } // now the calendars are known
             }
             "event" -> {
@@ -139,22 +158,28 @@ class HaClient(private val baseUrl: String, private val token: String, private v
     }
 
     override fun callService(domain: String, service: String, data: JsonObject) {
-        socket?.send(buildJsonObject {
-            put("id", ids.incrementAndGet()); put("type", "call_service")
-            put("domain", domain); put("service", service); put("service_data", data)
-        }.toString())
+        val ws = socket
+        if (authed && ws != null && send(ws, domain, service, data)) return
+        if (!queue.add(domain, service, data)) notice?.invoke("Can't reach the home system right now")
     }
+
+    private fun send(ws: WebSocket, domain: String, service: String, data: JsonObject) = ws.send(buildJsonObject {
+        put("id", ids.incrementAndGet()); put("type", "call_service")
+        put("domain", domain); put("service", service); put("service_data", data)
+    }.toString())
 
     /** The next week's events from every calendar (the Hub's calendar card and the screensaver's "next" line). */
     suspend fun refreshCalendars() {
         val cals = home.entities.value.keys.filter { it.startsWith("calendar.") }
         val start = java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault())
         val end = start.plusDays(7)
+        var reached = false
         val events = cals.flatMap { cal ->
             runCatching {
                 val req = Request.Builder().url("$baseUrl/api/calendars/$cal?start=${start.toInstant()}&end=${end.toInstant()}")
                     .header("Authorization", "Bearer $token").build()
                 http.newCall(req).execute().use { r ->
+                    reached = true
                     if (!r.isSuccessful) emptyList()
                     else json.parseToJsonElement(r.body!!.string()).jsonArray.map {
                         JsonObject(it.jsonObject + ("cal" to JsonPrimitive(cal)))
@@ -162,7 +187,7 @@ class HaClient(private val baseUrl: String, private val token: String, private v
                 }
             }.getOrDefault(emptyList())
         }
-        home.events.value = events.sortedBy { eventStart(it) }
+        if (reached) home.events.value = events.sortedBy { eventStart(it) } // unreachable: keep the last week we had
     }
 
     fun refreshCalendarsLater() = scope.launch { while (true) { delay(5 * 60_000); refreshCalendars() } }

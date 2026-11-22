@@ -83,8 +83,8 @@ class Ctx(val s: Map<String, Entity>, val act: Actions, val toast: (String) -> U
 
 /** The pages, each one screen: the left rail moves between them, Google TV style (no scrolling). */
 enum class Page(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    ROOM("Home", HubIcons.home), LIGHTS("Lights", HubIcons.bulb), TODAY("Today", HubIcons.cal), MONEY("Money", HubIcons.chart), ALLOCATION("Allocation", HubIcons.reactor),
-    HOME("Desk & health", HubIcons.pulse)
+    ROOM("Home", HubIcons.home), LIGHTS("Lights", HubIcons.bulb), TODAY("Today", HubIcons.cal), MONEY("Money", HubIcons.chart), ALLOCATION("Allocation", HubIcons.pin),
+    HOME("Desk & health", HubIcons.pulse), SETTINGS("Settings", HubIcons.reactor)
 }
 
 /**
@@ -93,7 +93,8 @@ enum class Page(val label: String, val icon: androidx.compose.ui.graphics.vector
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.json.JsonObject> = emptyList(), start: Page = Page.ROOM) {
+fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.json.JsonObject> = emptyList(), start: Page = Page.ROOM,
+               offline: String? = null) {
     val palette = ambientColours(ctx)
     var holding by remember { mutableStateOf<String?>(null) }
     var allApps by remember { mutableStateOf(false) }
@@ -128,7 +129,7 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
             }
         }) {
             Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 32.dp, top = 20.dp, bottom = 22.dp)) {
-                Header(ctx, connected, palette.first())
+                Header(ctx, connected, palette.first(), offline)
                 Spacer(Modifier.height(14.dp))
                 androidx.compose.animation.AnimatedContent(page, label = "page", modifier = Modifier.weight(1f),
                     // a cross-fade only: no size animation between pages of different heights
@@ -137,7 +138,7 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
                         Page.ROOM -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             AppsRow(ctx, first = first) { allApps = true }
                             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                NowPanel(ctx, events, Modifier.weight(1.75f).fillMaxHeight())
+                                NowPanel(ctx, events, Modifier.weight(1.75f).fillMaxHeight(), connected)
                                 if (musicShown(ctx)) MusicCard(ctx, Modifier.weight(1f), compact = true)
                             }
                             ScenesRow(ctx)
@@ -149,6 +150,7 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
                         }
                         Page.MONEY -> MoneyCard(ctx) { holding = it }
                         Page.ALLOCATION -> AllocationCard(ctx)
+                        Page.SETTINGS -> SettingsPage(ctx, connected)
                         Page.HOME -> Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             DeskCard(ctx, Modifier.weight(1f))
                             HealthCard(ctx, connected, ctx.s.keys.count { it.startsWith("calendar.") }, Modifier.weight(1.4f))
@@ -195,7 +197,7 @@ fun Ambient(colours: List<Color>) {
 }
 
 @Composable
-fun Header(ctx: Ctx, connected: Boolean, accent: Color) {
+fun Header(ctx: Ctx, connected: Boolean, accent: Color, offline: String? = null) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(1000) } }
     val h = now.hour
@@ -216,7 +218,7 @@ fun Header(ctx: Ctx, connected: Boolean, accent: Color) {
             }
             Spacer(Modifier.size(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (!connected) Chip { Dot(Hub.bad); Text("Reconnecting…", style = Hub.text(10.sp, Hub.ink2)) }
+                if (!connected) Chip { Dot(Hub.warn); Text(offline ?: "Offline", style = Hub.text(10.sp, Hub.ink2)) }
                 when (ctx.st(Ids.HOME)) {
                     "on" -> Chip { Dot(Hub.ok); Text("Home", style = Hub.text(10.sp, weight = 600)) }
                     "off" -> Chip { Dot(Hub.bad); Text("Away · all off", style = Hub.text(10.sp, Hub.ink2)) }

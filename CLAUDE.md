@@ -160,7 +160,16 @@ find). Testing takes over the TV screen, so ask first.
   Google TV ignores the home role and guards its launcher (disabling it left Home dead; never do that), so the app
   has HomeButtonService (accessibility, packageNames = launcherx only): it catches the Home key and opens the Hub
   whenever Google TV's home comes up uninvited (power-on, waking, backing out of an app); the Google TV tile allows it
-  (HomeRedirect) until the Hub is back. `tv-app/home on|off|status`. The ambient glow layers are drawn past the screen
+  (HomeRedirect) until the Hub is back. `tv-app/home on|off|status`. Never `am start -S` (force-stop): Android then
+  drops the app's accessibility service from the enabled list (deploy re-enables it if an update drops it).
+- Offline first: ha/Offline.kt. Snapshot keeps the last state on the TV (files/home-state.json, saved every 10 s while
+  things change and on onStop; not "after quiet": HA is never quiet) and loads it at start; OfflineQueue applies
+  presses at once and sends them on reconnect (before get_states): latest wish per entity, toggles stored as
+  turn_on/off, older than 15 min dropped, scripts/remote/media not queued (a toast says so). PhotoCache keeps the
+  frame's photos in Coil's disk cache; offline the frame only uses cached ones, else the comfort quote. The header
+  chip says "Offline · last update HH:MM · N changes waiting". Calendars keep the last week if unreachable. Settings
+  page (ui/Settings.kt): guest mode, music sync, TV glow, desk lamp follows the sky, away automation, hide amounts,
+  Home button status, connection. Unit tests: OfflineQueueTest (./gradlew :app:testDebugUnitTest). The ambient glow layers are drawn past the screen
   edges because they drift (a screen-sized layer showed its edge sliding in).
   Switching it on needs the user (Android's restricted settings for sideloaded apps), and this TCL TV's firmware also
   refuses to start it ("[TclAppBoot]: forbid bind service" in logcat) until the app is allowed to auto-start in TCL's

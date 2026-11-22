@@ -33,11 +33,13 @@ import java.time.format.DateTimeFormatter
  * photos, or the landscapes in guest mode), cross-fading slowly. Either way the weather and the lights in one line.
  */
 @Composable
-fun NowPanel(ctx: Ctx, events: List<JsonObject>, modifier: Modifier = Modifier) {
+fun NowPanel(ctx: Ctx, events: List<JsonObject>, modifier: Modifier = Modifier, connected: Boolean = true) {
     val now = LocalDateTime.now()
     val next = events.firstOrNull { it["start"]?.jsonObject?.get("dateTime") != null &&
         (parseTime(it["end"]?.jsonObject?.get("dateTime")?.jsonPrimitive?.contentOrNull) ?: now).isAfter(now) }
-    val photos = photoList(ctx)
+    // offline, only the photos already on the TV (a blank frame is worse than the quote)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val photos = photoList(ctx).let { all -> if (connected) all else all.filter { p -> photoUrl(p)?.let { PhotoCache.isCached(context, it) } == true } }
     if (next == null && photos.isNotEmpty()) {
         androidx.compose.foundation.layout.Box(modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(Hub.radius))
             .border(1.dp, Hub.line, androidx.compose.foundation.shape.RoundedCornerShape(Hub.radius))) {
