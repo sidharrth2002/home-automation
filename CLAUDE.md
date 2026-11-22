@@ -55,7 +55,7 @@ widget/               iPhone Scriptable widget (home.js) + its feed, webhook act
 presence/             phone-on-Wi-Fi home/away (needs PRESENCE_PHONE_MAC; not currently running)
 homeassistant/        HA config as code (helpers, templates, scripts, automations, dashboards, voice.json) + apply.py
 frontend/hub/         the Hub: plain HTML/CSS/JS on HA's websocket API, no build step; TV mode for the TV app
-tv-app/               Android TV app (a full-screen WebView of the Hub); tv-app/deploy builds and installs it
+tv-app/               Android TV app, native (Kotlin + Compose for TV): the Hub's cards as pages; tv-app/deploy builds and installs it
 bin/                  ha (REST CLI), check-commit (pre-commit guard), ha-mcp-headers, audiotee
 tests/                python -m tests.<name>; node tests/widget_smoke.js
 ```
@@ -74,7 +74,7 @@ HARNESS_FEED=<feed.json> WIDGET_JS=data/widget/Home.js node tests/widget_smoke.j
 .venv/bin/python -m widget install --copy     # widget script with the private addresses filled in, to the clipboard
 .venv/bin/python -m widget shortcuts          # signed Shortcuts for the lamps (into data/widget/shortcuts/)
 .venv/bin/python -m photos status | once | look | learn-me <photo>   # the photo frame (service every 4h; look = one batch)
-tv-app/deploy                                 # build the TV app and install it over adb (TV_HOST in .env)
+tv-app/deploy                                 # build the TV app (release) and install it over adb (TV_HOST in .env)
 .venv/bin/python frontend/screenshot.py <out> [selector]   # headless screenshots; HUB_REDACT=1 blurs calendar
 ```
 
@@ -145,6 +145,19 @@ find). Testing takes over the TV screen, so ask first.
   under their groups) | holdings (All/per-source tabs, source tag, "Settling" badge). No separate Cash card. Account
   type colours are fixed palette slots (ACCOUNT_TYPES/ALLOC in app.js), consecutive in bar order: re-run the dataviz
   validator if you change them. The merge passes `provider`, `label`, `interest_pct`, `matures` on each account.
+- The TV app is native (tv-app/app/src/main/java/com/sid/home): HomeActivity + ui/ (Theme = the Hub's tokens and
+  fonts; Home = rail + pages: Home (apps row, room, scenes, music), Today, Money, Allocation, Desk & health; Cards,
+  Cards2, Money) over ha/Ha.kt (HA websocket + REST calendars, the same feed as the Hub; Demo for --ez demo true).
+  One screen per page, no scrolling; the remote's left arrow opens the rail. Icons and quotes are generated from
+  app.js (tv-app/hub_sync.py), the demo household from demo.js (tv-app/demo-data): rerun them after changing those.
+  Its own HA token is made once by deploy (tv-app/make_token.py -> data/tv/token, git-ignored). Release builds only
+  on the TV (R8 + baseline profiles; debug Compose is slow). Test on the TV in demo mode (`am start -n
+  com.sid.home/.HomeActivity --ez demo true`): presses in real mode change real things (one moved a real slider).
+  `./gradlew :app:recordPaparazziDebug` renders screens with demo data (snapshots are git-ignored). The Home button:
+  Google TV ignores the home role and guards its launcher (disabling it left Home dead; never do that), so the app
+  has HomeButtonService, an accessibility service that only catches the Home key; `tv-app/home on|off|status`.
+  Switching it on needs the user (Android's restricted settings for sideloaded apps). The old WebView
+  (MainActivity, HubDream screensaver) remains until the native screensaver replaces it.
 - Keep every UI in sync, in the same PR: the Hub (desktop + phone), the TV app's TV layout (`?tv=1`, 1280 canvas;
   every new control must be reachable with the remote's arrows: they're buttons, so FOCUSABLE picks them up, but
   check) and screensaver (`?ambient=1`), the iPhone widget where it applies, and the README pictures (demo mode,

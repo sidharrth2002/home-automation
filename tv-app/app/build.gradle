@@ -1,9 +1,15 @@
 plugins {
     id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "org.jetbrains.kotlin.plugin.compose"
+    id "org.jetbrains.kotlin.plugin.serialization"
+    id "app.cash.paparazzi"
 }
 
-// The Hub's address is passed in at build time by ./deploy (-PhubUrl=...), so it isn't stored in the repo.
-def hubUrl = project.findProperty("hubUrl") ?: "http://homeassistant.local:8123/local/hub/index.html"
+// Passed in at build time by ./deploy, so neither is stored in the repo: Home Assistant's address, and the TV's own
+// long-lived token (made for it by ./deploy, kept in ../data/tv/token, which is git-ignored).
+def haUrl = project.findProperty("haUrl") ?: "http://homeassistant.local:8123"
+def haToken = project.findProperty("haToken") ?: ""
 
 android {
     namespace "com.sid.home"
@@ -13,13 +19,47 @@ android {
         applicationId "com.sid.home"
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
-        buildConfigField "String", "HUB_URL", "\"${hubUrl}\""
+        versionCode 2
+        versionName "2.0"
+        buildConfigField "String", "HA_URL", "\"${haUrl}\""
+        buildConfigField "String", "HA_TOKEN", "\"${haToken}\""
+        buildConfigField "String", "HUB_URL", "\"${haUrl}/local/hub/index.html\""
     }
-    buildFeatures { buildConfig true }
+    buildFeatures { buildConfig true; compose true }
+    // What the TV runs: optimised and shrunk (debug Compose is several times slower), signed with the local debug key.
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            signingConfig signingConfigs.debug
+        }
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+    kotlinOptions { jvmTarget = "17" }
+}
+
+dependencies {
+    def bom = platform("androidx.compose:compose-bom:2024.12.01")
+    implementation bom
+    implementation "androidx.compose.ui:ui"
+    implementation "androidx.compose.foundation:foundation"
+    implementation "androidx.compose.ui:ui-tooling-preview"
+    implementation "androidx.tv:tv-material:1.0.0"
+    implementation "androidx.activity:activity-compose:1.9.3"
+    implementation "androidx.lifecycle:lifecycle-runtime-compose:2.8.7"
+    implementation "androidx.lifecycle:lifecycle-service:2.8.7"
+    implementation "androidx.savedstate:savedstate-ktx:1.2.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3"
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+    implementation "io.coil-kt:coil-compose:2.7.0"
+    implementation "io.coil-kt:coil-svg:2.7.0"
+    // installs the libraries' baseline profiles (Compose ships them), so the app starts and scrolls fast from the first run
+    implementation "androidx.profileinstaller:profileinstaller:1.4.1"
+    debugImplementation "androidx.compose.ui:ui-tooling"
+    testImplementation "junit:junit:4.13.2"
 }

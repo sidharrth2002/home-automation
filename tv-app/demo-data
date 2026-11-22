@@ -1,0 +1,15 @@
+#!/bin/bash
+# Export the Hub's demo household (frontend/hub/demo.js) into the TV app, so both show the same made-up data:
+# app/src/main/assets/demo.json (+ the demo album cover). Rerun after changing demo.js.
+set -euo pipefail
+[[ ${1:-} == --fixed ]] && export DEMO_FIXED=1
+cd "$(dirname "$0")/.."
+node --input-type=module -e '
+import { demo } from "./frontend/hub/demo.js";
+// --fixed: a set time, so test pictures stay the same day to day; otherwise now (what ./deploy uses).
+const fixed = process.env.DEMO_FIXED === "1";
+const { entities, events } = demo(fixed ? Date.parse("2026-11-21T19:30:00Z") : Date.now());
+process.stdout.write(JSON.stringify({ entities, events }));
+' > tv-app/app/src/main/assets/demo.json
+cp frontend/hub/demo-art.svg tv-app/app/src/main/assets/demo-art.svg
+echo "tv-app/app/src/main/assets/demo.json: $(wc -c < tv-app/app/src/main/assets/demo.json) bytes"

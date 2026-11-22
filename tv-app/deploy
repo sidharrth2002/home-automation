@@ -4,17 +4,26 @@
 #   tv-app/deploy --build    just build the APK
 #   tv-app/deploy --no-open  build and install without opening it (the TV is off, or someone's watching)
 # The TV needs developer options with USB debugging on (the first connection asks you to allow it on the TV).
-# TV_HOST in ../.env is the TV's address; the Hub address is this Mac's, baked into the app at build time.
+# TV_HOST in ../.env is the TV's address. Home Assistant's address (this Mac's) and the app's own token are baked
+# into the app at build time; the token lives in ../data/tv/token, never in the repo.
 set -euo pipefail
 cd "$(dirname "$0")"
 export JAVA_HOME="${JAVA_HOME:-$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home}"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 MAC=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1)
-HUB="http://$MAC:8123/local/hub/index.html"
+HA="http://$MAC:8123"
 
-./gradlew -q assembleDebug -PhubUrl="$HUB"
-APK=app/build/outputs/apk/debug/app-debug.apk
-echo "built $APK (Hub at $HUB)"
+# The app talks to Home Assistant itself, with a token of its own (made once, kept out of the repo).
+TOKEN_FILE=../data/tv/token
+if [[ ! -s $TOKEN_FILE ]]; then
+  mkdir -p "$(dirname "$TOKEN_FILE")"
+  (umask 077; ../.venv/bin/python make_token.py > "$TOKEN_FILE")
+  echo "made the TV app's Home Assistant token (revoke it in your HA profile: \"Home TV app\")"
+fi
+./demo-data >/dev/null  # the demo household, in step with the Hub's
+./gradlew -q assembleRelease -PhaUrl="$HA" -PhaToken="$(cat "$TOKEN_FILE")"
+APK=app/build/outputs/apk/release/app-release.apk
+echo "built $APK (Home Assistant at $HA)"
 [[ ${1:-} == --build ]] && exit 0
 
 source ./adb.sh  # finds the TV and sets $ADB and $SERIAL
