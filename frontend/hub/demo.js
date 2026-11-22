@@ -109,7 +109,7 @@ export function demo(now = Date.now()) {
 
   put("input_boolean.music_sync", "on", { friendly_name: "Music sync" });
   put("input_select.music_sync_mode", "party", { options: ["auto", "calm", "party", "tv", "classic"] });
-  put("input_select.music_sync_colours", "Album Art", { options: ["Album Art", "Music Key"] });
+  put("input_select.music_sync_colours", "Music key", { options: ["Album art", "Music key"] });
   put("input_number.music_sync_sensitivity", 1.4, { min: 0.5, max: 3, step: 0.1 });
   put("input_number.music_sync_latency", 60, { min: -300, max: 300, step: 10, unit_of_measurement: "ms" });
   put("sensor.music_sync_tempo", 124, { locked: true, confidence: 0.86, unit_of_measurement: "BPM" });

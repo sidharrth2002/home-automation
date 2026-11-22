@@ -84,6 +84,13 @@ fun RoomCard(ctx: Ctx, first: androidx.compose.ui.focus.FocusRequester? = null) 
                 }
             }
         }
+        // where music sync takes its colours from: the music itself (default) or the album cover
+        Spacer(Modifier.height(10.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Hub.line))
+        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Music colours", style = Hub.text(10.sp, Hub.ink2)); Spacer(Modifier.width(14.dp))
+            ColoursChoice(ctx, Modifier.width(240.dp))
+        }
     }
 }
 
@@ -168,8 +175,22 @@ fun musicShown(ctx: Ctx): Boolean {
     return playing || (ctx.on(Ids.SYNC) && ctx.st(Ids.MODE) != "tv")
 }
 
+/** The cover's URL as Coil can load it: from Home Assistant, the web, or (demo) the app's assets. */
+fun artUrl(art: String?) = art?.let { if (it.startsWith("http")) it else if (it.startsWith("/")) BuildConfig.HA_URL + it else "file:///android_asset/$it" }
+
+/** The music sync choices, the music's own colours first (the default). */
 @Composable
-fun MusicCard(ctx: Ctx, modifier: Modifier = Modifier, compact: Boolean = false) {
+fun ColoursChoice(ctx: Ctx, modifier: Modifier = Modifier) {
+    val colours = (ctx.s[Ids.COLOURS]?.arr("options")?.map { it.toString().trim('"') } ?: listOf("Album art", "Music key"))
+        .sortedByDescending { it == "Music key" }
+    Segmented(colours, ctx.st(Ids.COLOURS), modifier = modifier,
+        onSelect = { ctx.act.callService("input_select", "select_option", data("entity_id" to Ids.COLOURS, "option" to it)) })
+}
+
+/** [onOpen]: pressing the cover opens the Music page (the compact card on Home). [focus]: where focus lands when it opens. */
+@Composable
+fun MusicCard(ctx: Ctx, modifier: Modifier = Modifier, compact: Boolean = false, onOpen: (() -> Unit)? = null,
+              focus: androidx.compose.ui.focus.FocusRequester? = null) {
     val now = ctx.s[Ids.NOW]
     val parts = (now?.state ?: "").split(" — ")
     val title = parts.getOrNull(0).orEmpty()
@@ -188,18 +209,23 @@ fun MusicCard(ctx: Ctx, modifier: Modifier = Modifier, compact: Boolean = false)
         }
     }
     val tempo = ctx.s[Ids.TEMPO]
+    val controls = !nothing || ctx.on(Ids.TV)
     HubCard(modifier) {
         CardHead("Music sync", HubIcons.music) {
             Switch(checked = ctx.on(Ids.SYNC), onCheckedChange = { ctx.act.callService("input_boolean", "toggle", data("entity_id" to Ids.SYNC)) },
-                colors = SwitchDefaults.colors(checkedTrackColor = palette.firstOrNull() ?: Hub.accent))
+                colors = SwitchDefaults.colors(checkedTrackColor = palette.firstOrNull() ?: Hub.accent),
+                modifier = if (focus != null && !controls) Modifier.focusRequester(focus) else Modifier)
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             val ctxAndroid = LocalContext.current
-            val url = art?.let { if (it.startsWith("http")) it else if (it.startsWith("/")) BuildConfig.HA_URL + it else "file:///android_asset/$it" }
-            Box(Modifier.size(if (compact) 72.dp else 118.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .06f))) {
-                if (url != null) AsyncImage(ImageRequest.Builder(ctxAndroid).data(url).decoderFactory(SvgDecoder.Factory()).crossfade(true).build(),
-                    contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            val url = artUrl(art)
+            val cover = @Composable {
+                Box(Modifier.size(if (compact) 72.dp else 118.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .06f))) {
+                    if (url != null) AsyncImage(ImageRequest.Builder(ctxAndroid).data(url).decoderFactory(SvgDecoder.Factory()).crossfade(true).build(),
+                        contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
             }
+            if (onOpen != null) Pressable(onClick = onOpen, shape = RoundedCornerShape(16.dp), scale = 1.04f) { cover() } else cover()
         }
         Spacer(Modifier.height(10.dp))
         Text(if (nothing) "Nothing playing" else title, style = Hub.text(20.sp, family = Hub.serif), textAlign = TextAlign.Center,
@@ -219,12 +245,13 @@ fun MusicCard(ctx: Ctx, modifier: Modifier = Modifier, compact: Boolean = false)
                 Text("-" + fmt(dur - pos), style = Hub.text(8.sp, Hub.ink3, family = Hub.mono))
             }
         }
-        if (!nothing || ctx.on(Ids.TV)) Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center,
+        if (controls) Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically) {
             fun music(cmd: String) = ctx.act.callService("script", "music_command", data("command" to cmd))
             Pressable(onClick = { music("previous") }, shape = CircleShape) { Box(Modifier.padding(8.dp)) { HubIcon(HubIcons.prev, Hub.ink2, 14.dp) } }
             Spacer(Modifier.width(10.dp))
-            Pressable(onClick = { music("play_pause") }, shape = CircleShape, color = Hub.ink, focusedColor = Color.White) {
+            Pressable(onClick = { music("play_pause") }, shape = CircleShape, color = Hub.ink, focusedColor = Color.White,
+                modifier = if (focus != null) Modifier.focusRequester(focus) else Modifier) {
                 Box(Modifier.padding(10.dp)) { HubIcon(if (playing) HubIcons.pause else HubIcons.play, Hub.bg, 16.dp) }
             }
             Spacer(Modifier.width(10.dp))
@@ -242,9 +269,7 @@ fun MusicCard(ctx: Ctx, modifier: Modifier = Modifier, compact: Boolean = false)
             onSelect = { ctx.act.callService("input_select", "select_option", data("entity_id" to Ids.MODE, "option" to it)) })
         if (!compact) Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Kicker("Colours"); Spacer(Modifier.width(14.dp))
-            val colours = ctx.s[Ids.COLOURS]?.arr("options")?.map { it.toString().trim('"') } ?: listOf("Album Art", "Music Key")
-            Segmented(colours, ctx.st(Ids.COLOURS), modifier = Modifier.weight(1f),
-                onSelect = { ctx.act.callService("input_select", "select_option", data("entity_id" to Ids.COLOURS, "option" to it)) })
+            ColoursChoice(ctx, Modifier.weight(1f))
         }
     }
 }
@@ -309,6 +334,7 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
         // the rest: Google TV's own home (every other app), and the TV's settings
         for ((label, icon, open) in listOf<Triple<String, androidx.compose.ui.graphics.vector.ImageVector, () -> Boolean>>(
             Triple("All apps", HubIcons.tv) { onAllApps(); true },
+            Triple("Screensaver", HubIcons.moon) { startScreensaver(context) },
             Triple("Google TV", HubIcons.home) { com.sid.home.HomeRedirect.chooseGoogleTv(context); launch(context, com.sid.home.HomeRedirect.GOOGLE_TV) },
             Triple("Settings", HubIcons.reactor) { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess },
@@ -321,6 +347,15 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
         }
     }
 }
+
+/**
+ * Start the screensaver now (the Hub's own, HubDream, set by tv-app/screensaver). Android has no public call for it, but
+ * SystemUI's Somnambulator ("start dreaming") does exactly that and is on this TV.
+ */
+fun startScreensaver(context: android.content.Context): Boolean = runCatching {
+    context.startActivity(android.content.Intent(android.content.Intent.ACTION_MAIN)
+        .setClassName("com.android.systemui", "com.android.systemui.Somnambulator").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+}.isSuccess
 
 /** Every app on the TV with a TV launch screen, by name (the home screen's own "All apps"). */
 fun installedApps(context: android.content.Context): List<Pair<String, String>> {

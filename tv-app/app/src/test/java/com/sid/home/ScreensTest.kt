@@ -60,4 +60,16 @@ class ScreensTest {
         val home = demo()
         paparazzi.snapshot { HomeScreen(Ctx(home.entities.value, Demo) {}, connected = true, events = home.events.value) }
     }
+
+    @Test
+    fun music() {
+        val home = demo()
+        paparazzi.snapshot { HomeScreen(Ctx(home.entities.value, Demo) {}, connected = true, start = com.sid.home.ui.Page.MUSIC) }
+    }
+
+    @Test
+    fun lights() {
+        val home = demo()
+        paparazzi.snapshot { HomeScreen(Ctx(home.entities.value, Demo) {}, connected = true, start = com.sid.home.ui.Page.LIGHTS) }
+    }
 }

@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The Music page's Visualizer: the loudness of what the TV itself is playing (output mix), never the microphone.
+         Android files that under RECORD_AUDIO; tv-app/deploy grants it over adb. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- The apps the home screen opens (Android 11+ only shows an app the packages it declares). -->
     <queries>
         <package android:name="com.netflix.ninja" />
