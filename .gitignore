@@ -21,3 +21,4 @@ tv-app/local.properties
 *.heic
 *.HEIC
 tv-app/app/src/debug/
+tv-app/app/src/test/snapshots/

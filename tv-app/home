@@ -1,0 +1,30 @@
+#!/bin/bash
+# Make the remote's Home button open the Hub app, or give it back to Google TV.
+#   tv-app/home on | off | status
+# Google TV sends Home to its own launcher whatever the home role says, and guards that launcher if it's disabled
+# (that left Home dead), so "on" switches on the app's tiny accessibility service that catches the Home key instead
+# (it never reads the screen). Google TV's launcher stays installed and enabled; the Hub has a tile for it.
+set -euo pipefail
+cd "$(dirname "$0")"
+source ./adb.sh
+GTV=com.google.android.apps.tv.launcherx
+SVC=com.sid.home/com.sid.home.HomeButtonService
+# the accessibility services already on (others are kept: only ours is added or removed)
+services() { "$ADB" -s "$SERIAL" shell settings get secure enabled_accessibility_services | tr -d '\r' | sed 's/^null$//'; }
+case "${1:-status}" in
+  on)
+    "$ADB" -s "$SERIAL" shell pm enable "$GTV" >/dev/null  # in case an older "on" disabled it
+    now=$(services)
+    [[ $now == *HomeButtonService* ]] || "$ADB" -s "$SERIAL" shell settings put secure enabled_accessibility_services "${now:+$now:}$SVC"
+    "$ADB" -s "$SERIAL" shell settings put secure accessibility_enabled 1
+    echo "the Home button now opens the Hub app; tv-app/home off gives it back to Google TV" ;;
+  off)
+    rest=$(services | tr ':' '\n' | grep -v HomeButtonService | paste -sd: -)
+    if [[ -n $rest ]]; then "$ADB" -s "$SERIAL" shell settings put secure enabled_accessibility_services "$rest"
+    else "$ADB" -s "$SERIAL" shell settings delete secure enabled_accessibility_services >/dev/null; fi
+    "$ADB" -s "$SERIAL" shell pm enable "$GTV" >/dev/null
+    echo "the Home button opens Google TV again" ;;
+  status)
+    [[ $(services) == *HomeButtonService* ]] && echo "Home button: the Hub app" || echo "Home button: Google TV" ;;
+  *) echo "usage: tv-app/home on | off | status" >&2; exit 1 ;;
+esac

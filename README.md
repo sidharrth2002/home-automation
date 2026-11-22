@@ -63,9 +63,9 @@ health card that says what's running and how fresh everything is.
 
 <img src="docs/tv.jpg" width="100%" alt="The Hub as an app on the TV">
 
-**On the TV** the Hub is an Android TV app with its own tile in the launcher. It notices it's on a TV and lays itself
-out for the sofa: the remote's arrows move a glowing ring to whatever is nearest in that direction, OK presses it, and
-Back closes things. The same app is the TV's **screensaver**, at the top of this page.
+**On the TV** the Hub is a native Android TV app (Kotlin and Compose for TV) with its own tile in the launcher: the
+same cards as pages that each fit the screen, a rail on the left to move between them, big tiles for Netflix, Prime
+Video, YouTube and Spotify, and the remote's focus moving with Google TV's own animations. The same app is the TV's **screensaver**, at the top of this page.
 
 **On the phone** it's a home-screen web app, with an iPhone widget in the same style and a set of Shortcuts, so I can
 flip a lamp without opening anything. Neither holds a Home Assistant password: they read a small feed and call
@@ -263,7 +263,8 @@ picked up as soon as they're downloaded. Text goes to `say` as a plain argument,
 <summary><b>The TV app and the screensaver</b></summary>
 <br>
 
-`tv-app/` is a small Android TV app: a full-screen WebView of the Hub with a launcher banner. The Hub recognises it
+`tv-app/` is a native Android TV app (Kotlin, Jetpack Compose for TV) that talks to Home Assistant directly, with a
+launcher banner; the screensaver below still uses the Hub in a WebView until its native version lands. The Hub recognises it
 (its user agent includes `HomeHubTV`) and switches to TV mode: a 1280-wide canvas scaled to the screen, arrow-key
 navigation to the nearest control in that direction (sliders take left and right), Back closing an open panel
 before leaving the app, and the Hub's own TV remote hidden, since you're holding the real one. On Home
