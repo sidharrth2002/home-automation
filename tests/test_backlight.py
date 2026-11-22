@@ -47,6 +47,25 @@ def run():
     b.ha_state.update({ON: "on", LEVEL: "1"})
     b.apply_ha()
     assert b.strip.wanted[2] == 1, "the lowest level is still on"
+
+    # the latest intent wins: switched off during a show, the strip leaves it; switched on, it rejoins
+    b = Backlight(); b.strip = FakeStrip()
+    b.ha_state.update({ON: "off", LEVEL: "200", HUE: "30", SAT: "60"})
+    b.on_frame({"r": 255, "g": 0, "b": 0, "dimming": 100})
+    assert b.strip.wanted == (True, (255, 0, 0), 100), "a show that starts takes the strip, even if it was off before"
+    b.on_ha_change(ON, "on"); b.on_ha_change(ON, "off")
+    assert b.strip.wanted[0] is False, "switched off during the show: off now"
+    b.on_frame({"r": 0, "g": 255, "b": 0, "dimming": 100})
+    assert b.strip.wanted[0] is False, "and the show's next frames don't bring it back"
+    b.on_ha_change(LEVEL, "100")
+    assert b.strip.wanted[0] is False, "other helper changes keep it off"
+    b.on_ha_change(ON, "on")
+    b.on_frame({"r": 0, "g": 0, "b": 255, "dimming": 100})
+    assert b.strip.wanted == (True, (0, 0, 255), 100), "switched on again: back in the show"
+    b.on_ha_change(ON, "off"); b.on_frame(None)
+    assert b.strip.wanted[0] is False and not b.left_show, "show over: Home Assistant's state (off), and the slate is clean"
+    b.on_frame({"r": 9, "g": 9, "b": 9, "dimming": 100})
+    assert b.strip.wanted[0] is True, "a new show later takes it again"
     print("backlight OK")
     keepalive()
 
