@@ -156,7 +156,10 @@ find). Testing takes over the TV screen, so ask first.
   `./gradlew :app:recordPaparazziDebug` renders screens with demo data (snapshots are git-ignored). The Home button:
   Google TV ignores the home role and guards its launcher (disabling it left Home dead; never do that), so the app
   has HomeButtonService, an accessibility service that only catches the Home key; `tv-app/home on|off|status`.
-  Switching it on needs the user (Android's restricted settings for sideloaded apps). The old WebView
+  Switching it on needs the user (Android's restricted settings for sideloaded apps), and this TCL TV's firmware also
+  refuses to start it ("[TclAppBoot]: forbid bind service" in logcat) until the app is allowed to auto-start in TCL's
+  guard app (com.tcl.guard), which only the user can change. Android string resources need apostrophes escaped (\'):
+  an unescaped one fails the resource merge, and a filter on "^e:" hides that error; check the APK's timestamp. The old WebView
   (MainActivity, HubDream screensaver) remains until the native screensaver replaces it.
 - Keep every UI in sync, in the same PR: the Hub (desktop + phone), the TV app's TV layout (`?tv=1`, 1280 canvas;
   every new control must be reachable with the remote's arrows: they're buttons, so FOCUSABLE picks them up, but
