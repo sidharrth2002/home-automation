@@ -3,19 +3,31 @@ package com.sid.home
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
-import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import java.io.File
 
-/** Whether Google TV's own home may stay up: only when chosen from the Hub's Google TV tile, until the Hub is back. */
+/**
+ * Whether Google TV's own home may stay up: when chosen from the Hub's Google TV tile (until the Hub is back), or for a
+ * while after the Hub crashed (so a Hub that crashes on launch can't trap the TV in a loop of reopening it).
+ * The service runs in its own process (a crash in the Hub can't take the Home button down with it), so these are
+ * small files both processes read, not fields.
+ */
 object HomeRedirect {
     const val GOOGLE_TV = "com.google.android.apps.tv.launcherx"
     private const val CHOSEN_FOR_MS = 30 * 60_000L
-    @Volatile private var allowUntil = 0L
+    private const val AFTER_CRASH_MS = 10 * 60_000L
+    private const val CHOSEN = "google-tv-chosen-until"
+    private const val CRASHED = "hub-crashed-until"
 
-    fun chooseGoogleTv() { allowUntil = SystemClock.elapsedRealtime() + CHOSEN_FOR_MS }
-    fun backInHub() { allowUntil = 0L }
-    val googleTvChosen get() = SystemClock.elapsedRealtime() < allowUntil
+    private fun file(c: Context, name: String) = File(c.filesDir, name)
+    private fun until(c: Context, name: String) = runCatching { file(c, name).readText().toLong() }.getOrDefault(0L)
+    private fun hold(c: Context, name: String, ms: Long) { runCatching { file(c, name).writeText((System.currentTimeMillis() + ms).toString()) } }
+
+    fun chooseGoogleTv(c: Context) = hold(c, CHOSEN, CHOSEN_FOR_MS)
+    fun backInHub(c: Context) { file(c, CHOSEN).delete() }
+    fun hubCrashed(c: Context) = hold(c, CRASHED, AFTER_CRASH_MS)
+    fun leaveGoogleTv(c: Context) = System.currentTimeMillis().let { it < until(c, CHOSEN) || it < until(c, CRASHED) }
 
     fun openHub(context: Context) = context.startActivity(Intent(context, HomeActivity::class.java)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
@@ -36,7 +48,7 @@ class HomeButtonService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && event.packageName == HomeRedirect.GOOGLE_TV
-            && !HomeRedirect.googleTvChosen) HomeRedirect.openHub(this)
+            && !HomeRedirect.leaveGoogleTv(this)) HomeRedirect.openHub(this)
     }
 
     override fun onInterrupt() = Unit

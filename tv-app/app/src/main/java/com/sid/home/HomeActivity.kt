@@ -67,6 +67,8 @@ object HomeApp {
 class HomeActivity : ComponentActivity() {
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
+        val crash = Thread.getDefaultUncaughtExceptionHandler()
+        if (crash !is HubCrash) Thread.setDefaultUncaughtExceptionHandler(HubCrash(applicationContext, crash))
         val actions = HomeApp.start(this, intent.getBooleanExtra("demo", false))
         setContent { HomeRoot(actions) }
     }
@@ -78,7 +80,15 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        HomeRedirect.backInHub() // Google TV's home is only kept when chosen, until the Hub is back
+        HomeRedirect.backInHub(this) // Google TV's home is only kept when chosen, until the Hub is back
+    }
+}
+
+/** Notes a crash before the app dies, so the Home button service leaves Google TV up for a while instead of looping. */
+private class HubCrash(private val context: Context, private val next: Thread.UncaughtExceptionHandler?) : Thread.UncaughtExceptionHandler {
+    override fun uncaughtException(t: Thread, e: Throwable) {
+        HomeRedirect.hubCrashed(context)
+        next?.uncaughtException(t, e)
     }
 }
 
