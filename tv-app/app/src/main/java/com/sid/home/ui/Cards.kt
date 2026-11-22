@@ -212,7 +212,7 @@ fun MusicCard(ctx: Ctx, modifier: Modifier = Modifier, compact: Boolean = false)
         if (!nothing && dur > 0) {
             Spacer(Modifier.height(8.dp))
             Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = .1f))) {
-                Box(Modifier.fillMaxWidth((pos / dur).toFloat()).height(3.dp).background(Brush.horizontalGradient(palette.ifEmpty { listOf(Hub.accent, Hub.accent) })))
+                Box(Modifier.fillMaxWidth((pos / dur).toFloat()).height(3.dp).background(Brush.horizontalGradient(palette.ifEmpty { listOf(Hub.accent) }.let { if (it.size < 2) it + it else it })))
             }
             Row(Modifier.fillMaxWidth().padding(top = 3.dp)) {
                 Text(fmt(pos), style = Hub.text(8.sp, Hub.ink3, family = Hub.mono)); Spacer(Modifier.weight(1f))
@@ -309,7 +309,7 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
         // the rest: Google TV's own home (every other app), and the TV's settings
         for ((label, icon, open) in listOf<Triple<String, androidx.compose.ui.graphics.vector.ImageVector, () -> Boolean>>(
             Triple("All apps", HubIcons.tv) { onAllApps(); true },
-            Triple("Google TV", HubIcons.home) { com.sid.home.HomeRedirect.chooseGoogleTv(); launch(context, com.sid.home.HomeRedirect.GOOGLE_TV) },
+            Triple("Google TV", HubIcons.home) { com.sid.home.HomeRedirect.chooseGoogleTv(context); launch(context, com.sid.home.HomeRedirect.GOOGLE_TV) },
             Triple("Settings", HubIcons.reactor) { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess },
         )) {

@@ -51,9 +51,11 @@
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation" />
 
-        <!-- The remote's Home button opens the Hub (tv-app/home on); only key events, never the screen's content. -->
+        <!-- The remote's Home button opens the Hub (tv-app/home on); only key events, never the screen's content.
+             Its own process: a crash in the Hub can't take it down (Android then waits up to an hour to restart it). -->
         <service
             android:name=".HomeButtonService"
+            android:process=":home_button"
             android:exported="false"
             android:label="Hub Home button"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">

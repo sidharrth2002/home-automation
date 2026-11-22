@@ -162,6 +162,10 @@ find). Testing takes over the TV screen, so ask first.
   whenever Google TV's home comes up uninvited (power-on, waking, backing out of an app); the Google TV tile allows it
   (HomeRedirect) until the Hub is back. `tv-app/home on|off|status`. Never `am start -S` (force-stop): Android then
   drops the app's accessibility service from the enabled list (deploy re-enables it if an update drops it).
+  The service runs in its own process (`:home_button`): when it shared the Hub's, a Hub crash (a one-colour song
+  palette in a gradient, 2026-11-22) killed it too and Android postponed its restart by up to an hour. So HomeRedirect's
+  state is files in filesDir, read by both processes; after a Hub crash (HubCrash handler) the service leaves Google
+  TV up for 10 min instead of reopening a Hub that crashes on launch. Brushes need 2+ colours: pad data-driven lists.
 - Offline first: ha/Offline.kt. Snapshot keeps the last state on the TV (files/home-state.json, saved every 10 s while
   things change and on onStop; not "after quiet": HA is never quiet) and loads it at start; OfflineQueue applies
   presses at once and sends them on reconnect (before get_states): latest wish per entity, toggles stored as
