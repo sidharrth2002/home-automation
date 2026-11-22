@@ -95,7 +95,7 @@ enum class Page(val label: String, val icon: androidx.compose.ui.graphics.vector
 @Composable
 fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.json.JsonObject> = emptyList(), start: Page = Page.ROOM,
                offline: String? = null, open: Page? = null, opened: () -> Unit = {}) {
-    val palette = ambientColours(ctx)
+    val palette = settled(ambientColours(ctx))
     var holding by remember { mutableStateOf<String?>(null) }
     var allApps by remember { mutableStateOf(false) }
     var saver by remember { mutableStateOf(false) }
@@ -109,7 +109,17 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
     androidx.activity.compose.BackHandler { page = Page.ROOM; runCatching { first.requestFocus() } }
     androidx.activity.compose.BackHandler(enabled = holding != null) { holding = null }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
-    LaunchedEffect(open) { if (open != null) { page = open; opened() } }
+    // asked from outside (the Home button, or adb): that page, with nothing left open over it
+    LaunchedEffect(open) {
+        if (open == null) return@LaunchedEffect
+        saver = false; allApps = false; holding = null
+        page = open
+        opened()
+        if (open == Page.ROOM) runCatching { kotlinx.coroutines.delay(250); first.requestFocus() }
+    }
+    // the page follows the rail's focus once it rests there, so scrolling past pages doesn't build each one on the way
+    var railAt by remember { mutableStateOf<Page?>(null) }
+    LaunchedEffect(railAt) { railAt?.let { delay(140); page = it } }
     Box(Modifier.fillMaxSize().background(Hub.bg)) {
         Ambient(palette)
         // modal: the rail slides over the page (with a dimmed backdrop) instead of squeezing it
@@ -120,7 +130,7 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
                 Spacer(Modifier.height(56.dp))
                 for (p in Page.entries) {
                     NavigationDrawerItem(selected = page == p, onClick = { page = p },
-                        modifier = Modifier.focusRequester(railItems[p.ordinal]).onFocusChanged { if (it.isFocused) page = p },
+                        modifier = Modifier.focusRequester(railItems[p.ordinal]).onFocusChanged { if (it.isFocused) railAt = p },
                         leadingContent = { HubIcon(p.icon, if (page == p) Hub.ink else Hub.ink2, 18.dp) },
                         colors = androidx.tv.material3.NavigationDrawerItemDefaults.colors(
                             containerColor = Color.Transparent, selectedContainerColor = Color.White.copy(alpha = .10f),
@@ -189,6 +199,19 @@ fun ambientColours(ctx: Ctx): List<Color> {
     val fallback = if (hour >= 21 || hour < 6) listOf(Color(60, 50, 140), Color(20, 70, 120), Color(90, 40, 90))
     else listOf(Color(255, 150, 80), Color(110, 80, 230), Color(40, 150, 190))
     return List(3) { pool.getOrNull(it) ?: pool.getOrNull(it % pool.size.coerceAtLeast(1)) ?: fallback[it] }
+}
+
+/**
+ * The latest colours, but changed at most every [everyMs]. During music sync the lamps change several times a
+ * second; following each change restarted the glow's 2.5 s colour fade and redrew its full-screen gradients every
+ * frame, which starved the UI thread (the rail felt laggy).
+ */
+@Composable
+fun settled(colours: List<Color>, everyMs: Long = 4000): List<Color> {
+    var shown by remember { mutableStateOf(colours) }
+    val latest by androidx.compose.runtime.rememberUpdatedState(colours)
+    LaunchedEffect(Unit) { while (true) { if (latest != shown) shown = latest; delay(everyMs) } }
+    return shown
 }
 
 @Composable

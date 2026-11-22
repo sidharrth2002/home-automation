@@ -17,6 +17,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.flow.sample
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,15 +77,17 @@ class HomeActivity : ComponentActivity() {
         setContent { HomeRoot(actions) }
     }
 
+    /** Back to the Hub while it's open: the Home button (via HomeButtonService), so it lands on Home with nothing over it. */
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        openPage(intent)
+        HomeApp.openPage.value = pageAsked(intent) ?: com.sid.home.ui.Page.ROOM
     }
 
+    private fun openPage(intent: android.content.Intent) { pageAsked(intent)?.let { HomeApp.openPage.value = it } }
+
     /** `--es page MUSIC` (adb, for checking a page on the TV): show that page. */
-    private fun openPage(intent: android.content.Intent) {
-        intent.getStringExtra("page")?.let { name -> com.sid.home.ui.Page.entries.find { it.name == name }?.let { HomeApp.openPage.value = it } }
-    }
+    private fun pageAsked(intent: android.content.Intent) =
+        intent.getStringExtra("page")?.let { name -> com.sid.home.ui.Page.entries.find { it.name == name } }
 
     override fun onStop() {
         super.onStop()
@@ -107,7 +110,10 @@ private class HubCrash(private val context: Context, private val next: Thread.Un
 
 @Composable
 fun HomeRoot(actions: Actions) {
-    val s by HomeApp.state.entities.collectAsState()
+    // at most 5 screen updates a second: during music sync Home Assistant sends lamp changes many times a second,
+    // and each one rebuilt the page (a TV's CPU is slow; the rail stuttered)
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    val s by remember { HomeApp.state.entities.sample(200) }.collectAsState(HomeApp.state.entities.value)
     val connected by HomeApp.state.connected.collectAsState()
     val events by HomeApp.state.events.collectAsState()
     val savedAt by HomeApp.state.savedAt.collectAsState()
