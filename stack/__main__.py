@@ -53,6 +53,8 @@ def services():
         out["investments"] = [PY, "-m", "investments", "--watch"]
     if os.environ.get("BACKLIGHT_NAME"):  # the Bluetooth strip behind the cabinet
         out["backlight"] = [PY, "-m", "backlight"]
+    if os.environ.get("TV_HOST"):  # puts the TV app's Home button service back when the TV drops it
+        out["home_button"] = [PY, "-m", "home_button"]
     if shutil.which("rclone") and "[onedrive]" in rclone_config():  # photos, once OneDrive is signed in
         out["photos"] = [PY, "-m", "photos", "--watch"]
     return out
