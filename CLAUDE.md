@@ -201,8 +201,10 @@ find). Testing takes over the TV screen, so ask first.
   the screensaver, which is why the Hub app doesn't use it. The ambient screen must never show finances.
 - The cabinet strip (`light.tv_backlight`; apply doesn't rename existing helpers, so they're still "TV backlight …") is Bluetooth only (MELK-OC21, an ELK-BLEDOM-style controller: 9-byte commands to FFF3,
   no replies, one colour for the whole strip). HA in Docker can't reach the Mac's Bluetooth, so `backlight/` holds the
-  connection and mirrors the helpers; the controller takes one connection at a time, so its phone app can't connect
-  while the service runs. Music sync gives it its own frame in the show (`Lights.outputs`) over UDP 127.0.0.1:38998;
+  connection and mirrors the helpers; the controller takes one connection at a time (the user has no phone app for it:
+  this service is its only client). An idle link can die silently (it did overnight), so with nothing to send the
+  service re-sends the power state every KEEPALIVE_S (45 s): a dead link then fails in the background and reconnects
+  before anyone presses anything. Music sync gives it its own frame in the show (`Lights.outputs`) over UDP 127.0.0.1:38998;
   live frames win, and after 2 s without one it goes back to the helpers. The template light only gets `brightness`
   in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has a calm colour row (six muted presets; hue and white-to-colour sliders under "Custom")
   under the orbs, sending hs_color; brightness is the orb's slider. After a drop, macOS can keep a stale link to the

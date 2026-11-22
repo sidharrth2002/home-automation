@@ -48,6 +48,40 @@ def run():
     b.apply_ha()
     assert b.strip.wanted[2] == 1, "the lowest level is still on"
     print("backlight OK")
+    keepalive()
+
+
+def keepalive():
+    """With nothing to send, the link is exercised every KEEPALIVE_S, so a quietly dead one is found in the background."""
+    import asyncio
+
+    class Client:
+        is_connected = True
+        def __init__(self): self.writes = []
+        async def write_gatt_char(self, char, data, response=False): self.writes.append(bytes(data))
+
+    async def go():
+        st = strip.Strip()
+        st.client = Client()
+        st.set(True, (255, 0, 0), 50)
+        old = strip.KEEPALIVE_S
+        strip.KEEPALIVE_S = 0.2
+        try:
+            task = asyncio.create_task(st._send_loop())
+            await asyncio.sleep(0.1)
+            n = len(st.client.writes)
+            assert n == 3, st.client.writes  # power, brightness, colour
+            await asyncio.sleep(0.5)
+            extra = st.client.writes[n:]
+            assert extra and all(w == strip.power(True) for w in extra), "idle: only the unchanged power state, again"
+            st.client.is_connected = False
+            st._wake.set()
+            await asyncio.sleep(0.05)
+            assert task.done() and isinstance(task.exception(), ConnectionError), "a dead link ends the loop, to reconnect"
+        finally:
+            strip.KEEPALIVE_S = old
+    asyncio.run(go())
+    print("strip keepalive OK")
 
 
 if __name__ == "__main__":
