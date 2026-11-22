@@ -207,8 +207,9 @@ find). Testing takes over the TV screen, so ask first.
   Switching it on needs the user (Android's restricted settings for sideloaded apps), and this TCL TV's firmware also
   refuses to start it ("[TclAppBoot]: forbid bind service" in logcat) until the app is allowed to auto-start in TCL's
   guard app (com.tcl.guard), which only the user can change. Android string resources need apostrophes escaped (\'):
-  an unescaped one fails the resource merge, and a filter on "^e:" hides that error; check the APK's timestamp. The old WebView
-  (MainActivity, HubDream screensaver) remains until the native screensaver replaces it.
+  an unescaped one fails the resource merge, and a filter on "^e:" hides that error; check the APK's timestamp. No WebView
+  is left in the app (MainActivity and Hub.java removed 2026-11-22): don't bring one back, Chromium in-process costs
+  hundreds of MB on this TV.
 - Calm by default, in every UI: the user is easily overstimulated. Low saturation (dark surfaces; colour only as small
   accents, like a tinted icon or a soft outline on the active item), little motion (slow and subtle at most; no
   pulsing, flashing or big focus zooms), few things per screen (secondary controls on their own page). Prefer removing
@@ -244,9 +245,12 @@ find). Testing takes over the TV screen, so ask first.
 - The TV app: Google TV uses *wireless debugging* (random port, announced over Bonjour), not port 5555. Pairing is a
   one-off (`adb pair <tv>:<pairing port> <code>`; the pairing port can be found with `dns-sd -B _adb-tls-pairing._tcp`
   or a port scan of the TV while the pairing screen is open); after that `tv-app/deploy` finds the connect port itself.
-  Debug builds allow WebView inspection: `adb forward tcp:9229 localabstract:webview_devtools_remote_<pid>`, then
-  CDP on localhost:9229. `adb exec-out screencap -p` screenshots the TV. A screenshot right after launch can show the
-  Hub before its scripts run; wait before concluding it's broken.
+  `adb exec-out screencap -p` screenshots the TV.
+- TV app memory (2.4 GB TV, 192 MB heap limit): measure with `dumpsys meminfo com.sid.home` while it's in front (in
+  the background the TV has already squeezed it), or the history in `logcat -b events | grep am_pss`; `killinfo`
+  lines are lmkd kills (pid, uid, oom_adj, …, rss KB). Normal foreground is ~85-130 MB PSS. The WebView screensaver
+  took it to 515-562 MB RSS within minutes, and lmkd killed down to adj 0. Coil's memory cache is capped at 24 MB
+  (HomeApp.start); prefetches that only want the disk cache decode at 16×16.
 - TV GPUs mis-draw heavy effects: `backdrop-filter` and large blurred layers left a card's contents drawn shifted
   after scrolling. TV mode turns them off and paints each card with `contain: paint`; keep new effects out of TV mode
   or test them there (scroll down and back up, then `screencap`).
@@ -260,7 +264,8 @@ find). Testing takes over the TV screen, so ask first.
 - WiZ sockets: every `wizlight(ip)` opens its own UDP socket until `async_close()`, so go through `lights._ask`; and
   `find_wizlights` cancelled mid-wait never closes its socket on port 38899, so it runs under `asyncio.shield`. Both
   leaked until 2026-11-21 (~600 sockets; discovery then failed with "Address already in use" and no mode would start).
-- The screensaver (`HubDream`, the Hub with `?ambient=1`) is set with `settings put secure screensaver_components`;
+- The screensaver (`HubDream`: a DreamService hosting the native `Screensaver` composable in a ComposeView, acting
+  as its own LifecycleOwner/SavedStateRegistryOwner) is set with `settings put secure screensaver_components`;
   `tv-app/screensaver on|off|test|status|delay <min>` (the idle delay is `system screen_off_timeout`; the user
   chose 1 minute). The original value is saved once in `data/tv/original-screensaver.txt`
   (Google's `dreamx/.service.Backdrop`). `cmd dreams start-dreaming` needs root and the Somnambulator launcher is

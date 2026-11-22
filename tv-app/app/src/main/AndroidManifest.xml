@@ -48,13 +48,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-        <!-- The full Hub in a WebView, for the cards that aren't native yet. -->
-        <activity
-            android:name=".MainActivity"
-            android:exported="false"
-            android:screenOrientation="landscape"
-            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation" />
-
         <!-- The remote's Home button opens the Hub (tv-app/home on); only key events, never the screen's content.
              Its own process: a crash in the Hub can't take it down (Android then waits up to an hour to restart it). -->
         <service
@@ -69,7 +62,7 @@
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/home_button" />
         </service>
 
-        <!-- The Hub as the TV's screensaver (switched on over adb: tv-app/screensaver). -->
+        <!-- The native Screensaver as the TV's screensaver (switched on over adb: tv-app/screensaver). -->
         <service
             android:name=".HubDream"
             android:exported="true"

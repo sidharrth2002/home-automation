@@ -264,19 +264,18 @@ picked up as soon as they're downloaded. Text goes to `say` as a plain argument,
 <br>
 
 `tv-app/` is a native Android TV app (Kotlin, Jetpack Compose for TV) that talks to Home Assistant directly, with a
-launcher banner; the screensaver below still uses the Hub in a WebView until its native version lands. The Hub recognises it
-(its user agent includes `HomeHubTV`) and switches to TV mode: a 1280-wide canvas scaled to the screen, arrow-key
+launcher banner, and is also the TV's screensaver (below). The web Hub has a TV mode of its own too: a 1280-wide canvas scaled to the screen, arrow-key
 navigation to the nearest control in that direction (sliders take left and right), Back closing an open panel
 before leaving the app, and the Hub's own TV remote hidden, since you're holding the real one. On Home
 Assistant's one-off sign-in page the arrows step between fields. TV GPUs struggle with heavy blur, so TV mode also
 swaps the frosted glass for near-solid cards. `?tv=1` shows TV mode in any browser.
 
-The **screensaver** is the Hub's ambient screen: a big clock and the date, what's playing with its cover, the
-three bulbs in their live colours, the weather, the next event and a quote that changes every ten minutes. When there are photos, it becomes a photo
-frame with the clock in the corner. The light behind it drifts, and the content
-shifts a few pixels over ten minutes so nothing burns in. Google TV hides third-party screensavers in its settings,
+The **screensaver** is the TV app's own (the same one as Home's Screensaver tile): your photos full screen,
+cross-fading slowly, or the soft ambient glow when there are none, with the time, the date, what's playing, the
+weather and the lights. The words drift a little each minute so nothing burns in, and it keeps going with the Mac
+off (photos already on the TV). Google TV hides third-party screensavers in its settings,
 but the setting underneath accepts any installed one, so it's switched over adb, with the original recorded first
-so it can go back. `?ambient=1` previews it.
+so it can go back. The Hub's `?ambient=1` is the browser version of it.
 
 ```sh
 tv-app/deploy                  # build with Gradle, install over adb and open it (TV_HOST in .env)

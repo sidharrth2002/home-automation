@@ -23,7 +23,6 @@ android {
         versionName "2.0"
         buildConfigField "String", "HA_URL", "\"${haUrl}\""
         buildConfigField "String", "HA_TOKEN", "\"${haToken}\""
-        buildConfigField "String", "HUB_URL", "\"${haUrl}/local/hub/index.html\""
     }
     buildFeatures { buildConfig true; compose true }
     // What the TV runs: optimised and shrunk (debug Compose is several times slower), signed with the local debug key.
