@@ -35,7 +35,7 @@
 
 <table>
   <tr><td align="right" valign="top" nowrap><b>18:40</b></td><td>I get in and tap <b>Welcome home</b>. The lamps by the TV come up in blue, settle to warm white, and the TV wakes up and says <i>"Welcome home, Sid."</i></td></tr>
-  <tr><td align="right" valign="top" nowrap><b>19:15</b></td><td>I put Spotify on. The two TV lamps and the strip behind the cabinet land on the beat, in colours taken from the album cover.</td></tr>
+  <tr><td align="right" valign="top" nowrap><b>19:15</b></td><td>I put Spotify on. The two TV lamps and the strip behind the cabinet land on the beat, in colours that follow the music's key (or the album cover, if I ask).</td></tr>
   <tr><td align="right" valign="top" nowrap><b>20:30</b></td><td>I switch to Netflix. They drop to a dim warm glow that barely moves, so I stop noticing them.</td></tr>
   <tr><td align="right" valign="top" nowrap><b>22:30</b></td><td>The desk lamp has been following the sky all day. By now it's down to candle colour.</td></tr>
   <tr><td align="right" valign="top" nowrap><b>any time</b></td><td>Leave the TV alone for a minute and it becomes a photo frame with a clock, what's playing and which lamps are on.</td></tr>
@@ -46,7 +46,7 @@
 <p align="center"><img src="docs/hub.jpg" width="100%" alt="The Hub: the lamps as glowing orbs, music sync with the album cover, scenes and the week's calendar"></p>
 
 The dashboard is plain HTML and JavaScript on Home Assistant's websocket API, with no build step. The orbs are the
-lamps in whatever colour they are right now, and the whole page takes its light from them and the album art. Below
+lamps in whatever colour they are right now, and the whole page takes its light from them. Below
 the fold: the photo frame, every account in one place, the desk lamp's view of the sky, a remote for the TV and a
 health card that says what's running and how fresh everything is.
 
@@ -182,7 +182,7 @@ tv-app/deploy                                    # build the TV app and install 
 | --- | --- |
 | `input_boolean.music_sync` | On/off. The bulbs go back to how they were when it stops, after 30s of silence, or on the next run after a crash. |
 | `input_select.music_sync_mode` | `auto`, `calm`, `party` (chases, strobes on drops), `tv`, `classic` (the original wiz_spotify algorithm). |
-| `input_select.music_sync_colours` | `Album art` or `Music key`. |
+| `input_select.music_sync_colours` | `Music key` (default: colours follow the music) or `Album art`. |
 | `input_number.music_sync_sensitivity` | Onset threshold. Up if it reacts to noise, down if it misses beats. |
 | `input_number.music_sync_latency` | Sends beats this many ms early to cover bulb lag. Negative for Bluetooth speakers. |
 | `sensor.music_sync_tempo` | Detected BPM and whether the beat grid is locked. |

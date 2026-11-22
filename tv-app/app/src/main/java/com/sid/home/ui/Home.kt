@@ -164,9 +164,9 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
     }
 }
 
-/** The page takes its light from the lamps and the album art, like the Hub's ambient field. */
+/** The page takes its light from the lamps (and the album art, only when that's the chosen colours), like the Hub's. */
 fun ambientColours(ctx: Ctx): List<Color> {
-    val music = ctx.on(Ids.SYNC) && ctx.s[Ids.NOW]?.str("player_state") == "playing"
+    val music = ctx.on(Ids.SYNC) && ctx.s[Ids.NOW]?.str("player_state") == "playing" && ctx.s[Ids.COLOURS]?.state == "Album art"
     val pal = if (music) ctx.s[Ids.NOW]?.arr("palette")?.map { hex(it.toString().trim('"')) } ?: emptyList() else emptyList()
     val lamps = Ids.lights.filter { ctx.on(it.first) }.map { lightColor(ctx.s[it.first]) }
     val pool = pal + lamps

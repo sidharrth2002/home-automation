@@ -109,7 +109,7 @@ class Controller:
         self.mode = "auto"
         self.sensitivity = 1.35
         self.latency_ms = 60.0
-        self.colours = ALBUM_ART
+        self.colours = MUSIC_KEY  # by default the show follows the music itself; album art is opt-in
         self.tv_app: str | None = None  # foreground app while the TV is on, else None
         self.cast = os.environ.get("TV_CAST", "")  # the TV's Cast device; Spotify on the TV plays through it
         self.cast_state = ""
@@ -140,7 +140,7 @@ class Controller:
                                min=-200, max=300, step=10, mode="slider", unit_of_measurement="ms", initial=60)
         if COLOURS not in states:
             await self.ha.call(type="input_select/create", name="Music Sync Colours", icon="mdi:palette",
-                               options=[ALBUM_ART, MUSIC_KEY], initial=ALBUM_ART)
+                               options=[ALBUM_ART, MUSIC_KEY], initial=MUSIC_KEY)
         states = {s["entity_id"]: s for s in await self.ha.call(type="get_states")}
         for eid in (*WATCHED, self.cast):
             if eid in states:
