@@ -24,7 +24,9 @@ object PhotoCache {
     fun keepWarm(context: Context, home: HomeState, scope: CoroutineScope) = scope.launch {
         home.entities.map { it[Ids2.PHOTOS]?.arr("photos")?.mapNotNull { p -> photoUrl(p.jsonObject) } ?: emptyList() }
             .distinctUntilChanged().collect { urls ->
-                for (u in urls) context.imageLoader.enqueue(ImageRequest.Builder(context).data(u)
+                // the disk cache keeps the downloaded file, so decode it tiny: only the download is wanted here
+                // (at the default size each one was a throwaway full-screen bitmap, ~8 MB, one after another)
+                for (u in urls) context.imageLoader.enqueue(ImageRequest.Builder(context).data(u).size(16, 16)
                     .memoryCachePolicy(CachePolicy.DISABLED).diskCachePolicy(CachePolicy.ENABLED).build())
             }
     }

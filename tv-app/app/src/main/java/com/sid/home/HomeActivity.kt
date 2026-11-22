@@ -53,6 +53,11 @@ object HomeApp {
 
     fun start(context: Context, demo: Boolean): Actions {
         actions?.let { return it }
+        // decoded pictures kept in memory: Coil's default is a quarter of the 192 MB heap, on a TV that's short of RAM;
+        // 24 MB holds the photo on screen and the next one, the album art and the banners (the rest is on disk)
+        coil.Coil.setImageLoader(coil.ImageLoader.Builder(context.applicationContext)
+            .memoryCache { coil.memory.MemoryCache.Builder(context.applicationContext).maxSizeBytes(24 * 1024 * 1024).build() }
+            .build())
         // Home's app banners, drawn before the page first asks for them (off the main thread)
         scope.launch { for (app in com.sid.home.ui.TV_APPS) com.sid.home.ui.Banners.load(context.applicationContext, app.pkg) }
         val a: Actions = if (demo || BuildConfig.HA_TOKEN.isEmpty()) {
