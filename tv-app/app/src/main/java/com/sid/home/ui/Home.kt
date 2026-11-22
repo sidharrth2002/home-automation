@@ -83,7 +83,7 @@ class Ctx(val s: Map<String, Entity>, val act: Actions, val toast: (String) -> U
 
 /** The pages, each one screen: the left rail moves between them, Google TV style (no scrolling). */
 enum class Page(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    ROOM("Home", HubIcons.home), TODAY("Today", HubIcons.cal), MONEY("Money", HubIcons.chart), ALLOCATION("Allocation", HubIcons.reactor),
+    ROOM("Home", HubIcons.home), LIGHTS("Lights", HubIcons.bulb), TODAY("Today", HubIcons.cal), MONEY("Money", HubIcons.chart), ALLOCATION("Allocation", HubIcons.reactor),
     HOME("Desk & health", HubIcons.pulse)
 }
 
@@ -134,16 +134,15 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
                     // a cross-fade only: no size animation between pages of different heights
                     transitionSpec = { (androidx.compose.animation.fadeIn(tween(220)) togetherWith androidx.compose.animation.fadeOut(tween(160))).using(null) }) { p ->
                     when (p) {
-                        Page.ROOM -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            AppsRow(ctx) { allApps = true }
-                            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                Column(Modifier.weight(1.75f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    RoomCard(ctx, first)
-                                    ScenesRow(ctx)
-                                }
+                        Page.ROOM -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            AppsRow(ctx, first = first) { allApps = true }
+                            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                NowPanel(ctx, events, Modifier.weight(1.75f).fillMaxHeight())
                                 if (musicShown(ctx)) MusicCard(ctx, Modifier.weight(1f), compact = true)
                             }
+                            ScenesRow(ctx)
                         }
+                        Page.LIGHTS -> RoomCard(ctx)
                         Page.TODAY -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             if (ctx.s.keys.any { it.startsWith("calendar.") }) CalendarCard(ctx, events)
                             PhotosCard(ctx, Modifier.weight(1f))
@@ -186,7 +185,9 @@ fun Ambient(colours: List<Color>) {
     // nothing per frame (redrawing big gradients every frame made the app stutter).
     fun Modifier.blob(color: Color, x: Float, y: Float, r: Float, alpha: Float) = drawWithCache {
         val brush = Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), Offset(size.width * x, size.height * y), size.width * r)
-        onDrawBehind { drawRect(brush) }
+        // drawn well past the screen's edges: the layer drifts, and a screen-sized rectangle showed its edge sliding in
+        val over = 160.dp.toPx()
+        onDrawBehind { drawRect(brush, topLeft = Offset(-over, -over), size = androidx.compose.ui.geometry.Size(size.width + 2 * over, size.height + 2 * over)) }
     }
     Box(Modifier.fillMaxSize().graphicsLayer { translationX = drift * 60.dp.toPx() }.blob(a, .12f, .05f, .55f, .42f))
     Box(Modifier.fillMaxSize().graphicsLayer { translationX = -drift * 70.dp.toPx() }.blob(b, .95f, .9f, .5f, .36f))

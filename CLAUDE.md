@@ -146,7 +146,8 @@ find). Testing takes over the TV screen, so ask first.
   type colours are fixed palette slots (ACCOUNT_TYPES/ALLOC in app.js), consecutive in bar order: re-run the dataviz
   validator if you change them. The merge passes `provider`, `label`, `interest_pct`, `matures` on each account.
 - The TV app is native (tv-app/app/src/main/java/com/sid/home): HomeActivity + ui/ (Theme = the Hub's tokens and
-  fonts; Home = rail + pages: Home (apps row, room, scenes, music), Today, Money, Allocation, Desk & health; Cards,
+  fonts; Home = rail + pages: Home (apps row, a calm Now panel, music, quiet scene tiles), Lights, Today, Money,
+  Allocation, Desk & health (keep Home calm: the user found saturated tiles and the lamp controls overstimulating); Cards,
   Cards2, Money) over ha/Ha.kt (HA websocket + REST calendars, the same feed as the Hub; Demo for --ez demo true).
   One screen per page, no scrolling; the remote's left arrow opens the rail. Icons and quotes are generated from
   app.js (tv-app/hub_sync.py), the demo household from demo.js (tv-app/demo-data): rerun them after changing those.
@@ -155,7 +156,10 @@ find). Testing takes over the TV screen, so ask first.
   com.sid.home/.HomeActivity --ez demo true`): presses in real mode change real things (one moved a real slider).
   `./gradlew :app:recordPaparazziDebug` renders screens with demo data (snapshots are git-ignored). The Home button:
   Google TV ignores the home role and guards its launcher (disabling it left Home dead; never do that), so the app
-  has HomeButtonService, an accessibility service that only catches the Home key; `tv-app/home on|off|status`.
+  has HomeButtonService (accessibility, packageNames = launcherx only): it catches the Home key and opens the Hub
+  whenever Google TV's home comes up uninvited (power-on, waking, backing out of an app); the Google TV tile allows it
+  (HomeRedirect) until the Hub is back. `tv-app/home on|off|status`. The ambient glow layers are drawn past the screen
+  edges because they drift (a screen-sized layer showed its edge sliding in).
   Switching it on needs the user (Android's restricted settings for sideloaded apps), and this TCL TV's firmware also
   refuses to start it ("[TclAppBoot]: forbid bind service" in logcat) until the app is allowed to auto-start in TCL's
   guard app (com.tcl.guard), which only the user can change. Android string resources need apostrophes escaped (\'):

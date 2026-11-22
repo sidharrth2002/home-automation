@@ -59,6 +59,11 @@ class HomeActivity : ComponentActivity() {
         val actions = HomeApp.start(this, intent.getBooleanExtra("demo", false))
         setContent { HomeRoot(actions) }
     }
+
+    override fun onResume() {
+        super.onResume()
+        HomeRedirect.backInHub() // Google TV's home is only kept when chosen, until the Hub is back
+    }
 }
 
 @Composable
