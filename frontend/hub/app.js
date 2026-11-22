@@ -273,7 +273,8 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
   $("#music").hidden = !shown;
   document.documentElement.classList.toggle("no-music", !shown);
   if (!shown) return "";
-  const colours = at(COLOURS, "options") ?? ["Album art", "Music key"];
+  // the music's own colours first: they're the default (as on the TV)
+  const colours = [...(at(COLOURS, "options") ?? ["Album art", "Music key"])].sort((a, b) => (b === "Music key") - (a === "Music key"));
   const nothing = !title || title === "Nothing playing";
   const sens = num(SENS, 1.35);
   const lat = num(LAT, 60);
