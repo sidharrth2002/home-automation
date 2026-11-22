@@ -1053,7 +1053,8 @@ section("#foot", () => [], () => `
 // ── ambient colour field ─────────────────────────────────────────
 function ambient() {
   const cols = LIGHTS.filter((l) => is(l.id, "on")).map((l) => rgbOf(S[l.id]));
-  const palette = (at(NOW, "palette") ?? []).map(hexToRgb);
+  // album colours only when chosen ("Album art"); by default the page follows the lamps, which follow the music
+  const palette = st(COLOURS) === "Album art" ? (at(NOW, "palette") ?? []).map(hexToRgb) : [];
   const music = is(SYNC, "on") && at(NOW, "player_state") === "playing" && palette.length;
   const pool = music ? [...palette, ...cols] : cols;
   const hour = new Date().getHours();

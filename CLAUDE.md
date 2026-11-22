@@ -94,7 +94,9 @@ find). Testing takes over the TV screen, so ask first.
   WiZ can't do transitions; fades are steps. Music sync never touches the desk lamp (`WIZ_EXCLUDE_MACS`).
 - TV: `media_player.smart_tv_pro` (Android TV Remote: power, keys, apps, volume steps only) and
   `media_player.sid_london_room_tv` (Google Cast: playing media, e.g. speech).
-- Music sync: `input_boolean.music_sync`, `input_select.music_sync_mode`, `sensor.music_sync_now_playing`.
+- Music sync: `input_boolean.music_sync`, `input_select.music_sync_mode`, `sensor.music_sync_now_playing`,
+  `input_select.music_sync_colours` (default `Music key`: colours follow the music in every mode; `Album art` is
+  opt-in, and only then do the Hub's and TV app's ambient glows take the album palette; otherwise they follow the lamps).
 - Scripts: party/chill/movie/all_off, `music_command` (play/pause/skip), `welcome_home`, `sleep_mode` (music, TV and
   desk lamp off, then the TV lamps and strip step from a warm glow to dark over ~12 min; mode restart; every other
   scene starts with `script.turn_off script.sleep_mode` so it can't dim them later).
