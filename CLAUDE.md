@@ -243,9 +243,11 @@ find). Testing takes over the TV screen, so ask first.
   the latest intent wins: a show that starts takes the strip (even if it was off), switching it off during a show takes
   it out of that show until it's switched on again or a new show starts; after 2 s without frames it goes back to the helpers. The template light only gets `brightness`
   in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has a calm colour row (six muted presets; hue and white-to-colour sliders under "Custom")
-  under the orbs, sending hs_color; brightness is the orb's slider. After a drop, macOS can keep a stale link to the
-  strip inside the process (it then stops advertising, so rescans never see it; seen 2026-11-21, 2 h unreachable,
-  doing its own effects): after 3 missed scans the service exits and the supervisor restarts it, which clears it.
+  under the orbs, sending hs_color; brightness is the orb's slider. After a drop, macOS keeps a stale link to the
+  strip inside the process: rescans from it never find the strip again (9 drops of 9, 2026-11-13 to 22; once 2 h
+  unreachable), while a fresh process connects within a second every time. So a link that drops is never rescanned:
+  the service exits at once (`FreshStart`) and the supervisor restarts it, back in ~3 s. Scans from a fresh start get
+  3 tries (the strip may really be off). Drops often line up with music sync starting or stopping; cause unknown.
 - Guest photos (`input_boolean.guest_photos`, Hub "Guest" button, voice "guest mode"): the frame shows 30 Wikimedia
   Commons featured landscapes (`photos/guest.py`, face-checked, credited, cached in www/photos-guest) instead of mine,
   on the Hub and the TV screensaver. `sync_frame` runs every 2 s on its own thread (`keep_in_sync`, own Faces), so a
