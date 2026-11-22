@@ -21,12 +21,16 @@ WRITE = "0000fff3-0000-1000-8000-00805f9b34fb"
 NAME_PREFIX = os.environ.get("BACKLIGHT_NAME", "MELK")
 MAX_HZ = 20
 SCAN_S = 15
-MAX_MISSES = 3  # missed scans in a row before restarting the process (~4 minutes)
+MAX_MISSES = 3  # missed scans in a row, from a fresh start, before restarting the process
 KEEPALIVE_S = 45  # with nothing to send, re-send the power state this often: an idle link can die silently
 
 
 class StripNotFound(ConnectionError):
     pass
+
+
+class FreshStart(Exception):
+    """This process can't reach the strip again; exit so the supervisor starts a new one (which can)."""
 
 
 def power(on: bool) -> bytes:
@@ -82,21 +86,24 @@ class Strip:
     async def run(self):
         backoff, misses = 2, 0
         while True:
+            linked = False
             try:
                 await self._connect()
-                backoff, misses = 2, 0
+                linked, backoff, misses = True, 2, 0
                 await self._send_loop()
             except asyncio.CancelledError:
                 raise
             except StripNotFound as e:
-                # After a drop, macOS can keep a stale link to the strip inside this process, and a connected strip
-                # doesn't advertise, so scans never find it again. A fresh process clears that; the supervisor
-                # restarts us.
                 misses += 1
                 if misses >= MAX_MISSES:
-                    raise SystemExit(f"strip: {e}; {misses} scans missed it, exiting for a fresh Bluetooth stack")
+                    raise FreshStart(f"{e}; {misses} scans missed it")
                 log.warning("strip: %s; retrying in %ds", e, backoff)
             except Exception as e:
+                # After a drop, macOS keeps a stale link to the strip inside this process: rescans from here never
+                # find it again (9 drops out of 9, 2026-11-13 to 22), while a fresh process connects within a second
+                # every time. So don't rescan: restart now, and the strip is back in ~3 s instead of a minute.
+                if linked:
+                    raise FreshStart(f"link dropped ({e or type(e).__name__})")
                 log.warning("strip: %s; retrying in %ds", e or type(e).__name__, backoff)
             self.connected.clear()
             if self.client:

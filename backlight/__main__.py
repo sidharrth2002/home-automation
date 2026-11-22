@@ -24,7 +24,7 @@ import websockets
 from music_sync.service import HA, load_env
 
 from . import PORT
-from .strip import Strip, frame_rgb, hs_to_rgb
+from .strip import FreshStart, Strip, frame_rgb, hs_to_rgb
 
 log = logging.getLogger("backlight")
 ON = "input_boolean.tv_backlight"
@@ -139,8 +139,12 @@ async def main():
     backlight = Backlight()
     loop = asyncio.get_running_loop()
     await loop.create_datagram_endpoint(lambda: _Frames(backlight), local_addr=("127.0.0.1", PORT))
-    await asyncio.gather(backlight.strip.run(), backlight.follow_ha(os.environ["TOKEN"]), backlight.expire_live())
+    try:
+        await asyncio.gather(backlight.strip.run(), backlight.follow_ha(os.environ["TOKEN"]), backlight.expire_live())
+    except FreshStart as e:
+        log.warning("strip: %s; exiting so the supervisor starts a fresh process", e)
+        return 1
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    raise SystemExit(asyncio.run(main()))

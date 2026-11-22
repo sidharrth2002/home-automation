@@ -101,6 +101,27 @@ def keepalive():
             strip.KEEPALIVE_S = old
     asyncio.run(go())
     print("strip keepalive OK")
+    fresh_start()
+
+
+def fresh_start():
+    """A link that drops is never rescanned from the same process (macOS hides the strip from it): it exits at once."""
+    import asyncio
+
+    class Dropping(strip.Strip):
+        connects = 0
+        async def _connect(self):
+            self.connects += 1
+        async def _send_loop(self):
+            raise ConnectionError("disconnected")
+
+    st = Dropping()
+    try:
+        asyncio.run(asyncio.wait_for(st.run(), 1))
+        raise AssertionError("should have asked for a fresh start")
+    except strip.FreshStart as e:
+        assert st.connects == 1 and "link dropped" in str(e), (st.connects, e)
+    print("strip fresh start OK")
 
 
 if __name__ == "__main__":
