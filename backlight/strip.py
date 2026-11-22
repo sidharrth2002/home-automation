@@ -3,8 +3,9 @@ similar apps). One colour for the whole strip.
 
 Its protocol is 9-byte commands written to characteristic FFF3, `7e .. .. .. .. .. .. .. ef`, with no reply:
 power, brightness (0-100) and colour (r, g, b). Writes go out without waiting for an acknowledgement, at most MAX_HZ,
-latest wins, so a slow radio never builds a backlog. The controller accepts one connection at a time: while this holds
-it, the phone app can't connect (close the app if this can't find it).
+latest wins, so a slow radio never builds a backlog. The controller accepts one connection at a time, and this is its
+only client. When idle it re-sends the power state every KEEPALIVE_S, so a link that dies quietly is noticed and
+reconnected in the background rather than at the next button press.
 """
 import asyncio
 import colorsys
@@ -21,6 +22,7 @@ NAME_PREFIX = os.environ.get("BACKLIGHT_NAME", "MELK")
 MAX_HZ = 20
 SCAN_S = 15
 MAX_MISSES = 3  # missed scans in a row before restarting the process (~4 minutes)
+KEEPALIVE_S = 45  # with nothing to send, re-send the power state this often: an idle link can die silently
 
 
 class StripNotFound(ConnectionError):
@@ -110,7 +112,7 @@ class Strip:
         dev = await BleakScanner.find_device_by_filter(
             lambda d, a: (d.name or a.local_name or "").startswith(NAME_PREFIX), timeout=SCAN_S)
         if not dev:
-            raise StripNotFound(f"no {NAME_PREFIX}* strip in range (is its phone app connected to it?)")
+            raise StripNotFound(f"no {NAME_PREFIX}* strip in range (out of reach, unpowered, or another device holds it)")
         self.client = BleakClient(dev, timeout=20, disconnected_callback=lambda _: self._wake.set())
         await self.client.connect()
         self.sent = None
@@ -121,7 +123,15 @@ class Strip:
         gap = 1 / MAX_HZ
         last = 0.0
         while True:
-            await self._wake.wait()
+            try:
+                await asyncio.wait_for(self._wake.wait(), KEEPALIVE_S)
+            except asyncio.TimeoutError:
+                # Nothing to do for a while. The link can die quietly when idle (overnight it did, and the next press
+                # found it dead and waited a minute for a reconnect), so re-send the power state: it changes nothing,
+                # and a dead link fails here, in the background, instead of when someone presses a button.
+                if self.sent is not None:
+                    await self._write(power(self.sent[0]))
+                continue
             self._wake.clear()
             if not self.client.is_connected:
                 raise ConnectionError("disconnected")
