@@ -94,10 +94,11 @@ enum class Page(val label: String, val icon: androidx.compose.ui.graphics.vector
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.json.JsonObject> = emptyList(), start: Page = Page.ROOM,
-               offline: String? = null) {
+               offline: String? = null, open: Page? = null, opened: () -> Unit = {}) {
     val palette = ambientColours(ctx)
     var holding by remember { mutableStateOf<String?>(null) }
     var allApps by remember { mutableStateOf(false) }
+    var saver by remember { mutableStateOf(false) }
     // opened from Home's music card: focus moves to the Music page's controls (not when browsing the rail, which keeps it)
     var focusMusic by remember { mutableStateOf(false) }
     val musicFocus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -108,6 +109,7 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
     androidx.activity.compose.BackHandler { page = Page.ROOM; runCatching { first.requestFocus() } }
     androidx.activity.compose.BackHandler(enabled = holding != null) { holding = null }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(open) { if (open != null) { page = open; opened() } }
     Box(Modifier.fillMaxSize().background(Hub.bg)) {
         Ambient(palette)
         // modal: the rail slides over the page (with a dimmed backdrop) instead of squeezing it
@@ -139,7 +141,7 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
                     transitionSpec = { (androidx.compose.animation.fadeIn(tween(220)) togetherWith androidx.compose.animation.fadeOut(tween(160))).using(null) }) { p ->
                     when (p) {
                         Page.ROOM -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            AppsRow(ctx, first = first) { allApps = true }
+                            AppsRow(ctx, first = first, onAllApps = { allApps = true }, onScreensaver = { saver = true })
                             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                 NowPanel(ctx, events, Modifier.weight(1.75f).fillMaxHeight(), connected)
                                 if (musicShown(ctx)) MusicCard(ctx, Modifier.weight(1f), compact = true,
@@ -173,6 +175,7 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
         }
         holding?.let { HoldingView(ctx, it) { holding = null } }
         if (allApps) AppsGrid(ctx) { allApps = false }
+        if (saver) Screensaver(ctx, palette, connected) { saver = false; runCatching { first.requestFocus() } }
     }
 }
 

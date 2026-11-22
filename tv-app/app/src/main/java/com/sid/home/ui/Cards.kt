@@ -312,7 +312,8 @@ fun rememberBanner(pkg: String): androidx.compose.ui.graphics.ImageBitmap? {
 }
 
 @Composable
-fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.focus.FocusRequester? = null, onAllApps: () -> Unit = {}) {
+fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.focus.FocusRequester? = null, onAllApps: () -> Unit = {},
+            onScreensaver: () -> Unit = {}) {
     val context = LocalContext.current
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         for ((i, app) in TV_APPS.withIndex()) {
@@ -334,7 +335,7 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
         // the rest: Google TV's own home (every other app), and the TV's settings
         for ((label, icon, open) in listOf<Triple<String, androidx.compose.ui.graphics.vector.ImageVector, () -> Boolean>>(
             Triple("All apps", HubIcons.tv) { onAllApps(); true },
-            Triple("Screensaver", HubIcons.moon) { startScreensaver(context) },
+            Triple("Screensaver", HubIcons.moon) { onScreensaver(); true },
             Triple("Google TV", HubIcons.home) { com.sid.home.HomeRedirect.chooseGoogleTv(context); launch(context, com.sid.home.HomeRedirect.GOOGLE_TV) },
             Triple("Settings", HubIcons.reactor) { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess },
@@ -347,15 +348,6 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
         }
     }
 }
-
-/**
- * Start the screensaver now (the Hub's own, HubDream, set by tv-app/screensaver). Android has no public call for it, but
- * SystemUI's Somnambulator ("start dreaming") does exactly that and is on this TV.
- */
-fun startScreensaver(context: android.content.Context): Boolean = runCatching {
-    context.startActivity(android.content.Intent(android.content.Intent.ACTION_MAIN)
-        .setClassName("com.android.systemui", "com.android.systemui.Somnambulator").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-}.isSuccess
 
 /** Every app on the TV with a TV launch screen, by name (the home screen's own "All apps"). */
 fun installedApps(context: android.content.Context): List<Pair<String, String>> {

@@ -79,7 +79,7 @@ private fun NowText(ctx: Ctx, next: JsonObject?, now: LocalDateTime) {
 
 /** The weather and the lights, in one line. */
 @Composable
-private fun StatusLine(ctx: Ctx) {
+fun StatusLine(ctx: Ctx) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
         ctx.s[Ids.WEATHER]?.let { w ->
             Row(verticalAlignment = Alignment.CenterVertically) {

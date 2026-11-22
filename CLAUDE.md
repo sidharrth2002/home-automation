@@ -149,11 +149,15 @@ find). Testing takes over the TV screen, so ask first.
   validator if you change them. The merge passes `provider`, `label`, `interest_pct`, `matures` on each account.
 - The TV app is native (tv-app/app/src/main/java/com/sid/home): HomeActivity + ui/ (Theme = the Hub's tokens and
   fonts; Home = rail + pages: Home (apps row with All apps / Screensaver / Google TV / Settings tiles, a calm Now panel,
-  music, quiet scene tiles), Music (ui/Music.kt: thin rings leave the cover once a bar at the Mac's tempo, the cover
-  breathes; pressing the cover on Home's music card opens it; Android's Visualizer on the output mix, session 0, makes
-  the halo swell with the TV's own sound: RECORD_AUDIO, granted by deploy, never the mic; silent TV = tempo only),
-  Lights (lamps, cabinet colours, Music colours: Music key / Album art), Today, Money, Allocation, Desk & health.
-  The Screensaver tile starts SystemUI's Somnambulator (no public API; it's on this TV). (Keep Home calm: the user found saturated tiles and the lamp controls overstimulating; app
+  music, quiet scene tiles), Music (ui/Music.kt; pressing the cover on Home's music card opens it: an additive aurora
+  that the bass swells, five ribbons of sound shaped by the mids, dust that glints with the highs; bands come from
+  Android's Visualizer FFT on the output mix, session 0, with per-band auto gain; this TCL does share its sound
+  (verified 2026-11-22); RECORD_AUDIO, granted by deploy, never the mic; without it a swell on each beat of the Mac's
+  tempo drives it. The user called plain rings "shit": keep it rich but calm, nothing strobes), Lights (lamps,
+  cabinet colours, Music colours: Music key / Album art), Today, Money, Allocation, Desk & health. The Screensaver
+  tile shows ui/Screensaver.kt in the app (photos full screen, clock drifting against burn-in, any key closes):
+  SystemUI's Somnambulator exists here but declines to dream when an app asks. `am start -n
+  com.sid.home/.HomeActivity --es page MUSIC` opens a page (only when the TV isn't in use). (Keep Home calm: the user found saturated tiles and the lamp controls overstimulating; app
   banners rest dimmed and light up on focus, focus zoom is gentle). The Now panel shows what's next, or with nothing
   left today the photo frame (20 s cross-fade), or with no photos a gentle quote (ui/Comfort.kt, not the Stoic QUOTES); Cards,
   Cards2, Money) over ha/Ha.kt (HA websocket + REST calendars, the same feed as the Hub; Demo for --ez demo true).

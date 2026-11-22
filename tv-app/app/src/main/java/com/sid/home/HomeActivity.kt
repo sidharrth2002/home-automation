@@ -44,6 +44,8 @@ object HomeApp {
 
     var notice: ((String) -> Unit)? = null
     var snapshot: com.sid.home.ha.Snapshot? = null
+    /** A page asked for from outside (an intent's "page" extra); the home screen shows it, then clears this. */
+    val openPage = kotlinx.coroutines.flow.MutableStateFlow<com.sid.home.ui.Page?>(null)
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
     fun start(context: Context, demo: Boolean): Actions {
@@ -70,7 +72,18 @@ class HomeActivity : ComponentActivity() {
         val crash = Thread.getDefaultUncaughtExceptionHandler()
         if (crash !is HubCrash) Thread.setDefaultUncaughtExceptionHandler(HubCrash(applicationContext, crash))
         val actions = HomeApp.start(this, intent.getBooleanExtra("demo", false))
+        openPage(intent)
         setContent { HomeRoot(actions) }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        openPage(intent)
+    }
+
+    /** `--es page MUSIC` (adb, for checking a page on the TV): show that page. */
+    private fun openPage(intent: android.content.Intent) {
+        intent.getStringExtra("page")?.let { name -> com.sid.home.ui.Page.entries.find { it.name == name }?.let { HomeApp.openPage.value = it } }
     }
 
     override fun onStop() {
@@ -108,7 +121,8 @@ fun HomeRoot(actions: Actions) {
     Demo.onCall = { toast = it }
     HomeApp.notice = { toast = it }
     Box {
-        HomeScreen(Ctx(s, actions) { toast = it }, connected, events, offline = offline)
+        val asked by HomeApp.openPage.collectAsState()
+        HomeScreen(Ctx(s, actions) { toast = it }, connected, events, offline = offline, open = asked) { HomeApp.openPage.value = null }
         AnimatedVisibility(toast != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp), enter = fadeIn(), exit = fadeOut()) {
             Text(toast.orEmpty(), style = Hub.text(12.sp, weight = 500),
                 modifier = Modifier.clip(CircleShape).background(Color(0xEE16161F)).padding(horizontal = 18.dp, vertical = 9.dp))
