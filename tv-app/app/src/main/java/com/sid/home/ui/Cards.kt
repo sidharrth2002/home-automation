@@ -295,20 +295,40 @@ fun launch(context: android.content.Context, pkg: String): Boolean {
     return true
 }
 
-/** An app's Google TV banner (or its icon) as an image; null when it isn't installed (or in tests). */
-@Composable
-fun rememberBanner(pkg: String): androidx.compose.ui.graphics.ImageBitmap? {
-    val context = LocalContext.current
-    return remember(pkg) {
-        runCatching {
+/**
+ * Apps' Google TV banners (or icons), drawn once per process and off the main thread: asking the package manager and
+ * drawing each one took a few ms, and Home's apps row did it again every time the page was shown.
+ */
+object Banners {
+    private val none = Any()
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
+    fun cached(pkg: String): androidx.compose.ui.graphics.ImageBitmap? = cache[pkg] as? androidx.compose.ui.graphics.ImageBitmap
+    fun known(pkg: String) = cache.containsKey(pkg)
+
+    /** The banner, null when the app isn't installed (or in tests). Call off the main thread. */
+    fun load(context: android.content.Context, pkg: String): androidx.compose.ui.graphics.ImageBitmap? {
+        cache[pkg]?.let { return it as? androidx.compose.ui.graphics.ImageBitmap }
+        val bmp = runCatching {
             val pm = context.packageManager
             val d = pm.getApplicationBanner(pkg) ?: pm.getApplicationIcon(pkg)
             val w = d.intrinsicWidth.coerceAtLeast(1); val h = d.intrinsicHeight.coerceAtLeast(1)
             val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
             d.setBounds(0, 0, w, h); d.draw(android.graphics.Canvas(bmp))
-            bmp.asImageBitmap()
+            bmp.asImageBitmap().also { it.prepareToDraw() }
         }.getOrNull()
+        cache[pkg] = bmp ?: none
+        return bmp
     }
+}
+
+/** An app's banner: at once if it's been drawn before, otherwise as soon as it's ready. */
+@Composable
+fun rememberBanner(pkg: String): androidx.compose.ui.graphics.ImageBitmap? {
+    val context = LocalContext.current
+    return androidx.compose.runtime.produceState(Banners.cached(pkg), pkg) {
+        if (value == null && !Banners.known(pkg)) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Banners.load(context, pkg) }
+    }.value
 }
 
 @Composable
@@ -362,10 +382,13 @@ fun installedApps(context: android.content.Context): List<Pair<String, String>> 
 @Composable
 fun AppsGrid(ctx: Ctx, onClose: () -> Unit) {
     val context = LocalContext.current
-    val apps = remember { installedApps(context) }
+    // the package manager is slow on this TV: ask it off the main thread (the grid fills in a moment later)
+    val apps by androidx.compose.runtime.produceState(emptyList<Pair<String, String>>()) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { installedApps(context) }
+    }
     val first = remember { androidx.compose.ui.focus.FocusRequester() }
     androidx.activity.compose.BackHandler { onClose() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(apps.isEmpty()) { if (apps.isNotEmpty()) { androidx.compose.runtime.withFrameNanos { }; runCatching { first.requestFocus() } } }
     Box(Modifier.fillMaxSize().background(Hub.bg.copy(alpha = .94f)).padding(horizontal = 56.dp, vertical = 36.dp)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {

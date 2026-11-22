@@ -1,47 +1,56 @@
 package com.sid.home.ui
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import android.os.SystemClock
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
-import androidx.compose.animation.togetherWith
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.foundation.focusGroup
-import androidx.compose.ui.focus.focusRequester
-import androidx.tv.material3.NavigationDrawerItem
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.util.lerp
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -52,6 +61,7 @@ import androidx.tv.material3.Text
 import com.sid.home.ha.Actions
 import com.sid.home.ha.Entity
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -75,7 +85,12 @@ object Ids {
     const val TV = "media_player.smart_tv_pro"
 }
 
-/** Everything a card needs: the entities right now, and a way to change things. */
+/**
+ * Everything a card needs: the entities right now, and a way to change things. Made once and kept: on the TV [s] is a
+ * [LiveEntities], so a card given the same Ctx is skipped when its parent recomposes, and recomposes only for the
+ * entities it read.
+ */
+@Stable
 class Ctx(val s: Map<String, Entity>, val act: Actions, val toast: (String) -> Unit) {
     fun st(id: String) = s[id]?.state
     fun on(id: String) = s[id]?.state == "on"
@@ -90,12 +105,12 @@ enum class Page(val label: String, val icon: androidx.compose.ui.graphics.vector
 /**
  * The home screen. A rail on the left (focus it with the remote's left arrow; up and down change page, and the page
  * follows the focus) and one page at a time, each fitting the TV, under the header with the clock and greeting.
+ * [railOpen]: draw the rail open without focus (for the snapshot tests).
  */
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.json.JsonObject> = emptyList(), start: Page = Page.ROOM,
-               offline: String? = null, open: Page? = null, opened: () -> Unit = {}) {
-    val palette = settled(ambientColours(ctx))
+               offline: String? = null, open: Page? = null, railOpen: Boolean = false, opened: () -> Unit = {}) {
+    val palette = settled { ambientColours(ctx) }
     var holding by remember { mutableStateOf<String?>(null) }
     var allApps by remember { mutableStateOf(false) }
     var saver by remember { mutableStateOf(false) }
@@ -117,75 +132,113 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
         opened()
         if (open == Page.ROOM) runCatching { kotlinx.coroutines.delay(250); first.requestFocus() }
     }
-    // the page follows the rail's focus once it rests there, so scrolling past pages doesn't build each one on the way
-    var railAt by remember { mutableStateOf<Page?>(null) }
-    LaunchedEffect(railAt) { railAt?.let { delay(140); page = it } }
+    val covered = rememberUpdatedState(saver)
     Box(Modifier.fillMaxSize().background(Hub.bg)) {
-        Ambient(palette)
-        // modal: the rail slides over the page (with a dimmed backdrop) instead of squeezing it
-        androidx.tv.material3.ModalNavigationDrawer(scrimBrush = Brush.horizontalGradient(listOf(Hub.bg.copy(alpha = .85f), Color.Transparent)), drawerContent = { open ->
-            // entering the rail lands on the page you're on, not whichever item happens to be level with you
-            Column(Modifier.fillMaxHeight().focusProperties { enter = { railItems[page.ordinal] } }.focusGroup()
-                .padding(horizontal = 10.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Spacer(Modifier.height(56.dp))
-                for (p in Page.entries) {
-                    NavigationDrawerItem(selected = page == p, onClick = { page = p },
-                        modifier = Modifier.focusRequester(railItems[p.ordinal]).onFocusChanged { if (it.isFocused) railAt = p },
-                        leadingContent = { HubIcon(p.icon, if (page == p) Hub.ink else Hub.ink2, 18.dp) },
-                        colors = androidx.tv.material3.NavigationDrawerItemDefaults.colors(
-                            containerColor = Color.Transparent, selectedContainerColor = Color.White.copy(alpha = .10f),
-                            focusedContainerColor = Color.White.copy(alpha = .16f), focusedSelectedContainerColor = Color.White.copy(alpha = .2f),
-                            contentColor = Hub.ink2, selectedContentColor = Hub.ink, focusedContentColor = Hub.ink),
-                    ) { Text(p.label, style = Hub.text(12.sp, weight = 500)) }
-                }
-                Spacer(Modifier.weight(1f))
-                if (open == androidx.tv.material3.DrawerValue.Open) Text(if (connected) "Live" else "Reconnecting…", style = Hub.text(9.sp, if (connected) Hub.ok else Hub.bad),
-                    modifier = Modifier.padding(start = 14.dp))
-            }
-        }) {
-            Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 32.dp, top = 20.dp, bottom = 22.dp)) {
-                Header(ctx, connected, palette.first(), offline)
-                Spacer(Modifier.height(14.dp))
-                androidx.compose.animation.AnimatedContent(page, label = "page", modifier = Modifier.weight(1f),
-                    // a cross-fade only: no size animation between pages of different heights
-                    transitionSpec = { (androidx.compose.animation.fadeIn(tween(220)) togetherWith androidx.compose.animation.fadeOut(tween(160))).using(null) }) { p ->
-                    when (p) {
-                        Page.ROOM -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            AppsRow(ctx, first = first, onAllApps = { allApps = true }, onScreensaver = { saver = true })
-                            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                NowPanel(ctx, events, Modifier.weight(1.75f).fillMaxHeight(), connected)
-                                if (musicShown(ctx)) MusicCard(ctx, Modifier.weight(1f), compact = true,
-                                    onOpen = { focusMusic = true; page = Page.MUSIC })
+        CompositionLocalProvider(LocalCovered provides covered) {
+            // under the screensaver none of this is drawn (it's covered), so it costs nothing per frame there
+            Box(Modifier.fillMaxSize().drawWithContent { if (!covered.value) drawContent() }) {
+                Ambient(palette)
+                Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 32.dp, top = 20.dp, bottom = 22.dp)) {
+                    Header(ctx, connected, palette.first(), offline)
+                    Spacer(Modifier.height(14.dp))
+                    androidx.compose.animation.AnimatedContent(page, label = "page", modifier = Modifier.weight(1f),
+                        // a cross-fade only: no size animation between pages of different heights
+                        transitionSpec = { (androidx.compose.animation.fadeIn(tween(220)) togetherWith androidx.compose.animation.fadeOut(tween(160))).using(null) }) { p ->
+                        when (p) {
+                            Page.ROOM -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                AppsRow(ctx, first = first, onAllApps = { allApps = true }, onScreensaver = { saver = true })
+                                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    NowPanel(ctx, events, Modifier.weight(1.75f).fillMaxHeight(), connected)
+                                    if (musicShown(ctx)) MusicCard(ctx, Modifier.weight(1f), compact = true,
+                                        onOpen = { focusMusic = true; page = Page.MUSIC })
+                                }
+                                ScenesRow(ctx)
                             }
-                            ScenesRow(ctx)
-                        }
-                        Page.MUSIC -> {
-                            MusicPage(ctx, palette, musicFocus)
-                            if (focusMusic) LaunchedEffect(Unit) {
-                                kotlinx.coroutines.delay(250) // after the cross-fade has put it on screen
-                                runCatching { musicFocus.requestFocus() }
-                                focusMusic = false
+                            Page.MUSIC -> {
+                                MusicPage(ctx, palette, musicFocus)
+                                if (focusMusic) LaunchedEffect(Unit) {
+                                    kotlinx.coroutines.delay(250) // after the cross-fade has put it on screen
+                                    runCatching { musicFocus.requestFocus() }
+                                    focusMusic = false
+                                }
                             }
-                        }
-                        Page.LIGHTS -> RoomCard(ctx)
-                        Page.TODAY -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            if (ctx.s.keys.any { it.startsWith("calendar.") }) CalendarCard(ctx, events)
-                            PhotosCard(ctx, Modifier.weight(1f))
-                        }
-                        Page.MONEY -> MoneyCard(ctx) { holding = it }
-                        Page.ALLOCATION -> AllocationCard(ctx)
-                        Page.SETTINGS -> SettingsPage(ctx, connected)
-                        Page.HOME -> Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            DeskCard(ctx, Modifier.weight(1f))
-                            HealthCard(ctx, connected, ctx.s.keys.count { it.startsWith("calendar.") }, Modifier.weight(1.4f))
+                            Page.LIGHTS -> RoomCard(ctx)
+                            Page.TODAY -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                if (ctx.s.keys.any { it.startsWith("calendar.") }) CalendarCard(ctx, events)
+                                PhotosCard(ctx, Modifier.weight(1f))
+                            }
+                            Page.MONEY -> MoneyCard(ctx) { holding = it }
+                            Page.ALLOCATION -> AllocationCard(ctx)
+                            Page.SETTINGS -> SettingsPage(ctx, connected)
+                            Page.HOME -> Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                DeskCard(ctx, Modifier.weight(1f))
+                                HealthCard(ctx, connected, ctx.s.keys.count { it.startsWith("calendar.") }, Modifier.weight(1.4f))
+                            }
                         }
                     }
                 }
+                Rail(page, railItems, connected, railOpen, onRest = { page = it }, onPick = { page = it })
+                holding?.let { HoldingView(ctx, it) { holding = null } }
+                if (allApps) AppsGrid(ctx) { allApps = false }
             }
         }
-        holding?.let { HoldingView(ctx, it) { holding = null } }
-        if (allApps) AppsGrid(ctx) { allApps = false }
         if (saver) Screensaver(ctx, palette, connected) { saver = false; runCatching { first.requestFocus() } }
+    }
+}
+
+private val RAIL_ITEM = 40.dp  // each item's height: all eight fit the 540 dp screen with room to spare
+private val RAIL_PILL = 56.dp  // an item at rest: its icon, in a pill when it's the page shown
+private val RAIL_OPEN = 172.dp // the highlight's width when the names show
+private const val RAIL_REST_MS = 300L
+
+/**
+ * The left rail: icons at rest, their names while it has focus. Lighter than tv-material's ModalNavigationDrawer,
+ * which animated the drawer's width (measuring and laying out the rail again every frame of opening and closing) and
+ * a full-screen scrim; here nothing changes size. The names and the backdrop fade as layers, and the highlight
+ * widens in the draw phase. The page follows the focus once it rests on an item for [RAIL_REST_MS], so moving
+ * through the rail doesn't build every page on the way (a page's first frame is the expensive one).
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun Rail(page: Page, items: List<androidx.compose.ui.focus.FocusRequester>, connected: Boolean, forceOpen: Boolean,
+                 onRest: (Page) -> Unit, onPick: (Page) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val open by androidx.compose.animation.core.animateFloatAsState(if (focused || forceOpen) 1f else 0f, tween(if (focused) 220 else 160), label = "rail")
+    var at by remember { mutableStateOf<Page?>(null) }
+    val rest by rememberUpdatedState(onRest)
+    LaunchedEffect(at) { at?.let { delay(RAIL_REST_MS); rest(it) } }
+    // a dimmed backdrop behind the names (one cached layer; at alpha 0 it isn't drawn at all)
+    Box(Modifier.fillMaxHeight().fillMaxWidth(.7f).graphicsLayer { alpha = open }
+        .background(Brush.horizontalGradient(listOf(Hub.bg.copy(alpha = .85f), Color.Transparent))))
+    Column(Modifier.fillMaxHeight().padding(start = 10.dp, top = 86.dp, bottom = 22.dp)
+        .onFocusChanged { focused = it.hasFocus }
+        // entering the rail lands on the page you're on, not whichever item happens to be level with you
+        .focusProperties { enter = { items[page.ordinal] } }.focusGroup(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (p in Page.entries) RailItem(p, page == p, { open }, items[p.ordinal], onFocus = { at = p }, onClick = { onPick(p) })
+        Spacer(Modifier.weight(1f))
+        Text(if (connected) "Live" else "Reconnecting…", style = Hub.text(9.sp, if (connected) Hub.ok else Hub.bad), maxLines = 1, softWrap = false,
+            modifier = Modifier.padding(start = 14.dp).wrapContentWidth(Alignment.Start, unbounded = true).graphicsLayer { alpha = open })
+    }
+}
+
+@Composable
+private fun RailItem(p: Page, selected: Boolean, open: () -> Float, focus: androidx.compose.ui.focus.FocusRequester,
+                     onFocus: () -> Unit, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val ink = if (selected || focused) Hub.ink else Hub.ink2
+    // laid out icon-sized (focus moves by these bounds); the name and the widened highlight draw past them
+    Box(Modifier.size(RAIL_PILL, RAIL_ITEM).focusRequester(focus)
+        .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
+        .clickable(interactionSource = null, indication = null, onClick = onClick)
+        .drawBehind {
+            val fill = if (focused && selected) .2f else if (focused) .16f else if (selected) .1f else 0f
+            if (fill > 0f) drawRoundRect(Color.White.copy(alpha = fill), size = Size(lerp(RAIL_PILL.toPx(), RAIL_OPEN.toPx(), open()), size.height),
+                cornerRadius = CornerRadius(size.height / 2))
+        }, contentAlignment = Alignment.CenterStart) {
+        HubIcon(p.icon, ink, 18.dp, Modifier.padding(start = 19.dp))
+        Text(p.label, style = Hub.text(12.sp, ink, 500), maxLines = 1, softWrap = false,
+            modifier = Modifier.padding(start = 50.dp).wrapContentWidth(Alignment.Start, unbounded = true).graphicsLayer { alpha = open() })
     }
 }
 
@@ -202,58 +255,97 @@ fun ambientColours(ctx: Ctx): List<Color> {
 }
 
 /**
- * The latest colours, but changed at most every [everyMs]. During music sync the lamps change several times a
- * second; following each change restarted the glow's 2.5 s colour fade and redrew its full-screen gradients every
- * frame, which starved the UI thread (the rail felt laggy).
+ * The latest [colours], looked at every [everyMs] (outside composition, so nothing recomposes when a lamp changes in
+ * between). During music sync the lamps change several times a second; following each change restarted the glow's
+ * colour fade and redrew its full-screen gradients every frame, which starved the UI thread (the rail felt laggy).
  */
 @Composable
-fun settled(colours: List<Color>, everyMs: Long = 4000): List<Color> {
-    var shown by remember { mutableStateOf(colours) }
-    val latest by androidx.compose.runtime.rememberUpdatedState(colours)
-    LaunchedEffect(Unit) { while (true) { if (latest != shown) shown = latest; delay(everyMs) } }
+fun settled(everyMs: Long = 4000, colours: () -> List<Color>): List<Color> {
+    var shown by remember { mutableStateOf(Snapshot.withoutReadObservation(colours)) }
+    val latest by rememberUpdatedState(colours)
+    LaunchedEffect(Unit) { while (true) { delay(everyMs); val c = latest(); if (c != shown) shown = c } }
     return shown
 }
 
+private const val AMBIENT_FADE_MS = 2500L
+private const val AMBIENT_DRIFT_MS = 60_000L
+
+/**
+ * The glow behind everything: three soft lights in the lamps' colours, drifting so slowly it's barely noticed. It moves
+ * about 2 px a second, so it's stepped twice a second (and colour fades ten times a second) instead of asking for 60
+ * frames a second forever: every frame redraws the whole window, and on this TV that alone kept the UI thread busy.
+ * The three lights are drawn together into one offscreen layer, so other frames (focus moves, the rail) only copy a
+ * texture instead of filling three overscanned full-screen gradients. Paused while the screensaver covers it.
+ */
 @Composable
 fun Ambient(colours: List<Color>) {
-    val a by animateColorAsState(colours[0], tween(2500), label = "a1")
-    val b by animateColorAsState(colours[1], tween(2500), label = "a2")
-    val c by animateColorAsState(colours[2], tween(2500), label = "a3")
-    val t = rememberInfiniteTransition(label = "drift")
-    val drift by t.animateFloat(-1f, 1f, infiniteRepeatable(tween(60_000, easing = LinearEasing), RepeatMode.Reverse), label = "d") // slow, barely noticed
-    // Drawn once per colour change and cached; the drift only slides the cached layer, so the TV's GPU does almost
-    // nothing per frame (redrawing big gradients every frame made the app stutter).
-    fun Modifier.blob(color: Color, x: Float, y: Float, r: Float, alpha: Float) = drawWithCache {
-        val brush = Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), Offset(size.width * x, size.height * y), size.width * r)
-        // drawn well past the screen's edges: the layer drifts, and a screen-sized rectangle showed its edge sliding in
-        val over = 160.dp.toPx()
-        onDrawBehind { drawRect(brush, topLeft = Offset(-over, -over), size = androidx.compose.ui.geometry.Size(size.width + 2 * over, size.height + 2 * over)) }
+    val covered = LocalCovered.current
+    val target by rememberUpdatedState(colours)
+    val shown = remember { mutableStateOf(colours) }
+    val drift = remember { mutableFloatStateOf(-1f) }
+    LaunchedEffect(Unit) {
+        val t0 = SystemClock.uptimeMillis()
+        var from = shown.value; var to = from; var since = 0L
+        while (true) {
+            if (covered.value) snapshotFlow { covered.value }.first { !it }
+            val now = SystemClock.uptimeMillis()
+            if (target != to) { from = shown.value; to = target; since = now }
+            val f = ((now - since) / AMBIENT_FADE_MS.toFloat()).coerceIn(0f, 1f)
+            shown.value = if (f < 1f) List(3) { lerp(from[it], to[it], f) } else to
+            val phase = (now - t0) % (2 * AMBIENT_DRIFT_MS) / AMBIENT_DRIFT_MS.toFloat() // 0..2: across and back
+            drift.floatValue = if (phase < 1f) -1f + 2f * phase else 3f - 2f * phase
+            delay(if (f < 1f) 100 else 500)
+        }
     }
-    Box(Modifier.fillMaxSize().graphicsLayer { translationX = drift * 30.dp.toPx() }.blob(a, .12f, .05f, .55f, .42f))
-    Box(Modifier.fillMaxSize().graphicsLayer { translationX = -drift * 35.dp.toPx() }.blob(b, .95f, .9f, .5f, .36f))
-    Box(Modifier.fillMaxSize().graphicsLayer { translationY = drift * 20.dp.toPx() }.blob(c, .6f, .25f, .35f, .2f))
+    Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithCache {
+        val c = shown.value
+        fun blob(i: Int, x: Float, y: Float, r: Float, alpha: Float) =
+            Brush.radialGradient(listOf(c[i].copy(alpha = alpha), Color.Transparent), Offset(size.width * x, size.height * y), size.width * r)
+        val lights = listOf(blob(0, .12f, .05f, .55f, .42f), blob(1, .95f, .9f, .5f, .36f), blob(2, .6f, .25f, .35f, .2f))
+        onDrawBehind {
+            val d = drift.floatValue
+            val moves = listOf(Offset(d * 30.dp.toPx(), 0f), Offset(-d * 35.dp.toPx(), 0f), Offset(0f, d * 20.dp.toPx()))
+            // the light moves; the rectangle it fills stays on the screen (no edge can slide into view)
+            for (i in 0..2) translate(moves[i].x, moves[i].y) { drawRect(lights[i], topLeft = -moves[i], size = size) }
+        }
+    })
+}
+
+private val DAY = DateTimeFormatter.ofPattern("EEEE d MMMM")
+private val HM = DateTimeFormatter.ofPattern("HH:mm")
+private val SS = DateTimeFormatter.ofPattern("ss")
+
+/** The time, updated on each minute: for what shows the hour or the date (so it doesn't recompose every second). */
+@Composable
+fun rememberMinute(): androidx.compose.runtime.State<LocalDateTime> = produceState(LocalDateTime.now()) {
+    while (true) { delay(60_000L - System.currentTimeMillis() % 60_000L + 20); value = LocalDateTime.now() }
+}
+
+/** The ticking clock on its own, so each second redraws two short texts, not the header. */
+@Composable
+private fun Clock() {
+    val now by produceState(LocalDateTime.now()) { while (true) { delay(1000L - System.currentTimeMillis() % 1000L + 5); value = LocalDateTime.now() } }
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(now.format(HM), style = Hub.text(30.sp, weight = 500, family = Hub.mono))
+        Text(now.format(SS), style = Hub.text(13.sp, Hub.ink3, family = Hub.mono), modifier = Modifier.padding(start = 3.dp, bottom = 4.dp))
+    }
 }
 
 @Composable
 fun Header(ctx: Ctx, connected: Boolean, accent: Color, offline: String? = null) {
-    var now by remember { mutableStateOf(LocalDateTime.now()) }
-    LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(1000) } }
+    val now by rememberMinute()
     val h = now.hour
     val hello = if (h < 5) "Still up" else if (h < 12) "Good morning" else if (h < 18) "Good afternoon" else "Good evening"
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Kicker(now.format(DateTimeFormatter.ofPattern("EEEE d MMMM")))
+            Kicker(now.format(DAY))
             Text(buildAnnotatedString {
                 append("$hello, ")
                 withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = accent.copy(alpha = .95f))) { append("Sid") }
             }, style = Hub.text(32.sp, family = Hub.serif, spacing = (-0.5).sp))
         }
         Column(horizontalAlignment = Alignment.End) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), style = Hub.text(30.sp, weight = 500, family = Hub.mono))
-                Text(now.format(DateTimeFormatter.ofPattern("ss")), style = Hub.text(13.sp, Hub.ink3, family = Hub.mono),
-                    modifier = Modifier.padding(start = 3.dp, bottom = 4.dp))
-            }
+            Clock()
             Spacer(Modifier.size(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (!connected) Chip { Dot(Hub.warn); Text(offline ?: "Offline", style = Hub.text(10.sp, Hub.ink2)) }

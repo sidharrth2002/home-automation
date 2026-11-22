@@ -38,8 +38,7 @@ fun NowPanel(ctx: Ctx, events: List<JsonObject>, modifier: Modifier = Modifier, 
     val next = events.firstOrNull { it["start"]?.jsonObject?.get("dateTime") != null &&
         (parseTime(it["end"]?.jsonObject?.get("dateTime")?.jsonPrimitive?.contentOrNull) ?: now).isAfter(now) }
     // offline, only the photos already on the TV (a blank frame is worse than the quote)
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val photos = photoList(ctx).let { all -> if (connected) all else all.filter { p -> photoUrl(p)?.let { PhotoCache.isCached(context, it) } == true } }
+    val photos = rememberShownPhotos(ctx, connected)
     if (next == null && photos.isNotEmpty()) {
         androidx.compose.foundation.layout.Box(modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(Hub.radius))
             .border(1.dp, Hub.line, androidx.compose.foundation.shape.RoundedCornerShape(Hub.radius))) {

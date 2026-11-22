@@ -164,7 +164,7 @@ find). Testing takes over the TV screen, so ask first.
   One screen per page, no scrolling; the remote's left arrow opens the rail. Icons and quotes are generated from
   app.js (tv-app/hub_sync.py), the demo household from demo.js (tv-app/demo-data): rerun them after changing those.
   Its own HA token is made once by deploy (tv-app/make_token.py -> data/tv/token, git-ignored). Release builds only
-  on the TV (R8 + baseline profiles; debug Compose is slow). Test on the TV in demo mode (`am start -n
+  on the TV (R8, baseline profiles incl. the app's own in src/main/baseline-prof.txt; debug Compose is slow). Test on the TV in demo mode (`am start -n
   com.sid.home/.HomeActivity --ez demo true`): presses in real mode change real things (one moved a real slider).
   `./gradlew :app:recordPaparazziDebug` renders screens with demo data (snapshots are git-ignored). The Home button:
   Google TV ignores the home role and guards its launcher (disabling it left Home dead; never do that), so the app
@@ -176,6 +176,20 @@ find). Testing takes over the TV screen, so ask first.
   palette in a gradient, 2026-11-22) killed it too and Android postponed its restart by up to an hour. So HomeRedirect's
   state is files in filesDir, read by both processes; after a Hub crash (HubCrash handler) the service leaves Google
   TV up for 10 min instead of reopening a Hub that crashes on launch. Brushes need 2+ colours: pad data-driven lists.
+- TV app performance (a weak TCL: 4 slow cores, ~2.4 GB RAM, already swapping; 48% janky frames before 2026-11-22):
+  one long-lived `Ctx` over `LiveEntities` (ui/Live.kt: a snapshot state per entity, fed at most 5×/s), so a card
+  recomposes only for entities it reads; never build a new Ctx/map per update, and read entities inside the composable
+  that shows them. HaClient batches events every 100 ms (one map copy, not one per event). Nothing animates forever at
+  60 fps: the ambient glow steps its drift twice a second into one offscreen layer, the Music light draws at 30 fps
+  with brushes made once per palette and reads the Visualizer in its frame loop (not composition); both stop under the
+  screensaver (`LocalCovered`), which also stops drawing the page under it. Clocks that show minutes update per minute
+  (`rememberMinute`). Package manager, disk and decoding stay off the main thread (Banners cache, installed apps,
+  the offline photo check, the next photo decoded ahead at the frame's size). The rail is a light custom one (no
+  ModalNavigationDrawer: its width animation relaid it out every frame): fixed layout, names/backdrop fade as layers,
+  the page follows after 300 ms of rest; 40 dp items fit all eight pages (snapshot `railOpen`). deploy runs `cmd package
+  compile -m speed` (an adb install is left at "verify", i.e. interpreted); `dumpsys package com.sid.home | grep -A3
+  Dexopt` should say speed. compose-stability.conf marks the JSON/time types stable. Measure with `dumpsys gfxinfo
+  com.sid.home reset` / `dumpsys gfxinfo com.sid.home` in demo mode.
 - Offline first: ha/Offline.kt. Snapshot keeps the last state on the TV (files/home-state.json, saved every 10 s while
   things change and on onStop; not "after quiet": HA is never quiet) and loads it at start; OfflineQueue applies
   presses at once and sends them on reconnect (before get_states): latest wish per entity, toggles stored as

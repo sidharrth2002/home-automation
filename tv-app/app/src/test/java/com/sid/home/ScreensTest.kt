@@ -67,6 +67,13 @@ class ScreensTest {
         paparazzi.snapshot { HomeScreen(Ctx(home.entities.value, Demo) {}, connected = true, start = com.sid.home.ui.Page.MUSIC) }
     }
 
+    /** The rail open (as when it has focus): all eight pages' names must fit, none overlapping. */
+    @Test
+    fun railOpen() {
+        val home = demo()
+        paparazzi.snapshot { HomeScreen(Ctx(home.entities.value, Demo) {}, connected = true, events = home.events.value, railOpen = true) }
+    }
+
     @Test
     fun lights() {
         val home = demo()

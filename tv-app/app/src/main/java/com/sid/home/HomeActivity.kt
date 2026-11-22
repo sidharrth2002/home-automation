@@ -33,7 +33,9 @@ import com.sid.home.ha.HomeState
 import com.sid.home.ui.Ctx
 import com.sid.home.ui.Hub
 import com.sid.home.ui.HomeScreen
+import com.sid.home.ui.LiveEntities
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The app's one connection to Home Assistant, shared by the home screen and the screensaver. With no token baked in
@@ -51,6 +53,8 @@ object HomeApp {
 
     fun start(context: Context, demo: Boolean): Actions {
         actions?.let { return it }
+        // Home's app banners, drawn before the page first asks for them (off the main thread)
+        scope.launch { for (app in com.sid.home.ui.TV_APPS) com.sid.home.ui.Banners.load(context.applicationContext, app.pkg) }
         val a: Actions = if (demo || BuildConfig.HA_TOKEN.isEmpty()) {
             Demo.load(state, context.assets.open("demo.json").bufferedReader().readText()); Demo
         } else {
@@ -110,10 +114,14 @@ private class HubCrash(private val context: Context, private val next: Thread.Un
 
 @Composable
 fun HomeRoot(actions: Actions) {
-    // at most 5 screen updates a second: during music sync Home Assistant sends lamp changes many times a second,
-    // and each one rebuilt the page (a TV's CPU is slow; the rail stuttered)
+    // at most 5 screen updates a second (during music sync Home Assistant sends lamp changes many times a second),
+    // each one only recomposing what read a changed entity (LiveEntities)
+    val live = remember { LiveEntities().apply { update(HomeApp.state.entities.value) } }
     @OptIn(kotlinx.coroutines.FlowPreview::class)
-    val s by remember { HomeApp.state.entities.sample(200) }.collectAsState(HomeApp.state.entities.value)
+    LaunchedEffect(live) { HomeApp.state.entities.sample(200).collect { live.update(it) } }
+    var toast by remember { mutableStateOf<String?>(null) }
+    // one Ctx for the app's life: cards given it are skipped when nothing they read changed
+    val ctx = remember { Ctx(live, actions) { toast = it } }
     val connected by HomeApp.state.connected.collectAsState()
     val events by HomeApp.state.events.collectAsState()
     val savedAt by HomeApp.state.savedAt.collectAsState()
@@ -122,13 +130,12 @@ fun HomeRoot(actions: Actions) {
     val offline = listOfNotNull("Offline",
         savedAt?.let { "last update " + java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalTime().toString().take(5) },
         pending.takeIf { it > 0 }?.let { "$it change${if (it > 1) "s" else ""} waiting" }).joinToString(" · ")
-    var toast by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(toast) { if (toast != null) { delay(3200); toast = null } }
     Demo.onCall = { toast = it }
     HomeApp.notice = { toast = it }
     Box {
         val asked by HomeApp.openPage.collectAsState()
-        HomeScreen(Ctx(s, actions) { toast = it }, connected, events, offline = offline, open = asked) { HomeApp.openPage.value = null }
+        HomeScreen(ctx, connected, events, offline = offline, open = asked) { HomeApp.openPage.value = null }
         AnimatedVisibility(toast != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp), enter = fadeIn(), exit = fadeOut()) {
             Text(toast.orEmpty(), style = Hub.text(12.sp, weight = 500),
                 modifier = Modifier.clip(CircleShape).background(Color(0xEE16161F)).padding(horizontal = 18.dp, vertical = 9.dp))

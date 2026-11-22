@@ -42,6 +42,12 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
+// stable JSON and time types (compose-stability.conf): with strong skipping (on by default in Kotlin 2.0.20+) they're
+// compared by value, so a card whose entity didn't change is skipped
+composeCompiler {
+    stabilityConfigurationFile = layout.projectDirectory.file("compose-stability.conf")
+}
+
 dependencies {
     def bom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation bom
