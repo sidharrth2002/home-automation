@@ -42,11 +42,22 @@ object HomeApp {
     val state = HomeState()
     private var actions: Actions? = null
 
+    var notice: ((String) -> Unit)? = null
+    var snapshot: com.sid.home.ha.Snapshot? = null
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
     fun start(context: Context, demo: Boolean): Actions {
         actions?.let { return it }
         val a: Actions = if (demo || BuildConfig.HA_TOKEN.isEmpty()) {
             Demo.load(state, context.assets.open("demo.json").bufferedReader().readText()); Demo
-        } else HaClient(BuildConfig.HA_URL, BuildConfig.HA_TOKEN, state).also { it.start(); it.refreshCalendarsLater() }
+        } else {
+            // offline first: the last known state on screen at once, then Home Assistant's when it answers
+            val snapshot = com.sid.home.ha.Snapshot(java.io.File(context.filesDir, "home-state.json")).also { this.snapshot = it }
+            snapshot.load(state)
+            snapshot.keepSaved(state, scope)
+            com.sid.home.ui.PhotoCache.keepWarm(context, state, scope)
+            HaClient(BuildConfig.HA_URL, BuildConfig.HA_TOKEN, state).also { it.notice = { m -> notice?.invoke(m) }; it.start(); it.refreshCalendarsLater() }
+        }
         actions = a
         return a
     }
@@ -60,6 +71,11 @@ class HomeActivity : ComponentActivity() {
         setContent { HomeRoot(actions) }
     }
 
+    override fun onStop() {
+        super.onStop()
+        kotlin.concurrent.thread { HomeApp.snapshot?.flush(HomeApp.state) } // keep what's on screen for next time
+    }
+
     override fun onResume() {
         super.onResume()
         HomeRedirect.backInHub() // Google TV's home is only kept when chosen, until the Hub is back
@@ -71,11 +87,18 @@ fun HomeRoot(actions: Actions) {
     val s by HomeApp.state.entities.collectAsState()
     val connected by HomeApp.state.connected.collectAsState()
     val events by HomeApp.state.events.collectAsState()
+    val savedAt by HomeApp.state.savedAt.collectAsState()
+    val pending by HomeApp.state.pending.collectAsState()
+    // offline: say since when the screen's state is, and what's waiting to be sent
+    val offline = listOfNotNull("Offline",
+        savedAt?.let { "last update " + java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalTime().toString().take(5) },
+        pending.takeIf { it > 0 }?.let { "$it change${if (it > 1) "s" else ""} waiting" }).joinToString(" · ")
     var toast by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(toast) { if (toast != null) { delay(3200); toast = null } }
     Demo.onCall = { toast = it }
+    HomeApp.notice = { toast = it }
     Box {
-        HomeScreen(Ctx(s, actions) { toast = it }, connected, events)
+        HomeScreen(Ctx(s, actions) { toast = it }, connected, events, offline = offline)
         AnimatedVisibility(toast != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp), enter = fadeIn(), exit = fadeOut()) {
             Text(toast.orEmpty(), style = Hub.text(12.sp, weight = 500),
                 modifier = Modifier.clip(CircleShape).background(Color(0xEE16161F)).padding(horizontal = 18.dp, vertical = 9.dp))

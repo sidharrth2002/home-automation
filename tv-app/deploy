@@ -27,7 +27,12 @@ echo "built $APK (Home Assistant at $HA)"
 [[ ${1:-} == --build ]] && exit 0
 
 source ./adb.sh  # finds the TV and sets $ADB and $SERIAL
+had_home=$("$ADB" -s "$SERIAL" shell settings get secure enabled_accessibility_services | grep -c HomeButtonService || true)
 "$ADB" -s "$SERIAL" install -r "$APK"
+# an update can drop the Home button service from Android's list; put it back if it was on
+if [[ $had_home != 0 ]] && ! "$ADB" -s "$SERIAL" shell settings get secure enabled_accessibility_services | grep -q HomeButtonService; then
+  ./home on >/dev/null
+fi
 if [[ ${1:-} == --no-open ]]; then echo "installed on the TV (not opened)"; exit 0; fi
 "$ADB" -s "$SERIAL" shell am start -n com.sid.home/.MainActivity >/dev/null
 echo "installed and opened on the TV"
