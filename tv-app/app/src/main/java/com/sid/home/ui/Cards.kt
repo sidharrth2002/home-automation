@@ -27,6 +27,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -75,7 +77,7 @@ fun RoomCard(ctx: Ctx, first: androidx.compose.ui.focus.FocusRequester? = null) 
                     val (h, s) = c
                     val chosen = strip.state == "on" && abs(((hs[0] - h + 540) % 360) - 180) < 4 && abs(hs[1] - s) < 6
                     Pressable(onClick = { ctx.act.callService("light", "turn_on", data("entity_id" to Ids.STRIP, "hs_color" to listOf(h, s))) },
-                        shape = CircleShape, scale = 1.25f) {
+                        shape = CircleShape, scale = 1.12f) {
                         Box(Modifier.size(16.dp).clip(CircleShape).background(Color.hsv(h.toFloat(), s / 100f, 1f))
                             .then(if (chosen) Modifier.border(2.dp, Hub.ink, CircleShape) else Modifier))
                     }
@@ -96,7 +98,7 @@ private fun Lamp(ctx: Ctx, id: String, name: String, tag: String, syncing: Boole
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Kicker(tag + if (lit && syncing) " · live" else "", color = if (lit) color.copy(alpha = .9f) else Hub.ink3)
         Spacer(Modifier.height(8.dp))
-        Pressable(onClick = { ctx.act.callService("light", "toggle", data("entity_id" to id)) }, shape = CircleShape, scale = 1.08f, glow = color,
+        Pressable(onClick = { ctx.act.callService("light", "toggle", data("entity_id" to id)) }, shape = CircleShape, scale = 1.03f, glow = color,
             modifier = if (focus != null) Modifier.focusRequester(focus) else Modifier) {
             Canvas(Modifier.size(104.dp)) {
                 val r = size.minDimension / 2
@@ -140,7 +142,7 @@ fun ScenesRow(ctx: Ctx) {
             Pressable(onClick = {
                 if (sc.id == "welcome_home") ctx.toast("Welcome home, Sid")
                 ctx.act.callService("script", "turn_on", data("entity_id" to "script.${sc.id}"))
-            }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp), glow = sc.glow, scale = 1.05f) {
+            }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp), glow = sc.glow, scale = 1.03f) {
                 // calm: dark glass and a small tinted icon; the scene that's on gets a soft outline in its colour
                 Row(Modifier.fillMaxWidth().height(52.dp).background(if (sc.active) sc.glow.copy(alpha = .10f) else Hub.glass)
                     .border(1.dp, if (sc.active) sc.glow.copy(alpha = .55f) else Hub.line, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp),
@@ -290,11 +292,15 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         for ((i, app) in TV_APPS.withIndex()) {
             val banner = rememberBanner(app.pkg)
+            var focused by remember { androidx.compose.runtime.mutableStateOf(false) }
+            // calm: the brand colours rest dimmed and only come up when the tile is focused
+            val dim by animateFloatAsState(if (focused) 1f else .42f, tween(350), label = "dim")
             Pressable(onClick = { if (!launch(context, app.pkg)) ctx.toast("${app.name} isn't installed") },
-                modifier = Modifier.weight(1f).then(if (i == 0 && first != null) Modifier.focusRequester(first) else Modifier),
-                shape = RoundedCornerShape(14.dp), glow = app.brand, scale = 1.08f) {
-                Box(Modifier.fillMaxWidth().height(66.dp).background(Brush.linearGradient(listOf(app.brand, app.brand.copy(alpha = .55f)))),
-                    contentAlignment = Alignment.Center) {
+                modifier = Modifier.weight(1f).then(if (i == 0 && first != null) Modifier.focusRequester(first) else Modifier)
+                    .onFocusChanged { focused = it.isFocused },
+                shape = RoundedCornerShape(14.dp), glow = app.brand, scale = 1.03f) {
+                Box(Modifier.fillMaxWidth().height(66.dp).graphicsLayer { alpha = dim }
+                    .background(Brush.linearGradient(listOf(app.brand, app.brand.copy(alpha = .55f)))), contentAlignment = Alignment.Center) {
                     if (banner != null) androidx.compose.foundation.Image(banner, app.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     else Text(app.name, style = Hub.text(13.sp, Color.White, 700))
                 }
@@ -307,7 +313,7 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
             Triple("Settings", HubIcons.reactor) { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess },
         )) {
-            Pressable(onClick = { open() }, modifier = Modifier.weight(.62f), shape = RoundedCornerShape(14.dp), color = Hub.glass, scale = 1.08f) {
+            Pressable(onClick = { open() }, modifier = Modifier.weight(.62f), shape = RoundedCornerShape(14.dp), color = Hub.glass, scale = 1.03f) {
                 Column(Modifier.fillMaxWidth().height(66.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     HubIcon(icon, Hub.ink2, 16.dp); Spacer(Modifier.height(5.dp)); Text(label, style = Hub.text(10.sp, Hub.ink2, 500))
                 }
@@ -346,7 +352,7 @@ fun AppsGrid(ctx: Ctx, onClose: () -> Unit) {
                     val (pkg, label) = apps[i]
                     val banner = rememberBanner(pkg)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Pressable(onClick = { launch(context, pkg); onClose() }, shape = RoundedCornerShape(12.dp), scale = 1.08f,
+                        Pressable(onClick = { launch(context, pkg); onClose() }, shape = RoundedCornerShape(12.dp), scale = 1.03f,
                             modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier)) {
                             Box(Modifier.fillMaxWidth().height(86.dp).background(Hub.glass), contentAlignment = Alignment.Center) {
                                 if (banner != null) androidx.compose.foundation.Image(banner, label, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())

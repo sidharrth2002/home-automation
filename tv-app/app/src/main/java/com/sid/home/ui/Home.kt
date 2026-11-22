@@ -180,7 +180,7 @@ fun Ambient(colours: List<Color>) {
     val b by animateColorAsState(colours[1], tween(2500), label = "a2")
     val c by animateColorAsState(colours[2], tween(2500), label = "a3")
     val t = rememberInfiniteTransition(label = "drift")
-    val drift by t.animateFloat(-1f, 1f, infiniteRepeatable(tween(30_000, easing = LinearEasing), RepeatMode.Reverse), label = "d")
+    val drift by t.animateFloat(-1f, 1f, infiniteRepeatable(tween(60_000, easing = LinearEasing), RepeatMode.Reverse), label = "d") // slow, barely noticed
     // Drawn once per colour change and cached; the drift only slides the cached layer, so the TV's GPU does almost
     // nothing per frame (redrawing big gradients every frame made the app stutter).
     fun Modifier.blob(color: Color, x: Float, y: Float, r: Float, alpha: Float) = drawWithCache {
@@ -189,9 +189,9 @@ fun Ambient(colours: List<Color>) {
         val over = 160.dp.toPx()
         onDrawBehind { drawRect(brush, topLeft = Offset(-over, -over), size = androidx.compose.ui.geometry.Size(size.width + 2 * over, size.height + 2 * over)) }
     }
-    Box(Modifier.fillMaxSize().graphicsLayer { translationX = drift * 60.dp.toPx() }.blob(a, .12f, .05f, .55f, .42f))
-    Box(Modifier.fillMaxSize().graphicsLayer { translationX = -drift * 70.dp.toPx() }.blob(b, .95f, .9f, .5f, .36f))
-    Box(Modifier.fillMaxSize().graphicsLayer { translationY = drift * 40.dp.toPx() }.blob(c, .6f, .25f, .35f, .2f))
+    Box(Modifier.fillMaxSize().graphicsLayer { translationX = drift * 30.dp.toPx() }.blob(a, .12f, .05f, .55f, .42f))
+    Box(Modifier.fillMaxSize().graphicsLayer { translationX = -drift * 35.dp.toPx() }.blob(b, .95f, .9f, .5f, .36f))
+    Box(Modifier.fillMaxSize().graphicsLayer { translationY = drift * 20.dp.toPx() }.blob(c, .6f, .25f, .35f, .2f))
 }
 
 @Composable

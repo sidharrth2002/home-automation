@@ -147,7 +147,9 @@ find). Testing takes over the TV screen, so ask first.
   validator if you change them. The merge passes `provider`, `label`, `interest_pct`, `matures` on each account.
 - The TV app is native (tv-app/app/src/main/java/com/sid/home): HomeActivity + ui/ (Theme = the Hub's tokens and
   fonts; Home = rail + pages: Home (apps row, a calm Now panel, music, quiet scene tiles), Lights, Today, Money,
-  Allocation, Desk & health (keep Home calm: the user found saturated tiles and the lamp controls overstimulating); Cards,
+  Allocation, Desk & health (keep Home calm: the user found saturated tiles and the lamp controls overstimulating; app
+  banners rest dimmed and light up on focus, focus zoom is gentle). The Now panel shows what's next, or with nothing
+  left today the photo frame (20 s cross-fade), or with no photos a gentle quote (ui/Comfort.kt, not the Stoic QUOTES); Cards,
   Cards2, Money) over ha/Ha.kt (HA websocket + REST calendars, the same feed as the Hub; Demo for --ez demo true).
   One screen per page, no scrolling; the remote's left arrow opens the rail. Icons and quotes are generated from
   app.js (tv-app/hub_sync.py), the demo household from demo.js (tv-app/demo-data): rerun them after changing those.

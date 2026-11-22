@@ -80,7 +80,7 @@ fun Chip(content: @Composable RowScope.() -> Unit) =
 @Composable
 fun Pressable(
     onClick: () -> Unit, modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(Hub.radiusSm),
-    color: Color = Color.Transparent, focusedColor: Color = Color.White.copy(alpha = .12f), scale: Float = 1.06f,
+    color: Color = Color.Transparent, focusedColor: Color = Color.White.copy(alpha = .12f), scale: Float = 1.025f,
     glow: Color = Color.White, content: @Composable () -> Unit,
 ) = Surface(
     onClick = onClick, modifier = modifier,
