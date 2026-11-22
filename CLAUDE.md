@@ -205,7 +205,8 @@ find). Testing takes over the TV screen, so ask first.
   this service is its only client). An idle link can die silently (it did overnight), so with nothing to send the
   service re-sends the power state every KEEPALIVE_S (45 s): a dead link then fails in the background and reconnects
   before anyone presses anything. Music sync gives it its own frame in the show (`Lights.outputs`) over UDP 127.0.0.1:38998;
-  live frames win, and after 2 s without one it goes back to the helpers. The template light only gets `brightness`
+  the latest intent wins: a show that starts takes the strip (even if it was off), switching it off during a show takes
+  it out of that show until it's switched on again or a new show starts; after 2 s without frames it goes back to the helpers. The template light only gets `brightness`
   in set_hs when colour and brightness come together, so set_hs saves the level too. Runs when BACKLIGHT_NAME is set. The Hub's Room card has a calm colour row (six muted presets; hue and white-to-colour sliders under "Custom")
   under the orbs, sending hs_color; brightness is the orb's slider. After a drop, macOS can keep a stale link to the
   strip inside the process (it then stops advertising, so rescans never see it; seen 2026-11-21, 2 h unreachable,

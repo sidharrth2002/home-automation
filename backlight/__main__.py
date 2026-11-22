@@ -6,7 +6,9 @@ helpers: on/off, level (0-255), hue and saturation. This watches them and sends 
 voice, Claude, scenes and automations all control it like any other light.
 
 Music sync drives it directly while a show runs: it sends frames to UDP 127.0.0.1:BACKLIGHT_PORT (see
-`backlight.live`). Live frames win; when they stop (or music sync says it's done) the strip goes back to whatever Home
+`backlight.live`). The latest intent wins: a show that starts takes the strip, even if it was switched off before, but
+switching it off during a show takes it out of that show (switching it on again puts it back). When frames stop (or
+music sync says it's done) the strip goes back to whatever Home
 Assistant says. Run by ./home up.
 """
 import asyncio
@@ -38,13 +40,15 @@ class Backlight:
         self.strip = Strip()
         self.ha_state = {ON: "off", LEVEL: "128", HUE: "30", SAT: "70"}
         self.live_at = 0.0
+        self.show_since = 0.0  # when the current show started
+        self.left_show = False  # switched off during this show: stays off and out of it
 
     @property
     def live(self):
         return time.monotonic() - self.live_at < LIVE_TIMEOUT_S
 
     def apply_ha(self):
-        if self.live:
+        if self.live and not self.left_show:
             return
         try:
             level = float(self.ha_state[LEVEL])
@@ -57,11 +61,28 @@ class Backlight:
     def on_frame(self, frame: dict | None):
         if frame is None:  # music sync is done with it
             self.live_at = 0.0
+            self.left_show = False
             self.apply_ha()
             return
+        if not self.live:  # a new show: a newer intent than any earlier switch-off
+            self.show_since = time.monotonic()
+            self.left_show = False
         self.live_at = time.monotonic()
+        if self.left_show:
+            return
         rgb = frame_rgb(frame)
         self.strip.set(any(rgb), rgb, 100)
+
+    def on_ha_change(self, entity: str, state: str):
+        """A change to one of the strip's helpers. Switching it off during a show takes it out of the show (the latest
+        intent wins); switching it on puts it back."""
+        was = self.ha_state.get(entity)
+        self.ha_state[entity] = state
+        if entity == ON and self.live and state != was:
+            self.left_show = state == "off"
+            if not self.left_show:
+                return  # back in the show: the next frame sets it
+        self.apply_ha()
 
     async def expire_live(self):
         while True:
@@ -69,6 +90,7 @@ class Backlight:
             if self.live_at and not self.live:
                 log.info("music sync went quiet; back to Home Assistant's state")
                 self.live_at = 0.0
+                self.left_show = False
                 self.apply_ha()
 
     async def follow_ha(self, token):
@@ -96,8 +118,7 @@ class Backlight:
         async for event in ha.events():
             data = event["data"]
             if data.get("entity_id") in WATCHED and data.get("new_state"):
-                self.ha_state[data["entity_id"]] = data["new_state"]["state"]
-                self.apply_ha()
+                self.on_ha_change(data["entity_id"], data["new_state"]["state"])
 
 
 class _Frames(asyncio.DatagramProtocol):
