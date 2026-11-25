@@ -137,6 +137,28 @@ def run():
         expect(hl.Halted, lambda: client(s, tmp).login(CREDS))
         assert s.posts == [] and hl.HALT.exists()
         hl.HALT.unlink()
+
+        # a login the network cut off: one automatic retry, after the wait, and never a second
+        expect(hl.Halted, lambda: hl._halt("login interrupted", retry_once=True))
+        assert not hl.take_retry(), "not before RETRY_AFTER_S"
+        later = hl.time.time() + hl.RETRY_AFTER_S + 1
+        with mock.patch.object(hl.time, "time", return_value=later):
+            assert hl.take_retry() and not hl.HALT.exists(), "the one retry lifts the halt"
+            assert not hl.take_retry(), "used up"
+        expect(hl.Halted, lambda: hl._halt("login interrupted again", retry_once=True))
+        with mock.patch.object(hl.time, "time", return_value=later + hl.RETRY_AFTER_S + 1):
+            assert not hl.take_retry() and hl.HALT.exists(), "the retry failing too waits for a person"
+        # HL rejecting the details never gets a retry
+        hl.recovered(); hl.HALT.unlink()
+        expect(hl.Halted, lambda: client(FakeSession(stage1_to="my-accounts/login-step-one"), tmp).login(CREDS))
+        with mock.patch.object(hl.time, "time", return_value=later):
+            assert not hl.take_retry() and hl.HALT.exists()
+        # a refresh that works gives the allowance back
+        hl.HALT.unlink(); hl.recovered()
+        expect(hl.Halted, lambda: hl._halt("login interrupted", retry_once=True))
+        with mock.patch.object(hl.time, "time", return_value=later):
+            assert hl.take_retry()
+        hl.recovered()
     print("investments login safety OK")
 
 

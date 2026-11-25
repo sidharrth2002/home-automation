@@ -28,6 +28,11 @@ home". README.md is the human-facing overview; this file is how to work on it sa
   One exception, because nothing has been sent yet: a stage-1 login page that won't load or has no `hl_vt` token
   raises `NotSent` and is tried next round; MAX_NOT_SENT (6) in a row halts. (A bad page right after boot on
   2026-11-14 halted HL for a week.) Anything after stage 1 is posted still halts at once.
+  Second exception (the user asked, 2026-11-25, after a timeout halted HL for three days): a login the network cut
+  off (`refresh`'s catch-all: timeout, dropped connection) halts with `retry_once`, and the service makes ONE
+  automatic login RETRY_AFTER_S (30 min) later (`hl.take_retry`, which uses the allowance up before going). If that
+  fails too it stays halted for the user; HL rejecting the details never retries; the allowance comes back only
+  after a refresh succeeds (`hl.recovered`). The code does this, not you: the rules above still bind you.
   That page was HL's Queue-it waiting room (queue.hl.co.uk): `_get` follows its one JavaScript redirect like a
   browser, which lands back on the real page with a queueittoken unless there's a real queue.
 - **Things here are physical.** Lights, the TV and speech happen in the user's room. Test with harmless paths first

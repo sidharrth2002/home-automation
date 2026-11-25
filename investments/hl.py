@@ -8,7 +8,9 @@ module is deliberately paranoid:
   positions, otherwise nothing is sent;
 - ANY failed or unexpected login writes a halt file, and `login()` refuses to run again until a human clears it
   (`python -m investments login`). The one thing tried again later is a login page that couldn't be used, since
-  nothing has been sent by then (and six in a row halts);
+  nothing has been sent by then (and six in a row halts). The one exception: a login cut off by the network (a
+  timeout, a dropped connection) allows ONE automatic login RETRY_AFTER_S later (`take_retry`); HL rejecting the
+  details never does, and the allowance comes back only after a refresh succeeds;
 - the session cookie is saved and reused, so a normal refresh doesn't log in at all.
 """
 import json
@@ -35,6 +37,7 @@ LOGGED_IN_PATHS = {"/my-accounts", "/my-accounts/portfolio_overview"}
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
 MAX_NOT_SENT = 6  # unusable login pages in a row (refreshes are hourly by day) before it halts
+RETRY_AFTER_S = 30 * 60  # after a login the network cut off: the wait before the one automatic retry
 
 
 class Halted(RuntimeError):
@@ -127,10 +130,45 @@ def halted_reason():
     return HALT.read_text().strip() if HALT.exists() else None
 
 
-def _halt(reason):
+def _retry_file():  # when the one automatic login after a network-cut halt may run
+    return HALT.with_name("HALTED.retry")
+
+
+def _retried_file():  # that login has been used; cleared only by a successful refresh
+    return HALT.with_name("retried")
+
+
+def _halt(reason, *, retry_once=False):
+    """Stop automatic logins. `retry_once`: the network cut the login off, so one automatic login is allowed later,
+    unless the last one was already that retry."""
     DATA.mkdir(parents=True, exist_ok=True)
     HALT.write_text(f"{datetime.now():%Y-%m-%d %H:%M} {reason}\n")
+    if retry_once and not _retried_file().exists():
+        _retry_file().write_text(str(time.time() + RETRY_AFTER_S))
+    else:
+        _retry_file().unlink(missing_ok=True)
     raise Halted(reason)
+
+
+def take_retry() -> bool:
+    """If the halt allows its one automatic login and it's due: use the allowance up (first, so nothing can make it
+    two) and lift the halt. Returns whether to go ahead."""
+    try:
+        at = float(_retry_file().read_text())
+    except (OSError, ValueError):
+        return False
+    if time.time() < at:
+        return False
+    _retried_file().write_text(f"{datetime.now():%Y-%m-%d %H:%M}\n")
+    _retry_file().unlink(missing_ok=True)
+    HALT.unlink(missing_ok=True)
+    return True
+
+
+def recovered():
+    """A refresh worked: a later network-cut halt gets its one automatic retry again."""
+    _retried_file().unlink(missing_ok=True)
+    _retry_file().unlink(missing_ok=True)
 
 
 def _num(text):
