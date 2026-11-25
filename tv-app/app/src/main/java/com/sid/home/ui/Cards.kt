@@ -335,7 +335,7 @@ fun rememberBanner(pkg: String): androidx.compose.ui.graphics.ImageBitmap? {
 fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.focus.FocusRequester? = null, onAllApps: () -> Unit = {},
             onScreensaver: () -> Unit = {}) {
     val context = LocalContext.current
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(modifier.fillMaxWidth().oneStepAtATime(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         for ((i, app) in TV_APPS.withIndex()) {
             val banner = rememberBanner(app.pkg)
             var focused by remember { androidx.compose.runtime.mutableStateOf(false) }

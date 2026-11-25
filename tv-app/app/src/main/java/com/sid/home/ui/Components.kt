@@ -76,6 +76,23 @@ fun Chip(content: @Composable RowScope.() -> Unit) =
         .padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp), content = content)
 
+/**
+ * At most one left/right move per [gapMs] inside this row. The TV's remote sends a burst of repeats for anything but
+ * the shortest press, and a row of small tiles took them all: one press flew past three tiles. A press now lands on
+ * the next tile; holding still moves along, a tile at a time.
+ */
+@Composable
+fun Modifier.oneStepAtATime(gapMs: Long = 180): Modifier {
+    val last = remember { longArrayOf(0L) }
+    return onPreviewKeyEvent {
+        if (it.type != KeyEventType.KeyDown || (it.key != Key.DirectionLeft && it.key != Key.DirectionRight)) return@onPreviewKeyEvent false
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - last[0] < gapMs) return@onPreviewKeyEvent true // too soon after the last move: swallow it
+        last[0] = now
+        false
+    }
+}
+
 /** Something you can focus and press with the remote: lifts and rings when focused, like Google TV's own tiles. */
 @Composable
 fun Pressable(
