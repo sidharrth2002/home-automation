@@ -357,8 +357,7 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
             Triple("All apps", HubIcons.tv) { onAllApps(); true },
             Triple("Screensaver", HubIcons.moon) { onScreensaver(); true },
             Triple("Google TV", HubIcons.home) { com.sid.home.HomeRedirect.chooseGoogleTv(context); launch(context, com.sid.home.HomeRedirect.GOOGLE_TV) },
-            Triple("Settings", HubIcons.reactor) { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess },
+            Triple("Settings", HubIcons.reactor) { com.sid.home.HomeRedirect.openSettings(context) },
         )) {
             Pressable(onClick = { open() }, modifier = Modifier.weight(.62f), shape = RoundedCornerShape(14.dp), color = Hub.glass, scale = 1.03f) {
                 Column(Modifier.fillMaxWidth().height(66.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
