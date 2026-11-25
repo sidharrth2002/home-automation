@@ -183,6 +183,8 @@ find). Testing takes over the TV screen, so ask first.
   and puts it back. dumpsys lists a bound service by android:label ("Hub Home button"), not class: keep them in step.
 - The remote sends a burst of DPAD repeats for all but the shortest press: one press flew past three app tiles. Rows
   of small tiles use `Modifier.oneStepAtATime()` (Components.kt: one left/right move per 180 ms). Not on sliders.
+- Open the TV's settings only through `HomeRedirect.openSettings(context[, action])`: Google TV draws them as a side
+  panel of its launcher, and without its 10-min hold the Home button service put the Hub straight back over it.
 - TV app performance (a weak TCL: 4 slow cores, ~2.4 GB RAM, already swapping; 48% janky frames before 2026-11-22):
   one long-lived `Ctx` over `LiveEntities` (ui/Live.kt: a snapshot state per entity, fed at most 5×/s), so a card
   recomposes only for entities it reads; never build a new Ctx/map per update, and read entities inside the composable

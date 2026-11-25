@@ -79,7 +79,7 @@ fun SettingsPage(ctx: Ctx, connected: Boolean) {
             Kicker("This TV", modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
             SettingRow(HubIcons.eye, "Hide amounts", "Money stays blurred until you show it", !privacy.value) { Privacy.set(context, !privacy.value) }
             SettingRow(HubIcons.home, "Home button opens the Hub", if (homeButton) "On · turn it off in Accessibility" else "Off · switch on Hub Home button in Accessibility", homeButton) {
-                runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                com.sid.home.HomeRedirect.openSettings(context, android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
             }
             SettingRow(HubIcons.pulse, "Connection", (if (connected) "Live · " else "Offline · ") + BuildConfig.HA_URL.removePrefix("http://"), null) {}
             Spacer(Modifier.height(2.dp))
