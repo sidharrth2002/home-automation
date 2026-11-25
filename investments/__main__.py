@@ -8,8 +8,9 @@
   python -m investments --watch   the service (run by ./home up): Hargreaves Lansdown hourly 07:00-22:00 (else every
                                   4h), Trading 212 every 30 min (else every 2h)
 
-Safety (HL locks the account after a few bad logins): one login attempt at a time, never retried; any failure
-halts automatic logins until `login` succeeds by hand; at most MAX_AUTO_LOGINS automatic logins a day.
+Safety (HL locks the account after a few bad logins): one login attempt at a time; any failure halts automatic
+logins until `login` succeeds by hand, except a login the network cut off, which gets ONE automatic retry 30 min
+later (hl.take_retry); at most MAX_AUTO_LOGINS automatic logins a day.
 """
 import getpass
 import json
@@ -27,7 +28,7 @@ import keyring
 
 from core import client as core
 
-from .hl import DATA, HL, Credentials, Halted, NotSent, halted_reason, save_json, _halt
+from .hl import DATA, HL, Credentials, Halted, NotSent, halted_reason, recovered, save_json, take_retry, _halt
 from .prices import Prices, compact
 from . import t212 as t212mod
 
@@ -252,13 +253,15 @@ def refresh(hl: HL, *, manual=False):
             hl.login(creds, manual=manual)
         except (Halted, NotSent):  # NotSent: the login page was unusable and nothing went to HL; try next round
             raise
-        except Exception as e:  # e.g. the connection dropped mid-login: it may have counted, so don't go again
-            _halt(f"login interrupted ({type(e).__name__}: {e}); not retrying automatically")
+        except Exception as e:  # e.g. the connection dropped mid-login: it may have counted, so not straight away
+            _halt(f"login interrupted ({type(e).__name__}: {e}); one automatic try in 30 min, unless that was it",
+                  retry_once=True)
         if not hl.logged_in():
             _halt("logged in but the portfolio still isn't readable; pausing rather than logging in again")
     accounts = hl.snapshot()
     publish(accounts)
     publish_prices(accounts, Prices())
+    recovered()
 
 
 def next_delay():
@@ -293,6 +296,9 @@ def watch():
                 continue
         if configured() and now >= due["hl"]:
             reason = halted_reason()
+            if reason and take_retry():  # a login the network cut off: its one automatic try
+                log.warning("Hargreaves Lansdown: trying one automatic login after: %s", reason)
+                reason = None
             if reason:  # wait for a successful manual `login`; checking again in a minute
                 due["hl"] = now + 60
                 if paused.get("hl") != reason:
