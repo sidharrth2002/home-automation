@@ -100,20 +100,13 @@ private fun Choose(ctx: Ctx, lists: List<Playlist>, error: String?) {
 @Composable
 private fun Running(ctx: Ctx) {
     val timer = ctx.s[SLEEP_TIMER]
-    val ends = remember(timer?.str("ends_at")) {
-        runCatching { java.time.Instant.parse(timer?.str("ends_at")).toEpochMilli() }
-            .recoverCatching { java.time.OffsetDateTime.parse(timer?.str("ends_at")).toInstant().toEpochMilli() }.getOrDefault(0L)
-    }
-    // the minutes left, refreshed every 20 s (nothing here moves in between)
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(ends) { while (true) { now = System.currentTimeMillis(); delay(20_000) } }
-    val left = ((ends - now + 59_999) / 60_000).coerceAtLeast(0)
+    val left = rememberSleepLeft(timer?.str("ends_at"))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Cover(timer?.str("image"), 64.dp, LocalContext.current)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Kicker("Sleep timer")
-            Text("Sleep · $left min", style = Hub.text(22.sp, family = Hub.serif))
+            Text(left, style = Hub.text(26.sp, family = Hub.serif))
             Text("${timer?.str("playlist") ?: "Spotify"} on the TV · fades out at the end", style = Hub.text(11.sp, Hub.ink2),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -133,5 +126,43 @@ private fun Cover(url: String?, size: androidx.compose.ui.unit.Dp, context: andr
         if (url != null) AsyncImage(ImageRequest.Builder(context).data(url).size(240).crossfade(false).build(), null,
             contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         else HubIcon(HubIcons.music, Hub.ink3, 20.dp)
+    }
+}
+
+
+/** Whether a sleep timer is running (the screensaver turns into [SleepNight] then). */
+fun sleeping(ctx: Ctx) = ctx.s[SLEEP_TIMER]?.state == "on"
+
+/** The time left on the timer, counting down each second: 29:41, or 1:12:05 past an hour. */
+@Composable
+fun rememberSleepLeft(endsAt: String?): String {
+    val ends = remember(endsAt) {
+        runCatching { java.time.Instant.parse(endsAt).toEpochMilli() }
+            .recoverCatching { java.time.OffsetDateTime.parse(endsAt).toInstant().toEpochMilli() }.getOrDefault(0L)
+    }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(ends) { while (true) { now = System.currentTimeMillis(); delay(1000 - now % 1000) } }
+    val s = ((ends - now + 999) / 1000).coerceAtLeast(0)
+    val h = s / 3600; val m = s % 3600 / 60; val sec = s % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
+}
+
+/**
+ * The screensaver while a sleep timer runs: almost nothing. A black screen with the time left and the playlist in
+ * very faint grey, no photos, no glow. It moves a little each minute so nothing sits on one spot all night.
+ */
+@Composable
+fun SleepNight(ctx: Ctx) {
+    val timer = ctx.s[SLEEP_TIMER]
+    val left = rememberSleepLeft(timer?.str("ends_at"))
+    val drift = ((System.currentTimeMillis() / 60_000) % 8).toInt()
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Column(Modifier.align(Alignment.Center).padding(start = (drift * 14).dp, top = (drift * 8).dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(left, style = Hub.text(44.sp, Color.White.copy(alpha = .16f), family = Hub.serif))
+            Text(timer?.str("playlist") ?: "Sleep", style = Hub.text(11.sp, Color.White.copy(alpha = .09f)),
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(320.dp).padding(top = 4.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
     }
 }

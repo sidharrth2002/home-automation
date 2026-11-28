@@ -326,7 +326,12 @@ const PLAYLISTS = "sensor.spotify_playlists";
 const SLEEP_LENGTHS = [30, 45, 60, 90];
 let sleepMins = 45;
 let sleepPick = null; // the chosen playlist's uri, until Start
-const minsLeft = (ends) => Math.max(0, Math.ceil((Date.parse(ends) - Date.now()) / 60_000));
+// the time left, counting down: 29:41, or 1:12:05 past an hour
+const sleepLeft = (ends) => {
+  const s = Math.max(0, Math.ceil((Date.parse(ends) - Date.now()) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), pad = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+};
 section("#sleep", () => [SLEEP_T, PLAYLISTS], () => {
   const lists = at(PLAYLISTS, "playlists") ?? [];
   const running = is(SLEEP_T, "on");
@@ -339,7 +344,7 @@ section("#sleep", () => [SLEEP_T, PLAYLISTS], () => {
     return `${head}
       <div class="sleep-now">
         <div class="pl-art" ${img ? `style="background-image:url('${esc(img)}')"` : ""}>${img ? "" : I.music}</div>
-        <div><b>Sleep · <span id="sleep-left" data-ends="${esc(at(SLEEP_T, "ends_at"))}">${minsLeft(at(SLEEP_T, "ends_at"))} min</span></b>
+        <div><b class="sleep-left" id="sleep-left" data-ends="${esc(at(SLEEP_T, "ends_at"))}">${sleepLeft(at(SLEEP_T, "ends_at"))}</b>
           <small>${esc(at(SLEEP_T, "playlist") ?? "Spotify")} on the TV · fades out at the end</small></div>
         <div class="sleep-acts"><button class="ghost" data-act="sleep-extend">+15 min</button>
           <button class="ghost" data-act="sleep-cancel">Cancel</button></div>
@@ -1124,7 +1129,7 @@ function tick() {
   $("#date").textContent = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
   $("#hello").textContent = h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
   const left = $("#sleep-left");
-  if (left) left.textContent = `${minsLeft(left.dataset.ends)} min`;
+  if (left) left.textContent = sleepLeft(left.dataset.ends);
   document.querySelectorAll(".progress").forEach((el) => {
     const dur = Number(el.dataset.dur);
     const since = el.dataset.playing === "true" ? Date.now() / 1000 - Number(el.dataset.at) : 0;

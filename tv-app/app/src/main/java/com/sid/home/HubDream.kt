@@ -1,6 +1,7 @@
 package com.sid.home
 
 import android.service.dreams.DreamService
+import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -21,6 +22,7 @@ import com.sid.home.ui.LiveEntities
 import com.sid.home.ui.Screensaver
 import com.sid.home.ui.ambientColours
 import com.sid.home.ui.settled
+import com.sid.home.ui.sleeping
 import kotlinx.coroutines.flow.sample
 
 /**
@@ -51,7 +53,15 @@ class HubDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
         val actions = HomeApp.start(this, false)
         window.decorView.setViewTreeLifecycleOwner(this)
         window.decorView.setViewTreeSavedStateRegistryOwner(this)
-        setContentView(ComposeView(this).apply { setContent { DreamRoot(actions) } })
+        setContentView(ComposeView(this).apply { setContent { DreamRoot(actions, ::dim) } })
+    }
+
+    /** During a sleep timer: the backlight as low as the window may set it (if the TV honours it), back after. */
+    private fun dim(on: Boolean) {
+        val w = window ?: return
+        w.attributes = w.attributes.apply {
+            screenBrightness = if (on) 0.01f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
     }
 
     override fun onDreamingStarted() {
@@ -71,12 +81,14 @@ class HubDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
 }
 
 @Composable
-private fun DreamRoot(actions: Actions) {
+private fun DreamRoot(actions: Actions, dim: (Boolean) -> Unit) {
     // a screensaver changes slowly: one update a second is plenty
     val live = remember { LiveEntities().apply { update(HomeApp.state.entities.value) } }
     @OptIn(kotlinx.coroutines.FlowPreview::class)
     LaunchedEffect(live) { HomeApp.state.entities.sample(1000).collect { live.update(it) } }
     val ctx = remember { Ctx(live, actions) {} }
     val connected by HomeApp.state.connected.collectAsState()
+    val asleep = sleeping(ctx)
+    LaunchedEffect(asleep) { dim(asleep) }
     Screensaver(ctx, settled { ambientColours(ctx) }, connected) {}
 }
