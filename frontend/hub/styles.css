@@ -777,6 +777,7 @@ dialog.event h3 { margin: 10px 40px 20px 0; font: 400 32px/1.08 var(--serif); le
 /* sleep timer: lengths, a row of playlist covers, one button; while it runs, just what's playing and the time left */
 .sleep[hidden] { display: none; }
 .sleep { display: flex; flex-direction: column; gap: 14px; }
+.sleep .seg button { text-transform: none; }
 .pl-row { display: grid; grid-auto-flow: column; grid-auto-columns: 92px; gap: 10px; overflow-x: auto; padding: 2px 2px 6px;
   scrollbar-width: none; overscroll-behavior-x: contain; }
 .pl-row::-webkit-scrollbar { display: none; }

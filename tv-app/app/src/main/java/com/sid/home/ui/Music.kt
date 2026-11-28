@@ -60,8 +60,11 @@ import kotlin.math.sin
 @Composable
 fun MusicPage(ctx: Ctx, colours: List<Color>, focus: FocusRequester? = null) {
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Box(Modifier.weight(1.55f).fillMaxHeight().clip(RoundedCornerShape(Hub.radius)).background(Color(0xFF07070C))) {
-            SoundLight(ctx, colours)
+        Column(Modifier.weight(1.55f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(Hub.radius)).background(Color(0xFF07070C))) {
+                SoundLight(ctx, colours)
+            }
+            SleepStrip(ctx)  // fall asleep to a playlist (the sleep timer); not there without playlists
         }
         MusicCard(ctx, Modifier.weight(1f).fillMaxHeight(), focus = focus)
     }

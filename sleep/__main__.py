@@ -321,4 +321,9 @@ async def _listen(ha: HA, handle):
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    if sys.argv[1:] == ["login"]:  # once: this service's own Spotify sign-in (see sleep/spotify.py)
+        load_env()
+        spotify.login()
+    else:
+        asyncio.run(main())

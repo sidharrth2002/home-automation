@@ -52,6 +52,7 @@ ACTIONS = (*LIGHT_ACTIONS, "off", "ping")  # "ping" does nothing visible; it tes
 PHONE_ACTIONS = ACTIONS  # the phone uses "ping" for its setup check
 SYNC, MODE, NOW = "input_boolean.music_sync", "input_select.music_sync_mode", "sensor.music_sync_now_playing"
 TV, HOME, WEATHER, HEALTH = "media_player.smart_tv_pro", "binary_sensor.someone_home", "weather.forecast_home", "sensor.system_health"
+SLEEP = "sensor.sleep_timer"
 
 
 def load_env():
@@ -103,6 +104,9 @@ def build(states: list[dict]) -> dict:
         "home": {"on": True, "off": False}.get(get(HOME)[0]),
         "weather": {"state": w_state, "temp": w.get("temperature")} if w_state else None,
         "health": get(HEALTH)[0],
+        # the music sleep timer, while it runs: the widget shows "Sleep · 23 min"
+        "sleep": ({"ends_at": get(SLEEP)[1].get("ends_at"), "playlist": get(SLEEP)[1].get("playlist")}
+                  if get(SLEEP)[0] == "on" else None),
     }
 
 
