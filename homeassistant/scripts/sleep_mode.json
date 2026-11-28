@@ -1,15 +1,9 @@
 {
   "alias": "Sleep",
   "icon": "mdi:power-sleep",
-  "description": "Wind down for bed: music and TV off, a warm glow that steps down to dark over ~12 minutes. Any other scene cancels it.",
+  "description": "Wind down for bed: music and TV off, then the Sleep lights (a warm glow that steps down to dark over ~12 minutes). Any other scene cancels it.",
   "mode": "restart",
   "sequence": [
-    {
-      "action": "input_boolean.turn_off",
-      "target": {
-        "entity_id": "input_boolean.music_sync"
-      }
-    },
     {
       "if": [
         {
@@ -28,92 +22,7 @@
       ]
     },
     {
-      "action": "light.turn_off",
-      "target": {
-        "entity_id": "light.desk_lamp"
-      }
-    },
-    {
-      "delay": {
-        "seconds": 2
-      }
-    },
-    {
-      "action": "light.turn_on",
-      "target": {
-        "entity_id": ["light.wiz_rgbw_tunable_624d4e", "light.wiz_rgbw_tunable_4b472c"]
-      },
-      "data": {
-        "brightness_pct": 25,
-        "color_temp_kelvin": 2200
-      }
-    },
-    {
-      "action": "light.turn_on",
-      "target": {
-        "entity_id": "light.tv_backlight"
-      },
-      "data": {
-        "brightness_pct": 20,
-        "hs_color": [25, 85]
-      }
-    },
-    {
-      "delay": {
-        "minutes": 4
-      }
-    },
-    {
-      "action": "light.turn_on",
-      "target": {
-        "entity_id": ["light.wiz_rgbw_tunable_624d4e", "light.wiz_rgbw_tunable_4b472c"]
-      },
-      "data": {
-        "brightness_pct": 10,
-        "color_temp_kelvin": 2200
-      }
-    },
-    {
-      "action": "light.turn_on",
-      "target": {
-        "entity_id": "light.tv_backlight"
-      },
-      "data": {
-        "brightness_pct": 10,
-        "hs_color": [18, 95]
-      }
-    },
-    {
-      "delay": {
-        "minutes": 4
-      }
-    },
-    {
-      "action": "light.turn_off",
-      "target": {
-        "entity_id": ["light.wiz_rgbw_tunable_624d4e", "light.wiz_rgbw_tunable_4b472c"]
-      }
-    },
-    {
-      "action": "light.turn_on",
-      "target": {
-        "entity_id": "light.tv_backlight"
-      },
-      "data": {
-        "brightness_pct": 3,
-        "hs_color": [10, 100]
-      }
-    },
-    {
-      "delay": {
-        "minutes": 4
-      }
-    },
-    {
-      "action": "light.turn_off",
-      "target": {
-        "entity_id": "light.tv_backlight"
-      }
+      "action": "script.sleep_lights"
     }
   ]
 }

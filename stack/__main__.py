@@ -57,6 +57,8 @@ def services():
         out["backlight"] = [PY, "-m", "backlight"]
     if os.environ.get("TV_HOST"):  # puts the TV app's Home button service back when the TV drops it
         out["home_button"] = [PY, "-m", "home_button"]
+        out["sleep"] = [PY, "-m", "sleep"]  # the music sleep timer (Spotify on the TV, the TV's own timer over adb)
+    out["spotify_queue"] = [PY, "-m", "spotify_queue"]  # the Hub's Up next (Spotify's queue; search and add)
     if shutil.which("rclone") and "[onedrive]" in rclone_config():  # photos, once OneDrive is signed in
         out["photos"] = [PY, "-m", "photos", "--watch"]
     return pick(out)

@@ -1,0 +1,44 @@
+{
+  "alias": "Sleep timer",
+  "icon": "mdi:bed-clock",
+  "description": "Fall asleep to music: plays a Spotify playlist on the TV, winds the room down, fades the music out over the last 10 minutes, then pauses it and turns the TV off (the sleep service; the TV's own sleep timer is set too, as a backup).",
+  "mode": "queued",
+  "fields": {
+    "playlist": {
+      "name": "Playlist",
+      "description": "A Spotify playlist URI (spotify:playlist:...)",
+      "required": true,
+      "selector": {
+        "text": {}
+      }
+    },
+    "name": {
+      "name": "Playlist name",
+      "selector": {
+        "text": {}
+      }
+    },
+    "minutes": {
+      "name": "Minutes",
+      "default": 45,
+      "selector": {
+        "number": {
+          "min": 5,
+          "max": 180,
+          "step": 5
+        }
+      }
+    }
+  },
+  "sequence": [
+    {
+      "event": "home_sleep",
+      "event_data": {
+        "action": "start",
+        "playlist": "{{ playlist }}",
+        "name": "{{ name | default('') }}",
+        "minutes": "{{ minutes | default(45) | int }}"
+      }
+    }
+  ]
+}

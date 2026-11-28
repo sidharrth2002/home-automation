@@ -179,6 +179,11 @@ async function music(parent, d, wide) {
   text(col, m.title, wide ? 14 : 12, { weight: "bold", lines: 2 });
   if (m.artist) text(col, m.artist, wide ? 12 : 10.5, { alpha: 0.6, lines: 1 });
   if (!m.playing) text(col, "Paused", 10, { alpha: 0.4 });
+  // the music sleep timer: an end time, not a countdown (iOS redraws widgets only every few minutes)
+  if (d.sleep && d.sleep.ends_at) {
+    const end = new Date(d.sleep.ends_at);
+    text(col, `☾ Sleep until ${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`, 10, { alpha: 0.5, lines: 1 });
+  }
   return box;
 }
 

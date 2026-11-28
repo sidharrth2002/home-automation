@@ -333,8 +333,10 @@ fun rememberBanner(pkg: String): androidx.compose.ui.graphics.ImageBitmap? {
 
 @Composable
 fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.focus.FocusRequester? = null, onAllApps: () -> Unit = {},
-            onScreensaver: () -> Unit = {}) {
+            onScreensaver: () -> Unit = {}, onSleep: () -> Unit = {}) {
     val context = LocalContext.current
+    // the sleep timer's way in from Home (its strip is on the Music page); the time left while one runs
+    val sleepLabel = if (sleeping(ctx)) "Sleep · ${rememberSleepLeft(ctx.s["sensor.sleep_timer"]?.str("ends_at"))}" else "Sleep timer"
     Row(modifier.fillMaxWidth().oneStepAtATime(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         for ((i, app) in TV_APPS.withIndex()) {
             val banner = rememberBanner(app.pkg)
@@ -354,8 +356,9 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
         }
         // the rest: Google TV's own home (every other app), and the TV's settings
         for ((label, icon, open) in listOf<Triple<String, androidx.compose.ui.graphics.vector.ImageVector, () -> Boolean>>(
+            Triple(sleepLabel, HubIcons.moon) { onSleep(); true },
             Triple("All apps", HubIcons.tv) { onAllApps(); true },
-            Triple("Screensaver", HubIcons.moon) { onScreensaver(); true },
+            Triple("Screensaver", HubIcons.eye) { onScreensaver(); true },
             Triple("Google TV", HubIcons.home) { com.sid.home.HomeRedirect.chooseGoogleTv(context); launch(context, com.sid.home.HomeRedirect.GOOGLE_TV) },
             Triple("Settings", HubIcons.reactor) { com.sid.home.HomeRedirect.openSettings(context) },
         )) {

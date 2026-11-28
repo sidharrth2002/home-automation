@@ -51,16 +51,19 @@ fun Screensaver(ctx: Ctx, colours: List<Color>, connected: Boolean, onClose: () 
     // a fresh press closes it (not the tail of the press that opened it)
     Box(Modifier.fillMaxSize().background(Color.Black).focusRequester(focus).focusable()
         .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown && System.currentTimeMillis() - opened > 500) onClose(); true }) {
-        if (photos.isNotEmpty()) PhotoFrame(photos, 20_000, Modifier.fillMaxSize(), label = false)
-        else Ambient(colours)
-        Box(Modifier.fillMaxWidth().fillMaxHeight(.5f).align(Alignment.BottomCenter)
-            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .6f)))))
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 56.dp, bottom = 44.dp).offset(x = drift.dp, y = -(drift / 2).dp)) {
-            Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), style = Hub.text(72.sp, Color.White, family = Hub.serif))
-            Text(now.format(DateTimeFormatter.ofPattern("EEEE d MMMM")), style = Hub.text(14.sp, Color.White.copy(alpha = .8f)))
-            val playing = ctx.s[Ids.NOW]?.takeIf { it.str("player_state") == "playing" }?.state
-            if (!playing.isNullOrBlank()) Text("♪  $playing", style = Hub.text(12.sp, Color.White.copy(alpha = .7f)), modifier = Modifier.padding(top = 10.dp))
-            Box(Modifier.padding(top = 12.dp)) { StatusLine(ctx) }
+        // a sleep timer running: just the faint time left (see Sleep.kt)
+        if (sleeping(ctx)) SleepNight(ctx) else {
+            if (photos.isNotEmpty()) PhotoFrame(photos, 20_000, Modifier.fillMaxSize(), label = false)
+            else Ambient(colours)
+            Box(Modifier.fillMaxWidth().fillMaxHeight(.5f).align(Alignment.BottomCenter)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .6f)))))
+            Column(Modifier.align(Alignment.BottomStart).padding(start = 56.dp, bottom = 44.dp).offset(x = drift.dp, y = -(drift / 2).dp)) {
+                Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), style = Hub.text(72.sp, Color.White, family = Hub.serif))
+                Text(now.format(DateTimeFormatter.ofPattern("EEEE d MMMM")), style = Hub.text(14.sp, Color.White.copy(alpha = .8f)))
+                val playing = ctx.s[Ids.NOW]?.takeIf { it.str("player_state") == "playing" }?.state
+                if (!playing.isNullOrBlank()) Text("♪  $playing", style = Hub.text(12.sp, Color.White.copy(alpha = .7f)), modifier = Modifier.padding(top = 10.dp))
+                Box(Modifier.padding(top = 12.dp)) { StatusLine(ctx) }
+            }
         }
     }
 }

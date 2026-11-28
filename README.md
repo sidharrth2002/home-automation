@@ -99,6 +99,10 @@ a Claude session looking after my finances can update the portfolio the Hub show
     <td valign="top"><img src="docs/icons/claude.svg" width="40"><br><b>Claude, everywhere</b><br><sub>Ask for the lights in plain English, or let another Claude session read and update the home state through a skill or an MCP server.</sub></td>
   </tr>
   <tr>
+    <td valign="top"><img src="docs/icons/sleep.svg" width="40"><br><b>Falling asleep to music</b><br><sub>Pick a playlist and a length on the Hub, the TV or the phone: it plays on the TV through Spotify, the room winds down to a warm glow and then dark, the music fades out over the last ten minutes, and the TV switches itself off.</sub></td>
+    <td valign="top"></td>
+  </tr>
+  <tr>
     <td valign="top"><img src="docs/icons/telemetry.svg" width="40"><br><b>Logs, metrics and traces</b><br><sub>Every service reports over OpenTelemetry to a local Grafana: health, errors, API latency and every log line, searchable.</sub></td>
     <td valign="top"><img src="docs/icons/switch.svg" width="40"><br><b>One switch</b><br><sub><code>./home up</code> and <code>./home down</code> start and stop everything, and a supervisor restarts anything that falls over.</sub></td>
   </tr>
@@ -460,7 +464,7 @@ I edit these rather than using the UI so the repo stays the source of truth.
 | --- | --- |
 | `helpers.json` | toggles, timers, sliders |
 | `templates/` | daylight and desk lamp target sensors |
-| `scripts/` | Welcome home, Party, Chill, Movie, Sleep, All off, `music_command` |
+| `scripts/` | Welcome home, Party, Chill, Movie, Sleep (and its `sleep_lights`), All off, `music_command`, the sleep timer's start / cancel / extend, `spotify_queue` (Up next: add, jump, search) |
 | `automations/` | TV lighting, desk lamp, manual hold, away |
 | `dashboards/home.json` | the standard Home Assistant dashboard (`/home-hub`) |
 | `voice.json` | what Claude can see and control |

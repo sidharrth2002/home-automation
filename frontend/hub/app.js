@@ -172,7 +172,14 @@ function renderAll(force = false) {
     const sig = JSON.stringify(deps().map((id) => (S[id] ? [S[id].state, S[id].attributes] : null)));
     if (!force && sig === lastSig[sel]) continue;
     lastSig[sel] = sig;
+    const typing = document.activeElement?.matches?.("input[type=search]") && $(sel).contains(document.activeElement)
+      ? { name: document.activeElement.name, at: document.activeElement.selectionStart } : null;
     $(sel).innerHTML = render();
+    if (typing) { // a live update mid-typing: same box, same place
+      const box = $(sel).querySelector(`input[name="${typing.name}"]`);
+      box?.focus({ preventScroll: true });
+      box?.setSelectionRange(typing.at, typing.at);
+    }
     if (sel === "#invest") renderHolding(); // keep an open holding in step with fresh data
   }
   if (keep && (!document.activeElement || document.activeElement === document.body)) {
@@ -260,7 +267,39 @@ section("#scenes", () => [SYNC, MODE, SLEEP, ...LIGHTS.map((l) => l.id)], () => 
 let tuneOpen = false;
 // TEMPO isn't a dependency: it updates every couple of seconds during sync, and rebuilding the card that often
 // restarted the progress bar. ambient() keeps the BPM readout current in place instead.
-section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
+// Spotify's queue (the spotify_queue service): Up next, press one to jump to it; search to add a song
+const QUEUE = "sensor.spotify_queue";
+const SEARCH = "sensor.spotify_search";
+const QUEUE_SHOWN = 5;
+let queueAll = false;
+let queueQuery = ""; // what's typed in the search box
+let queueSearched = ""; // the last search sent (its results show while they match)
+const qRow = (t, act, v, label) => `
+  <li><button class="q-row" data-act="${act}" data-v="${esc(v)}" title="${esc(label)}">
+    <span class="q-art" ${t.image ? `style="background-image:url('${esc(t.image)}')"` : ""}></span>
+    <span class="q-txt"><b>${esc(t.name)}</b><small>${esc(t.artist ?? "")}</small></span>
+    <span class="q-go">${act === "q-add" ? I.plus : ""}</span></button></li>`;
+function queueCard(nothing) {
+  const up = at(QUEUE, "queue") ?? [];
+  if (nothing || !S[QUEUE]) return "";
+  const results = queueSearched && st(SEARCH) === queueSearched ? at(SEARCH, "results") ?? [] : null;
+  const list = up.slice(0, queueAll ? up.length : QUEUE_SHOWN);
+  return `
+    <div class="queue">
+      <div class="row"><span class="kicker">Up next</span>
+        ${up.length > QUEUE_SHOWN ? `<button class="q-more" data-act="q-more">${queueAll ? "Fewer" : `All ${up.length}`}</button>` : ""}</div>
+      ${list.length ? `<ol class="q-list">${list.map((t, i) => qRow(t, "q-skip", i, `Play ${t.name} now`)).join("")}</ol>`
+        : `<p class="q-note">Nothing queued</p>`}
+      <form class="q-search" data-form="q-search" role="search">
+        <input type="search" name="q" placeholder="Add a song to the queue…" value="${esc(queueQuery)}" enterkeyhint="search" autocomplete="off" aria-label="Search Spotify">
+      </form>
+      ${results ? `<div class="row"><span class="kicker">Results</span><button class="q-more" data-act="q-clear">Close</button></div>
+        ${results.length ? `<ol class="q-list">${results.map((t) => qRow(t, "q-add", t.uri, `Add ${t.name} to the queue`)).join("")}</ol>`
+          : `<p class="q-note">No songs found</p>`}` : queueSearched ? `<p class="q-note">Searching…</p>` : ""}
+    </div>`;
+}
+
+section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV, QUEUE, SEARCH], () => {
   const sync = is(SYNC, "on");
   const mode = st(MODE);
   const [title, artist] = String(st(NOW) ?? "").split(" — ");
@@ -304,7 +343,7 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
       <div class="art ${art ? "" : "empty"}" ${art ? `style="background-image:url('${esc(art)}')"` : ""}>${art ? "" : I.music}</div></div>
     <div class="track"><h2>${esc(nothing ? "Nothing playing" : title)}</h2><p>${sub}</p>
       <div class="swatches">${palette.map((h) => `<i style="background:${esc(h)};color:${esc(h)}" title="${esc(h)}"></i>`).join("")}</div></div>
-    ${progress}${transport}
+    ${progress}${transport}${queueCard(nothing)}
     <div class="row"><span class="kicker">Mode</span>
       <span class="bpm" id="music-bpm"></span></div>
     <div class="seg">${modes.map((m) => `<button data-act="select" data-id="${MODE}" data-v="${esc(m)}" aria-pressed="${m === mode}">${m === "tv" ? "TV" : esc(m)}</button>`).join("")}</div>
@@ -318,6 +357,48 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
         <input class="slider" type="range" min="-200" max="300" step="10" value="${lat}" data-act="number" data-id="${LAT}" data-unit=" ms" style="--p:${((lat + 200) / 500) * 100}%">
         <span class="value">${lat} ms</span></div>
     </details>`;
+});
+
+// sleep timer: fall asleep to a Spotify playlist on the TV (the sleep service runs it; see sleep/__main__.py)
+const SLEEP_T = "sensor.sleep_timer";
+const PLAYLISTS = "sensor.spotify_playlists";
+const SLEEP_LENGTHS = [30, 45, 60, 90];
+let sleepMins = 45;
+let sleepPick = null; // the chosen playlist's uri, until Start
+// the time left, counting down: 29:41, or 1:12:05 past an hour
+const sleepLeft = (ends) => {
+  const s = Math.max(0, Math.ceil((Date.parse(ends) - Date.now()) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), pad = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+};
+section("#sleep", () => [SLEEP_T, PLAYLISTS], () => {
+  const lists = at(PLAYLISTS, "playlists") ?? [];
+  const running = is(SLEEP_T, "on");
+  $("#sleep").hidden = !running && !lists.length;
+  if ($("#sleep").hidden) return "";
+  const head = `<div class="card-head"><div class="card-title">${I.moon} Sleep timer</div>
+    <span class="kicker">${running ? "Winding down" : "Fall asleep to music"}</span></div>`;
+  if (running) {
+    const img = at(SLEEP_T, "image");
+    return `${head}
+      <div class="sleep-now">
+        <div class="pl-art" ${img ? `style="background-image:url('${esc(img)}')"` : ""}>${img ? "" : I.music}</div>
+        <div><b class="sleep-left" id="sleep-left" data-ends="${esc(at(SLEEP_T, "ends_at"))}">${sleepLeft(at(SLEEP_T, "ends_at"))}</b>
+          <small>${esc(at(SLEEP_T, "playlist") ?? "Spotify")} on the TV · fades out at the end</small></div>
+        <div class="sleep-acts"><button class="ghost" data-act="sleep-extend">+15 min</button>
+          <button class="ghost" data-act="sleep-cancel">Cancel</button></div>
+      </div>`;
+  }
+  const picked = lists.find((p) => p.uri === sleepPick);
+  const error = at(SLEEP_T, "error");
+  return `${head}
+    <div class="seg">${SLEEP_LENGTHS.map((m) => `<button data-act="sleep-mins" data-v="${m}" aria-pressed="${m === sleepMins}">${m} min</button>`).join("")}</div>
+    <div class="pl-row">${lists.map((p) => `
+      <button class="pl" data-act="sleep-pick" data-v="${esc(p.uri)}" aria-pressed="${p.uri === sleepPick}" title="${esc(p.name)}">
+        <span class="pl-art" ${p.image ? `style="background-image:url('${esc(p.image)}')"` : ""}>${p.image ? "" : I.music}</span>
+        <span class="pl-name">${esc(p.name)}</span></button>`).join("")}</div>
+    <button class="sleep-go" data-act="sleep-start" ${picked ? "" : "disabled"}>${picked ? `Play ${esc(picked.name)} · ${sleepMins} min` : "Choose a playlist"}</button>
+    ${error ? `<p class="sleep-note">${esc(error)}</p>` : ""}`;
 });
 
 // calendar: the week ahead from every calendar.* entity (iCloud via CalDAV)
@@ -1086,6 +1167,8 @@ function tick() {
   $("#clock").innerHTML = `${String(h).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}<span class="sec">${String(d.getSeconds()).padStart(2, "0")}</span>`;
   $("#date").textContent = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
   $("#hello").textContent = h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  const left = $("#sleep-left");
+  if (left) left.textContent = sleepLeft(left.dataset.ends);
   document.querySelectorAll(".progress").forEach((el) => {
     const dur = Number(el.dataset.dur);
     const since = el.dataset.playing === "true" ? Date.now() / 1000 - Number(el.dataset.at) : 0;
@@ -1125,6 +1208,32 @@ document.addEventListener("click", (ev) => {
   if (!el || el.tagName === "INPUT") return;
   const { act, id, v } = el.dataset;
   if (act === "music") return call("script", "music_command", { command: v });
+  if (act === "sleep-mins") { sleepMins = Number(v); lastSig["#sleep"] = null; return renderAll(); }
+  if (act === "sleep-pick") { sleepPick = sleepPick === v ? null : v; lastSig["#sleep"] = null; return renderAll(); }
+  if (act === "sleep-start") {
+    const p = (at(PLAYLISTS, "playlists") ?? []).find((x) => x.uri === sleepPick);
+    if (!p) return;
+    toast(`Starting ${p.name} on the TV…`);
+    sleepPick = null;
+    return call("script", "sleep_timer_start", { playlist: p.uri, name: p.name, minutes: sleepMins });
+  }
+  if (act === "q-more") { queueAll = !queueAll; lastSig["#music"] = null; return renderAll(); }
+  if (act === "q-skip") {
+    const t = (at(QUEUE, "queue") ?? [])[Number(v)];
+    toast(`Playing ${t?.name ?? "it"}…`);
+    return call("script", "spotify_queue", { action: "skip", index: Number(v) });
+  }
+  if (act === "q-add") {
+    const t = (at(SEARCH, "results") ?? []).find((x) => x.uri === v);
+    toast(`Added ${t?.name ?? "it"} to the queue`);
+    return call("script", "spotify_queue", { action: "add", uri: v });
+  }
+  if (act === "q-clear") {
+    queueQuery = queueSearched = ""; lastSig["#music"] = null; renderAll();
+    return call("script", "spotify_queue", { action: "clear" });
+  }
+  if (act === "sleep-extend") return call("script", "sleep_timer_extend", { minutes: 15 });
+  if (act === "sleep-cancel") return call("script", "sleep_timer_cancel", {});
   if (act === "strip-hs") return call("light", "turn_on", { entity_id: STRIP, hs_color: v.split(",").map(Number) });
   // Mouse/touch presses are handled on pointerdown (so holding repeats); a click with no pointer is the keyboard.
   if (act === "tv-key") return ev.detail === 0 ? tvKey(v) : undefined;
@@ -1157,6 +1266,21 @@ document.addEventListener("click", (ev) => {
     call("script", "turn_on", { entity_id: id });
   }
   else if (act === "select") call(domain, "select_option", { entity_id: id, option: v });
+});
+document.addEventListener("input", (ev) => {
+  if (ev.target.matches?.(".q-search input")) queueQuery = ev.target.value;
+});
+document.addEventListener("submit", (ev) => {
+  const form = ev.target.closest?.("[data-form=q-search]");
+  if (!form) return;
+  ev.preventDefault();
+  const q = queueQuery.trim();
+  if (!q) return;
+  queueSearched = q;
+  form.querySelector("input")?.blur(); // the phone's keyboard down, so the results are in view
+  lastSig["#music"] = null;
+  renderAll();
+  call("script", "spotify_queue", { action: "search", q });
 });
 document.addEventListener("toggle", (ev) => {
   if (ev.target.matches?.("details.tune")) tuneOpen = ev.target.open;
@@ -1319,6 +1443,72 @@ function setLive(ok) {
   const label = $("#conn-label");
   if (dot) dot.className = `dot ${ok ? "ok" : "bad"}`;
   if (label) label.textContent = ok ? "Live" : "Reconnecting…";
+}
+
+// ── phone: the Hub as pages you swipe between, with a tab bar (the TV app's pages, roughly) ──
+// The cards move into a horizontal scroll-snap strip, one page per screen, each scrolling on its own; on a wider
+// screen they go back into the grid. Only the browser's own scrolling moves anything: nothing animates by itself.
+const PAGES = [
+  ["home", "Home", I.home, [".top", ".stack"], ""],
+  ["music", "Music", I.music, ["#music", "#sleep"], "Spotify isn't playing. Start something, or a scene, and it shows up here."],
+  ["today", "Today", I.cal, ["#calendar", "#photos"], "Nothing on today."],
+  ["money", "Money", I.chart, ["#invest"], ""],
+  ["devices", "Devices", I.tv, ["#tv", "#desk", "#health", "#foot"], ""],
+];
+const PHONE = matchMedia("(max-width: 720px)");
+let pager = null;
+let homes = []; // where each moved card lived in the grid: [card, parent, next sibling], to put it back
+function pageTo(i, smooth = true) {
+  pager?.querySelector(".pager").scrollTo({ left: i * pager.querySelector(".pager").clientWidth, behavior: smooth ? "smooth" : "instant" });
+}
+function markTab(i) {
+  pager?.querySelectorAll(".tabbar button").forEach((b, j) => b.setAttribute("aria-current", j === i ? "page" : "false"));
+  try { sessionStorage.hubPage = PAGES[i][0]; } catch { /* private mode */ }
+}
+function paged(on) {
+  const hub = $("#hub");
+  if (on && !pager) {
+    pager = document.createElement("div");
+    pager.className = "paged-wrap";
+    pager.innerHTML = `<div class="pager">${PAGES.map(([id, , , , empty]) =>
+      `<div class="page" data-page="${id}">${empty ? `<p class="page-empty">${esc(empty)}</p>` : ""}</div>`).join("")}</div>
+      <nav class="tabbar" aria-label="Pages">${PAGES.map(([id, label, icon], i) =>
+        `<button data-page-tab="${i}" aria-current="false">${icon}<span>${label}</span></button>`).join("")}</nav>`;
+    hub.append(pager); // in the document first: a card inside one already moved (the sleep card in .stack) is still found
+    PAGES.forEach(([id, , , sels]) => {
+      const page = pager.querySelector(`[data-page="${id}"]`);
+      for (const sel of sels) {
+        const el = $(sel);
+        homes.push([el, el.parentNode, el.nextSibling]);
+        page.insertBefore(el, page.querySelector(".page-empty"));
+      }
+    });
+    document.documentElement.classList.add("paged");
+    const strip = pager.querySelector(".pager");
+    strip.addEventListener("scroll", () => markTab(Math.round(strip.scrollLeft / strip.clientWidth)), { passive: true });
+    let start = 0;
+    try { start = Math.max(0, PAGES.findIndex(([id]) => id === (location.hash.slice(1) || sessionStorage.hubPage))); } catch { /* */ }
+    requestAnimationFrame(() => { pageTo(start, false); markTab(start); });
+  } else if (!on && pager) {
+    for (const [el, parent, next] of homes.reverse()) parent.insertBefore(el, next); // last moved first: siblings are back
+    homes = [];
+    pager.remove();
+    pager = null;
+    document.documentElement.classList.remove("paged");
+  }
+}
+document.addEventListener("click", (ev) => {
+  const tab = ev.target.closest?.("[data-page-tab]");
+  if (!tab) return;
+  const i = Number(tab.dataset.pageTab);
+  const page = pager?.querySelectorAll(".page")[i];
+  // the page you're on: back to its top; another: slide to it
+  if (tab.getAttribute("aria-current") === "page") page?.scrollTo({ top: 0, behavior: "smooth" });
+  else pageTo(i);
+});
+if (!TV_MODE && !AMBIENT) {
+  paged(PHONE.matches);
+  PHONE.addEventListener("change", (e) => paged(e.matches));
 }
 
 (async () => {

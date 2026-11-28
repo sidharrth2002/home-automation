@@ -79,6 +79,7 @@ home_mcp/             the same for Claude Desktop's chat: a stdlib MCP server (s
                       bin/install-mcp adds it to claude_desktop_config.json. No MCP SDK: its deps break FastAPI's pins
 investments/          Hargreaves Lansdown client (hl.py, lockout-safe), FT price history (prices.py), Trading 212 (t212.py)
 backlight/            the Bluetooth LED strip behind the cabinet (MELK/ELK-BLEDOM), as light.tv_backlight
+spotify_queue/        Spotify's Up next for the Hub: sensor.spotify_queue/_search; script.spotify_queue (add/skip/search)
 photos/               OneDrive photos via Microsoft Graph: picks a few good ones (faces, people, you) for the Hub
 widget/               iPhone Scriptable widget (home.js) + its feed, webhook actions and signed Shortcuts (__main__.py)
 presence/             phone-on-Wi-Fi home/away (needs PRESENCE_PHONE_MAC; not currently running)
@@ -253,6 +254,13 @@ find). Testing takes over the TV screen, so ask first.
   `frontend/readme_images.py`). Deploy with `homeassistant.apply` (the TV app loads the Hub fresh each launch);
   rebuild the app with `tv-app/deploy` when tv-app/ changes, or `tv-app/deploy --no-open` when the TV is off or in
   use (never launch it over something playing). Check demo screenshots of each.
+- The Hub on a phone (≤720px, not TV or ambient mode) is pages you swipe between: app.js `PAGES` moves the cards into
+  a horizontal scroll-snap strip (Home: header + .stack; Music: music + sleep; Today: calendar + photos; Money;
+  Devices: TV, desk, health, foot) with a bottom tab bar, and back into the grid when wider. A new card must be added to a page there.
+  Opens on `#music` etc. or the last page this session. frontend/screenshot.py's captureBeyondViewport shows the strip
+  half-scrolled: check phone pages with a plain 390×844 capture.
+  Phone Home is compact (`.paged` rules at the end of styles.css): one-row header, scenes as a quiet 3 × 2 of names.
+  Cards are put back where they came from (`homes`), so the sleep card returns into .stack on a wide screen.
 - Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries
   state to the screens. A service's sensors are reported with `core.client.report(entity, state, attrs)` (table
   `live`, `PUT /v1/live/<entity>`), never POSTed to HA's /api/states: core mirrors them, retries, and re-sends after
@@ -297,6 +305,27 @@ find). Testing takes over the TV screen, so ask first.
 - WiZ sockets: every `wizlight(ip)` opens its own UDP socket until `async_close()`, so go through `lights._ask`; and
   `find_wizlights` cancelled mid-wait never closes its socket on port 38899, so it runs under `asyncio.shield`. Both
   leaked until 2026-11-21 (~600 sockets; discovery then failed with "Address already in use" and no mode would start).
+- The music sleep timer (`sleep/`, supervised next to home_button): HA event `home_sleep` from
+  `script.sleep_timer_start {playlist, name, minutes}` / `_cancel` / `_extend {minutes}`. Start: `sensor.sleep_timer`
+  goes "on" first (the TV bias lighting automation skips while it's on, else waking the TV would start a TV glow and
+  switching it off would put the lights back), TV on, wait for the TV as a Spotify Connect device (type TV, or
+  SPOTIFY_TV_DEVICE), play the playlist, `script.sleep_lights` (the Sleep scene's wind-down, split out so both use
+  it; scenes cancel both), and the TCL TV's own timer over adb (global `tcl_app_power_off_time_delay`, in
+  MILLISECONDS — the TV's own "10 min" writes 600000; a bare minute count switches it off within seconds; -1 cancels;
+  it reacts at once and fills in `tcl_app_power_off_time_expire` itself) 2 min later than ours as a backup. Last 10 min:
+  Spotify volume down linearly; end: pause, volume back, TV and lights off. data/sleep.json resumes a running timer.
+  Spotify: its own sign-in (`python -m sleep login`, SPOTIFY_CLIENT_ID/SECRET in .env, redirect
+  http://127.0.0.1:8798/callback, token in data/secrets/spotify.json, refreshed by the service). HA's Spotify
+  integration is unreliable here (its spotifyaio parser fails on Spotify's current responses, and it shows only
+  SELECT_SOURCE while nothing plays, hiding browse/play), so it's only a fallback token, never the control path.
+  `sensor.spotify_playlists` (name, uri, image) feeds the pickers; ~16 KB for ~70 playlists, near HA's recorder
+  attribute limit, so keep the fields minimal. UIs: the Hub's Sleep card (under the scenes), the TV app's SleepStrip
+  on the music page (pressing a cover starts), the widget's "Sleep until HH:MM" (an end time: widgets redraw late).
+  The Hub and TV app count down each second (29:41, 1:12:05). While it runs, the screensaver is `SleepNight`
+  (Sleep.kt): black, only the time left and the playlist in faint grey, shifting a little each minute; HubDream also
+  sets the window brightness to 0.01 (whether the TCL backlight follows is untested). Home's top row has a
+  Sleep timer tile (the time left while one runs) that opens the Music page focused on the strip. Any button on it opens Home's Music page
+  (HubDream.dispatchKeyEvent → HomeActivity `page=MUSIC`) to pause or cancel, rather than dropping back into Spotify.
 - The screensaver (`HubDream`: a DreamService hosting the native `Screensaver` composable in a ComposeView, acting
   as its own LifecycleOwner/SavedStateRegistryOwner) is set with `settings put secure screensaver_components`;
   `tv-app/screensaver on|off|test|status|delay <min>` (the idle delay is `system screen_off_timeout`; the user
@@ -370,3 +399,14 @@ find). Testing takes over the TV screen, so ask first.
 - `tv-app/app/src/debug/res/` is a git-ignored overlay for personal resources (the launcher banner with the user's
   photo). The committed banner in `src/main` must stay generic. Personal photos (`*.heic`) are git-ignored and blocked
   by the commit guard.
+
+## Spotify queue (spotify_queue/)
+
+- Reuses the sleep timer's Spotify sign-in (sleep/spotify.py: queue, add_to_queue, next_track, search). Reports
+  sensor.spotify_queue (state: count; now, queue ≤20 of {name, artist, image, uri}) every 20 s while playing (2 min
+  idle) and ~1 s after a track change (subscribe_trigger on sensor.music_sync_now_playing); unchanged ones aren't resent.
+- `home_spotify` event via script.spotify_queue {action: add uri | skip index | search q | clear}. Skip = next ×
+  (index+1), 0.25 s apart (Spotify has no "play this queue item"). Spotify's API can't remove or reorder the queue.
+- Hub: Up next in the music card (5, "All N"), a search box (renderAll keeps a focused search box's text and caret;
+  results show while sensor.spotify_search's state matches the query sent). The TV app doesn't show the queue yet.
+

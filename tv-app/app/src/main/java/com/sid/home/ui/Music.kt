@@ -58,10 +58,13 @@ import kotlin.math.sin
 
 /** The Music page: light that moves with the song (an aurora, ribbons of sound, a little drifting dust), and the music card. */
 @Composable
-fun MusicPage(ctx: Ctx, colours: List<Color>, focus: FocusRequester? = null) {
+fun MusicPage(ctx: Ctx, colours: List<Color>, focus: FocusRequester? = null, sleepFocus: FocusRequester? = null) {
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Box(Modifier.weight(1.55f).fillMaxHeight().clip(RoundedCornerShape(Hub.radius)).background(Color(0xFF07070C))) {
-            SoundLight(ctx, colours)
+        Column(Modifier.weight(1.55f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(Hub.radius)).background(Color(0xFF07070C))) {
+                SoundLight(ctx, colours)
+            }
+            SleepStrip(ctx, focus = sleepFocus)  // fall asleep to a playlist (the sleep timer); not there without playlists
         }
         MusicCard(ctx, Modifier.weight(1f).fillMaxHeight(), focus = focus)
     }
