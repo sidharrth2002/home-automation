@@ -302,8 +302,9 @@ find). Testing takes over the TV screen, so ask first.
   goes "on" first (the TV bias lighting automation skips while it's on, else waking the TV would start a TV glow and
   switching it off would put the lights back), TV on, wait for the TV as a Spotify Connect device (type TV, or
   SPOTIFY_TV_DEVICE), play the playlist, `script.sleep_lights` (the Sleep scene's wind-down, split out so both use
-  it; scenes cancel both), and the TCL TV's own timer over adb (global `tcl_app_power_off_time_delay`, minutes, -1
-  cancels; it reacts at once, and under a minute it sleeps in ~5 s) 2 min later than ours as a backup. Last 10 min:
+  it; scenes cancel both), and the TCL TV's own timer over adb (global `tcl_app_power_off_time_delay`, in
+  MILLISECONDS — the TV's own "10 min" writes 600000; a bare minute count switches it off within seconds; -1 cancels;
+  it reacts at once and fills in `tcl_app_power_off_time_expire` itself) 2 min later than ours as a backup. Last 10 min:
   Spotify volume down linearly; end: pause, volume back, TV and lights off. data/sleep.json resumes a running timer.
   Spotify: its own sign-in (`python -m sleep login`, SPOTIFY_CLIENT_ID/SECRET in .env, redirect
   http://127.0.0.1:8798/callback, token in data/secrets/spotify.json, refreshed by the service). HA's Spotify

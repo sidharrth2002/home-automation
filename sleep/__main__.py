@@ -127,6 +127,7 @@ class Sleeper:
             return self.publish()
         await self._restore_volume()
         await self.adb_timer(-1)
+        await self.ha_service("script", "turn_off", "script.sleep_lights")  # stop the wind-down; the music carries on
         self.t = None
         self.save()
         self.publish()
@@ -203,16 +204,22 @@ class Sleeper:
 
 
 # ── the TV's own timer, over adb (as the Home Button watchdog reaches the TV) ──
+def tv_timer_value(minutes: int) -> int:
+    """What tcl_app_power_off_time_delay takes: MILLISECONDS (the TV's own "10 min" writes 600000), -1 cancels.
+    A bare minute count reads as a few ms and the TV switches off at once."""
+    return -1 if minutes < 0 else minutes * 60_000
+
+
 async def set_tv_timer(minutes: int):
-    """The TCL TV's sleep timer: global tcl_app_power_off_time_delay, in minutes; -1 cancels it. Its own service
-    (com.tcl.shutdowndialog) watches the setting and starts the countdown at once."""
+    """The TCL TV's sleep timer: global tcl_app_power_off_time_delay (see tv_timer_value); -1 cancels it. Its own
+    service (com.tcl.shutdowndialog) watches the setting and starts the countdown at once."""
     from home_button.__main__ import serial, shell
 
     def go():
         s = serial()
         if not s:
             return log.warning("TV not reachable over adb: no backup sleep timer on the TV")
-        shell(s, "settings", "put", "global", "tcl_app_power_off_time_delay", str(minutes))
+        shell(s, "settings", "put", "global", "tcl_app_power_off_time_delay", str(tv_timer_value(minutes)))
     try:
         await asyncio.to_thread(go)
     except OSError as e:

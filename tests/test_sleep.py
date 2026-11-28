@@ -25,6 +25,8 @@ class FakeSpotify:
 def run():
     assert sl.fade_volume(40, 3600) == 40 and sl.fade_volume(40, sl.FADE_S) == 40
     assert sl.fade_volume(40, sl.FADE_S / 2) == 20 and sl.fade_volume(40, 0) == 0 and sl.fade_volume(40, -5) == 0
+    # the TV's setting is in ms: 32 (minutes) written as-is switched the TV off at once
+    assert sl.tv_timer_value(10) == 600_000 and sl.tv_timer_value(32) == 1_920_000 and sl.tv_timer_value(-1) == -1
 
     with tempfile.TemporaryDirectory() as d:
         sl.STATE = Path(d) / "sleep.json"
@@ -80,8 +82,10 @@ def run():
 
                 # cancel: the music carries on; the TV's backup timer is cleared
                 await s.start("spotify:playlist:1", "Night", 45, playlists)
+                ha.clear()
                 await s.cancel()
                 assert adb[-1] == -1 and s.t is None and reports[-1][1] == "off"
+                assert ("script", "turn_off", "script.sleep_lights") in ha, "the lights stop winding down"
                 assert sp.calls[-1][0] == "play", "cancel doesn't pause the music"
 
                 # the TV never appears in Spotify: a clear message, nothing left running
