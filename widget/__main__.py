@@ -23,6 +23,7 @@ import logging
 import plistlib
 import os
 import secrets
+import shutil
 import socket
 import subprocess
 import sys
@@ -171,9 +172,27 @@ def make_shortcuts(host: str | None = None) -> list[Path]:
     return made
 
 
+def local_name() -> str:
+    """This machine's Bonjour/mDNS name (without .local): scutil on the Mac, the hostname elsewhere."""
+    if shutil.which("scutil"):
+        return subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True).stdout.strip()
+    return socket.gethostname().split(".")[0]
+
+
+def bases() -> list[str]:
+    """Where the phone can reach Home Assistant: the IP first, then the .local name in case the address changes,
+    then PUBLIC_URL (the Cloudflare Tunnel, e.g. https://home.example.org) for when it's away from home. WIDGET_HOST
+    (the server's address, set by pi/use-server) replaces the first two when this runs on the Mac but HA doesn't."""
+    if os.environ.get("WIDGET_HOST"):
+        out = [f"http://{os.environ['WIDGET_HOST']}:8123"]
+    else:
+        name = local_name()
+        out = [f"http://{h}:8123" for h in [lan_ip()] + ([f"{name}.local"] if name else [])]
+    return out + ([os.environ["PUBLIC_URL"].rstrip("/")] if os.environ.get("PUBLIC_URL") else [])
+
+
 def action_bases() -> list[str]:
-    name = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True).stdout.strip()
-    return [f"http://{h}:8123" for h in [lan_ip()] + ([f"{name}.local"] if name else [])]
+    return bases()
 
 
 def fetch_states():
@@ -200,17 +219,14 @@ def lan_ip() -> str:
 
 
 def feed_urls() -> list[str]:
-    """The IP address first, then the Mac's .local name in case the address changes."""
-    name = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True).stdout.strip()
-    hosts = [lan_ip()] + ([f"{name}.local"] if name else [])
-    return [f"http://{h}:8123/local/widget/{key()}.json" for h in hosts]
+    return [f"{b}/local/widget/{key()}.json" for b in bases()]
 
 
 def install(copy=False) -> Path:
     actions = {"ids": {a: action_id(a) for a in PHONE_ACTIONS}, "bases": action_bases()}
     script = TEMPLATE.read_text().replace('"__FEED_URLS__"', json.dumps(feed_urls())) \
         .replace('"__ACTIONS__"', json.dumps(actions)) \
-        .replace("__HUB_URL__", f"http://{lan_ip()}:8123/local/hub/index.html")
+        .replace("__HUB_URL__", f"{os.environ.get('PUBLIC_URL', '').rstrip('/') or bases()[0]}/local/hub/index.html")
     DATA.mkdir(parents=True, exist_ok=True)
     INSTALLED.write_text(script)
     INSTALLED.chmod(0o600)

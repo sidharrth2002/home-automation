@@ -10,6 +10,7 @@ with the TV off or unreachable it waits. Run by ./home up.
 import logging
 import os
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -23,7 +24,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SVC = "com.sid.home/com.sid.home.HomeButtonService"
 LABEL = "label=Hub Home button"  # how dumpsys lists it once bound (android:label in the TV app's manifest)
 CHECK_S = 30
-ADB = str(Path(os.environ.get("ANDROID_HOME", Path.home() / "Library/Android/sdk")) / "platform-tools/adb")
+SDK_ADB = Path(os.environ.get("ANDROID_HOME", Path.home() / "Library/Android/sdk")) / "platform-tools/adb"
+ADB = str(SDK_ADB) if SDK_ADB.exists() else (shutil.which("adb") or str(SDK_ADB))  # the Pi: Debian's `adb` package
 
 
 def listed(dump: str, label: str) -> str:

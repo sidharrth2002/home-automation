@@ -1,0 +1,22 @@
+# The server (Raspberry Pi) on top of docker-compose.yml. Its .env sets
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.pi.yml
+# so plain `docker compose` (and ./home) picks this up there; the Mac never reads it.
+services:
+  homeassistant:
+    # On Linux, Home Assistant wants the host's network: discovery (WiZ bulbs, Cast, mDNS) needs broadcasts that a
+    # bridged container doesn't see. Docker Desktop on the Mac couldn't do this, hence the port mapping there.
+    network_mode: host
+    ports: !reset []  # drops the base file's 8123:8123 (host networking has no port mapping); Compose 2.24+
+
+  # The way in from outside: an outbound-only Cloudflare Tunnel, so no router ports are opened and the home's IP
+  # stays private. The public hostname (home.<your domain> -> http://localhost:8123) is set on the
+  # tunnel in Cloudflare's dashboard; TUNNEL_TOKEN in .env. Off until COMPOSE_PROFILES=tunnel is set (pi/README.md).
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: cloudflared
+    restart: unless-stopped
+    network_mode: host
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+    profiles: [tunnel]

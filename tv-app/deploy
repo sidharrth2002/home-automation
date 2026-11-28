@@ -10,8 +10,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export JAVA_HOME="${JAVA_HOME:-$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home}"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-MAC=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1)
-HA="http://$MAC:8123"
+# Home Assistant's address, baked into the app: the server's (TV_HA_HOST in ../.env, set by pi/use-server), else
+# this Mac's own
+HA_HOST=$(sed -n 's/^TV_HA_HOST=//p' ../.env 2>/dev/null | tr -d "\"'" | tail -1)
+HA_HOST=${HA_HOST:-$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1)}
+HA="http://$HA_HOST:8123"
 
 # The app talks to Home Assistant itself, with a token of its own (made once, kept out of the repo).
 TOKEN_FILE=../data/tv/token

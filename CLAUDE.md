@@ -10,6 +10,16 @@ bulbs (two by the TV, one adaptive desk lamp), a TCL Google TV, music-reactive l
 Hub), an iPhone widget, an Android TV app, investments (Hargreaves Lansdown, Trading 212) and a speaking "Welcome
 home". README.md is the human-facing overview; this file is how to work on it safely.
 
+Moving to two machines (built 2026-11-28, before the Pi arrived; pi/README.md is the runbook): a Raspberry Pi 5
+(Raspberry Pi OS Lite 64-bit, Debian Bookworm, Python 3.11) as the always-on server under systemd
+(`pi/home-stack.service`; `./home` asks systemd there), and the Mac running only `HOME_ONLY=music_sync,announce`
+against it (`HOME_DOCKER=0`, HA_URL/HA_HTTP/CORE_URL pointing at the Pi). `stack.pick` applies HOME_ONLY/HOME_SKIP.
+Keep new code portable: no macOS-only command without a `shutil.which` guard (scutil, ioreg, say, pbcopy,
+osascript); `ping -W` on Linux vs `-t` on macOS; adb from the SDK on the Mac, `/usr/bin/adb` on the Pi; secrets
+via `keyring` (the Keychain on the Mac, `FileKeyring` in data/secrets/ on Linux). Test Linux changes in
+`docker run --platform linux/arm64 debian:bookworm` with only `git ls-files -co --exclude-standard` copied in
+(never .env or data/). The public hostname (Cloudflare Tunnel) and the Pi's address are personal: never in the repo.
+
 ## The rules that matter most
 
 - **The GitHub repo is public.** Never commit `.env`, `data/`, `homeassistant/config/`, logs, APKs, `.shortcut`

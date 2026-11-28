@@ -2,13 +2,18 @@
 #
 # Wireless debugging listens on a random port that changes when it restarts, and announces it over Bonjour. Reuse a
 # live connection if there is one, otherwise look the port up (adb's own discovery is unreliable on macOS, so ask
-# dns-sd), and fall back to the classic 5555. TV_HOST in ../.env is the TV's address.
+# dns-sd, or avahi-browse on Linux), and fall back to the classic 5555. TV_HOST in ../.env is the TV's address.
 TV_HOST=$(sed -n 's/^TV_HOST=//p' ../.env 2>/dev/null | tr -d "\"'")
 [[ -n $TV_HOST ]] || { echo "set TV_HOST=<the TV's address> in .env" >&2; exit 1; }
 ADB="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"
+[[ -x $ADB ]] || ADB=$(command -v adb || echo "$ADB")  # the Pi: Debian's adb package
 
 bonjour_port() {
   local out name
+  if ! command -v dns-sd >/dev/null; then  # Linux: avahi's parsable lines are =;iface;IPv4;name;type;domain;host;address;port;txt
+    avahi-browse -rpt _adb-tls-connect._tcp 2>/dev/null | awk -F';' -v h="$TV_HOST" '$1 == "=" && $8 == h {print $9; exit}'
+    return
+  fi
   out=$(mktemp)
   dns-sd -B _adb-tls-connect._tcp local. > "$out" 2>&1 & sleep 3; kill $! 2>/dev/null
   name=$(awk '/ Add / {print $NF; exit}' "$out")

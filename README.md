@@ -170,6 +170,12 @@ bin/ha call script.turn_on script.welcome_home
 tv-app/deploy                                    # build the TV app and install it on the TV
 ```
 
+**Always on, from anywhere.** It can also run on a Raspberry Pi as an always-on server (systemd brings it back
+after a reboot or a power cut), with the Mac only adding what needs a Mac (music sync, its voices), and the Hub
+reachable from outside at a subdomain of your own through a Cloudflare Tunnel, with no router ports opened.
+[pi/README.md](pi/README.md) is the step-by-step: `pi/setup` on the Pi, `pi/move-from-mac` and `pi/use-server` on
+the Mac.
+
 ## Deep dives
 
 <details>

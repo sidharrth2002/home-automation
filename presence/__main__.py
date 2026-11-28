@@ -14,8 +14,10 @@ import errno
 import logging
 import os
 import re
+import shutil
 import socket
 import subprocess
+import sys
 import time
 
 import telemetry
@@ -42,7 +44,9 @@ def ip_for_mac(mac):
 
 
 def alive(ip):
-    if subprocess.run(["ping", "-c", "1", "-t", "1", ip], capture_output=True).returncode == 0:
+    # a one-second wait: -t on macOS, -W on Linux (where -t is the TTL)
+    wait = ["-t", "1"] if sys.platform == "darwin" else ["-W", "1"]
+    if subprocess.run(["ping", "-c", "1", *wait, ip], capture_output=True).returncode == 0:
         return "ping"
     with socket.socket() as s:
         s.settimeout(1.5)
@@ -55,6 +59,9 @@ def alive(ip):
 
 
 def mac_idle_s():
+    """How long the Mac's keyboard and mouse have been idle; forever on a machine that isn't a Mac (the server)."""
+    if not shutil.which("ioreg"):
+        return float("inf")
     out = subprocess.run(["ioreg", "-c", "IOHIDSystem"], capture_output=True, text=True).stdout
     m = re.search(r'"HIDIdleTime" = (\d+)', out)
     return int(m.group(1)) / 1e9 if m else float("inf")
