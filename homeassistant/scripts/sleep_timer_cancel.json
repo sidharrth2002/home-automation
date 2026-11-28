@@ -1,0 +1,14 @@
+{
+  "alias": "Cancel sleep timer",
+  "icon": "mdi:bed-clock",
+  "description": "Stop the sleep timer; the music keeps playing at its normal volume.",
+  "mode": "queued",
+  "sequence": [
+    {
+      "event": "home_sleep",
+      "event_data": {
+        "action": "cancel"
+      }
+    }
+  ]
+}

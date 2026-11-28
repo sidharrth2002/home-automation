@@ -320,6 +320,43 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
     </details>`;
 });
 
+// sleep timer: fall asleep to a Spotify playlist on the TV (the sleep service runs it; see sleep/__main__.py)
+const SLEEP_T = "sensor.sleep_timer";
+const PLAYLISTS = "sensor.spotify_playlists";
+const SLEEP_LENGTHS = [30, 45, 60, 90];
+let sleepMins = 45;
+let sleepPick = null; // the chosen playlist's uri, until Start
+const minsLeft = (ends) => Math.max(0, Math.ceil((Date.parse(ends) - Date.now()) / 60_000));
+section("#sleep", () => [SLEEP_T, PLAYLISTS], () => {
+  const lists = at(PLAYLISTS, "playlists") ?? [];
+  const running = is(SLEEP_T, "on");
+  $("#sleep").hidden = !running && !lists.length;
+  if ($("#sleep").hidden) return "";
+  const head = `<div class="card-head"><div class="card-title">${I.moon} Sleep timer</div>
+    <span class="kicker">${running ? "Winding down" : "Fall asleep to music"}</span></div>`;
+  if (running) {
+    const img = at(SLEEP_T, "image");
+    return `${head}
+      <div class="sleep-now">
+        <div class="pl-art" ${img ? `style="background-image:url('${esc(img)}')"` : ""}>${img ? "" : I.music}</div>
+        <div><b>Sleep · <span id="sleep-left" data-ends="${esc(at(SLEEP_T, "ends_at"))}">${minsLeft(at(SLEEP_T, "ends_at"))} min</span></b>
+          <small>${esc(at(SLEEP_T, "playlist") ?? "Spotify")} on the TV · fades out at the end</small></div>
+        <div class="sleep-acts"><button class="ghost" data-act="sleep-extend">+15 min</button>
+          <button class="ghost" data-act="sleep-cancel">Cancel</button></div>
+      </div>`;
+  }
+  const picked = lists.find((p) => p.uri === sleepPick);
+  const error = at(SLEEP_T, "error");
+  return `${head}
+    <div class="seg">${SLEEP_LENGTHS.map((m) => `<button data-act="sleep-mins" data-v="${m}" aria-pressed="${m === sleepMins}">${m} min</button>`).join("")}</div>
+    <div class="pl-row">${lists.map((p) => `
+      <button class="pl" data-act="sleep-pick" data-v="${esc(p.uri)}" aria-pressed="${p.uri === sleepPick}" title="${esc(p.name)}">
+        <span class="pl-art" ${p.image ? `style="background-image:url('${esc(p.image)}')"` : ""}>${p.image ? "" : I.music}</span>
+        <span class="pl-name">${esc(p.name)}</span></button>`).join("")}</div>
+    <button class="sleep-go" data-act="sleep-start" ${picked ? "" : "disabled"}>${picked ? `Play ${esc(picked.name)} · ${sleepMins} min` : "Choose a playlist"}</button>
+    ${error ? `<p class="sleep-note">${esc(error)}</p>` : ""}`;
+});
+
 // calendar: the week ahead from every calendar.* entity (iCloud via CalDAV)
 const CAL_DAYS = 7;
 let calEvents = null; // null until the first fetch
@@ -1086,6 +1123,8 @@ function tick() {
   $("#clock").innerHTML = `${String(h).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}<span class="sec">${String(d.getSeconds()).padStart(2, "0")}</span>`;
   $("#date").textContent = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
   $("#hello").textContent = h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  const left = $("#sleep-left");
+  if (left) left.textContent = `${minsLeft(left.dataset.ends)} min`;
   document.querySelectorAll(".progress").forEach((el) => {
     const dur = Number(el.dataset.dur);
     const since = el.dataset.playing === "true" ? Date.now() / 1000 - Number(el.dataset.at) : 0;
@@ -1125,6 +1164,17 @@ document.addEventListener("click", (ev) => {
   if (!el || el.tagName === "INPUT") return;
   const { act, id, v } = el.dataset;
   if (act === "music") return call("script", "music_command", { command: v });
+  if (act === "sleep-mins") { sleepMins = Number(v); lastSig["#sleep"] = null; return renderAll(); }
+  if (act === "sleep-pick") { sleepPick = sleepPick === v ? null : v; lastSig["#sleep"] = null; return renderAll(); }
+  if (act === "sleep-start") {
+    const p = (at(PLAYLISTS, "playlists") ?? []).find((x) => x.uri === sleepPick);
+    if (!p) return;
+    toast(`Starting ${p.name} on the TV…`);
+    sleepPick = null;
+    return call("script", "sleep_timer_start", { playlist: p.uri, name: p.name, minutes: sleepMins });
+  }
+  if (act === "sleep-extend") return call("script", "sleep_timer_extend", { minutes: 15 });
+  if (act === "sleep-cancel") return call("script", "sleep_timer_cancel", {});
   if (act === "strip-hs") return call("light", "turn_on", { entity_id: STRIP, hs_color: v.split(",").map(Number) });
   // Mouse/touch presses are handled on pointerdown (so holding repeats); a click with no pointer is the keyboard.
   if (act === "tv-key") return ev.detail === 0 ? tvKey(v) : undefined;

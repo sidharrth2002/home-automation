@@ -12,7 +12,7 @@
     }
   },
   "sequence": [
-    {"action": "script.turn_off", "target": {"entity_id": "script.sleep_mode"}},
+    {"action": "script.turn_off", "target": {"entity_id": ["script.sleep_mode", "script.sleep_lights"]}},
     {
       "variables": {
         "greeting": "{{ text if text is defined and text else 'Welcome home, Sid.' }}",

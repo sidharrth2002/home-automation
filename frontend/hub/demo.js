@@ -110,6 +110,10 @@ export function demo(now = Date.now()) {
   put("input_boolean.music_sync", "on", { friendly_name: "Music sync" });
   put("input_select.music_sync_mode", "party", { options: ["auto", "calm", "party", "tv", "classic"] });
   put("input_select.music_sync_colours", "Music key", { options: ["Album art", "Music key"] });
+  // the sleep timer's playlist picker: made-up playlists, no covers (the cards show a note icon)
+  put("sensor.spotify_playlists", 6, { friendly_name: "Spotify playlists", playlists: ["Wind down", "Rain on the window",
+    "Slow piano", "Lo-fi nights", "Ambient drift", "Sunday morning"].map((name, i) => ({ name, uri: `spotify:playlist:demo${i}`, image: null })) });
+  put("sensor.sleep_timer", "off", { friendly_name: "Sleep timer" });
   put("input_number.music_sync_sensitivity", 1.4, { min: 0.5, max: 3, step: 0.1 });
   put("input_number.music_sync_latency", 60, { min: -300, max: 300, step: 10, unit_of_measurement: "ms" });
   put("sensor.music_sync_tempo", 124, { locked: true, confidence: 0.86, unit_of_measurement: "BPM" });

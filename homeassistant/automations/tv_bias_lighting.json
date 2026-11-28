@@ -1,7 +1,7 @@
 {
   "id": "tv_bias_lighting",
   "alias": "TV bias lighting",
-  "description": "Subtle warm lighting that follows whatever the TV plays (any app), via music_sync's TV mode. Restores the lights when the TV turns off. Leaves a Mac music session alone.",
+  "description": "Subtle warm lighting that follows whatever the TV plays (any app), via music_sync's TV mode. Restores the lights when the TV turns off. Leaves a Mac music session alone. Stays out of the way while the music sleep timer runs.",
   "mode": "restart",
   "triggers": [
     {
@@ -36,6 +36,10 @@
             {
               "condition": "template",
               "value_template": "{{ not is_state('binary_sensor.someone_home', 'off') }}"
+            },
+            {
+              "condition": "template",
+              "value_template": "{{ not is_state('sensor.sleep_timer', 'on') }}"
             }
           ],
           "sequence": [

@@ -91,21 +91,21 @@ body.dim .blob { opacity: .16; }
     "health health health health health health health tv tv tv tv tv"
     "foot foot foot foot foot foot foot foot foot foot foot foot"; }
 .top { grid-area: top; } .room { grid-area: room; } .scenes { grid-area: scenes; }
-.music { grid-area: music; } .desk { grid-area: desk; } .tv { grid-area: tv; }
+.music { grid-area: music; } .sleep { grid-area: sleep; } .desk { grid-area: desk; } .tv { grid-area: tv; }
 .health-card { grid-area: health; } .foot { grid-area: foot; } .calendar { grid-area: calendar; } .photos-card { grid-area: photos; } .invest-card { grid-area: invest; }
 
 @media (max-width: 1100px) {
   .hub { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas:
-    "top top" "room room" "scenes scenes" "calendar calendar" "photos photos" "invest invest" "music desk" "tv health" "foot foot"; }
+    "top top" "room room" "scenes scenes" "sleep sleep" "calendar calendar" "photos photos" "invest invest" "music desk" "tv health" "foot foot"; }
   .stack { display: contents; }
   .no-music .hub { grid-template-areas:
-    "top top" "room room" "scenes scenes" "calendar calendar" "photos photos" "invest invest" "desk desk" "tv health" "foot foot"; }
+    "top top" "room room" "scenes scenes" "sleep sleep" "calendar calendar" "photos photos" "invest invest" "desk desk" "tv health" "foot foot"; }
 }
 @media (max-width: 720px) {
   .hub { grid-template-columns: minmax(0, 1fr); grid-template-areas:
-    "top" "room" "scenes" "music" "calendar" "photos" "invest" "desk" "tv" "health" "foot"; }
+    "top" "room" "scenes" "sleep" "music" "calendar" "photos" "invest" "desk" "tv" "health" "foot"; }
   .no-music .hub { grid-template-areas:
-    "top" "room" "scenes" "calendar" "photos" "invest" "desk" "tv" "health" "foot"; }
+    "top" "room" "scenes" "sleep" "calendar" "photos" "invest" "desk" "tv" "health" "foot"; }
   .chips { justify-content: flex-end; }
   .chips .chip:nth-child(3) { display: none; }
 }
@@ -773,3 +773,29 @@ dialog.event h3 { margin: 10px 40px 20px 0; font: 400 32px/1.08 var(--serif); le
 .amb-quote cite { display: block; margin-top: 10px; font: 600 12px/1 var(--sans); font-style: normal; letter-spacing: .2em;
   text-transform: uppercase; color: rgba(255,255,255,.5); }
 .ambient-mode.has-photos .amb-quote { margin: 22px 0 0; max-width: 560px; font-size: 20px; text-shadow: 0 1px 12px rgba(0,0,0,.6); }
+
+/* sleep timer: lengths, a row of playlist covers, one button; while it runs, just what's playing and the time left */
+.sleep[hidden] { display: none; }
+.sleep { display: flex; flex-direction: column; gap: 14px; }
+.pl-row { display: grid; grid-auto-flow: column; grid-auto-columns: 92px; gap: 10px; overflow-x: auto; padding: 2px 2px 6px;
+  scrollbar-width: none; overscroll-behavior-x: contain; }
+.pl-row::-webkit-scrollbar { display: none; }
+.pl { display: flex; flex-direction: column; gap: 7px; text-align: left; border-radius: 14px; padding: 4px; transition: background .3s; }
+.pl[aria-pressed="true"] { background: rgba(255,255,255,.1); }
+.pl[aria-pressed="true"] .pl-art { outline: 2px solid rgba(255,255,255,.85); outline-offset: 2px; }
+.pl-art { aspect-ratio: 1; width: 100%; border-radius: 10px; background: rgba(255,255,255,.06) center / cover;
+  display: grid; place-items: center; color: var(--ink-3); opacity: .9; }
+.pl-art svg { width: 22px; height: 22px; }
+.pl-name { font-size: 12px; line-height: 1.3; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sleep-go { height: 42px; border-radius: 12px; background: rgba(255,255,255,.92); color: #0b0b10; font-weight: 600; font-size: 14px;
+  transition: opacity .3s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 14px; }
+.sleep-go:disabled { opacity: .35; }
+.sleep-now { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.sleep-now .pl-art { width: 56px; }
+.sleep-now b { display: block; font-weight: 600; }
+.sleep-now small { color: var(--ink-3); font-size: 12px; }
+.sleep-acts { display: flex; gap: 8px; }
+.sleep .ghost { height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); color: var(--ink-2); font-size: 13px; }
+.sleep-note { margin: 0; font-size: 12px; color: var(--ink-3); }
+@media (max-width: 520px) { .sleep-now { grid-template-columns: 48px minmax(0, 1fr); } .sleep-now .pl-art { width: 48px; }
+  .sleep-acts { grid-column: 1 / -1; } .sleep-acts .ghost { flex: 1; } }

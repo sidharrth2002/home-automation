@@ -1,0 +1,28 @@
+{
+  "alias": "Sleep timer: more time",
+  "icon": "mdi:bed-clock",
+  "description": "Add time to the running sleep timer (15 minutes unless given).",
+  "mode": "queued",
+  "fields": {
+    "minutes": {
+      "name": "Minutes",
+      "default": 15,
+      "selector": {
+        "number": {
+          "min": 5,
+          "max": 60,
+          "step": 5
+        }
+      }
+    }
+  },
+  "sequence": [
+    {
+      "event": "home_sleep",
+      "event_data": {
+        "action": "extend",
+        "minutes": "{{ minutes | default(15) | int }}"
+      }
+    }
+  ]
+}
