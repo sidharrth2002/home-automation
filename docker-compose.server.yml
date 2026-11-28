@@ -8,15 +8,9 @@ services:
     network_mode: host
     ports: !reset []  # drops the base file's 8123:8123 (host networking has no port mapping); Compose 2.24+
 
-  # The way in from outside: an outbound-only Cloudflare Tunnel, so no router ports are opened and the home's IP
-  # stays private. The public hostname (home.<your domain> -> http://localhost:8123) is set on the
-  # tunnel in Cloudflare's dashboard; TUNNEL_TOKEN in .env. Off until COMPOSE_PROFILES=tunnel is set (server/README.md).
+  # the tunnel (docker-compose.yml) on the host's network too, with "homeassistant" meaning this machine, so the
+  # dashboard's http://homeassistant:8123 works here as it does on the Mac (and the MCP: http://homeassistant:8792)
   cloudflared:
-    image: cloudflare/cloudflared:2024.12.2
-    container_name: cloudflared
-    restart: unless-stopped
     network_mode: host
-    command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
-    profiles: [tunnel]
+    extra_hosts:
+      - "homeassistant:127.0.0.1"

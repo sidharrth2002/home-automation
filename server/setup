@@ -90,17 +90,29 @@ else
 fi
 
 # ── Home Assistant behind the tunnel: trust the proxy on this machine ─────────────────────────────
-CONF=homeassistant/config/configuration.yaml
-if [[ -f $CONF ]] && ! grep -q "trusted_proxies" "$CONF"; then
-  if [[ $CHECK ]]; then need "$CONF http: trusted_proxies"
-  elif grep -q "^http:" "$CONF"; then
-    echo "  $CONF already has an http: section; add use_x_forwarded_for and trusted_proxies (127.0.0.1, ::1) to it" >&2
+# Home Assistant keeps its web server's settings in .storage/http now (a YAML http: section is ignored once it has
+# migrated, "yaml_migration_done"), so the trusted proxies go there: 127.0.0.1 is the tunnel on this machine (host
+# networking), 172.16.0.0/12 is Docker's private networks (the tunnel on the Mac). Only edited with HA stopped.
+HTTPCONF=homeassistant/config/.storage/http
+proxied() { python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["data"]["stable"]; sys.exit(0 if s.get("use_x_forwarded_for") and "127.0.0.1" in s.get("trusted_proxies", []) else 1)' "$HTTPCONF"; }
+if [[ ! -f $HTTPCONF ]]; then
+  need "$HTTPCONF (run server/move-from-mac on the Mac first)"
+elif ! proxied; then
+  if [[ $CHECK ]]; then need "Home Assistant trusting the tunnel ($HTTPCONF)"
+  elif docker inspect -f '{{.State.Running}}' homeassistant 2>/dev/null | grep -q true; then
+    echo "  Home Assistant is running: ./home down, then server/setup again, to let it trust the tunnel" >&2
   else
-    printf '\n# the Cloudflare Tunnel (cloudflared, on this machine) forwards requests from outside\nhttp:\n  use_x_forwarded_for: true\n  trusted_proxies:\n    - 127.0.0.1\n    - ::1\n' >> "$CONF"
-    echo "  $CONF: trusted the local tunnel"
+    python3 - "$HTTPCONF" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+s = d["data"]["stable"]
+s["use_x_forwarded_for"] = True
+s["trusted_proxies"] = sorted(set(s.get("trusted_proxies", [])) | {"127.0.0.1", "::1", "172.16.0.0/12"})
+json.dump(d, open(p, "w"), indent=2)
+PY
+    echo "  Home Assistant now trusts the tunnel"
   fi
-elif [[ ! -f $CONF ]]; then
-  need "$CONF (run server/move-from-mac on the Mac first)"
 fi
 
 # ── systemd ─────────────────────────────────────────────────────
