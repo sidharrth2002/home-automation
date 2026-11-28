@@ -138,7 +138,9 @@ async def main():
     telemetry.setup("backlight")
     backlight = Backlight()
     loop = asyncio.get_running_loop()
-    await loop.create_datagram_endpoint(lambda: _Frames(backlight), local_addr=("127.0.0.1", PORT))
+    # BACKLIGHT_BIND=0.0.0.0 on the server lets the Mac's music sync reach it (frames only set the strip's colour)
+    bind = os.environ.get("BACKLIGHT_BIND", "127.0.0.1")
+    await loop.create_datagram_endpoint(lambda: _Frames(backlight), local_addr=(bind, PORT))
     try:
         await asyncio.gather(backlight.strip.run(), backlight.follow_ha(os.environ["TOKEN"]), backlight.expire_live())
     except FreshStart as e:

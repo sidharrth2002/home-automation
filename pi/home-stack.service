@@ -1,0 +1,21 @@
+# The home's services on the server, under systemd: started at boot (after Docker, so Home Assistant is coming up),
+# and started again if the supervisor ever dies. pi/setup fills in @USER@ and @DIR@ and installs it.
+[Unit]
+Description=Home automation services (stack supervisor)
+Wants=network-online.target docker.service
+After=network-online.target docker.service bluetooth.service
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/.venv/bin/python -m stack
+# the supervisor stops its children itself on SIGTERM (bulbs restored first); give it the time it asks for
+KillMode=mixed
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+StandardOutput=append:@DIR@/home.log
+StandardError=append:@DIR@/home.log
+
+[Install]
+WantedBy=multi-user.target

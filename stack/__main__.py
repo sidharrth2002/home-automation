@@ -57,7 +57,15 @@ def services():
         out["home_button"] = [PY, "-m", "home_button"]
     if shutil.which("rclone") and "[onedrive]" in rclone_config():  # photos, once OneDrive is signed in
         out["photos"] = [PY, "-m", "photos", "--watch"]
-    return out
+    return pick(out)
+
+
+def pick(out: dict) -> dict:
+    """Two machines can share the work: the always-on server runs most services (HOME_SKIP=music_sync,announce in
+    its .env), and the Mac only the ones that need a Mac (HOME_ONLY=music_sync,announce). Unset: everything here."""
+    names = lambda k: {n.strip() for n in os.environ.get(k, "").split(",") if n.strip()}
+    only, skip = names("HOME_ONLY"), names("HOME_SKIP")
+    return {k: v for k, v in out.items() if (not only or k in only) and k not in skip}
 
 
 def rclone_config() -> str:

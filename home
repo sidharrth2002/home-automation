@@ -33,16 +33,31 @@ stop_strays() {  # services started by hand, outside the supervisor
   pkill -KILL -f "$SERVICES" || true
 }
 
-up() {
-  if pid=$(supervisor_pid); then echo "already running (supervisor pid $pid)"; return; fi
+env_get() { sed -n "s/^$1=//p" .env 2>/dev/null | tr -d "\"'" | tail -1; }
+# The server (the Pi): systemd runs the supervisor (pi/home-stack.service), so it starts at boot and is restarted if
+# it dies; this script just asks systemd. The Mac with HOME_DOCKER=0 runs only its own services (HOME_ONLY), against
+# Home Assistant on the server.
+systemd() { [[ $(uname) == Linux ]] && systemctl cat home-stack.service >/dev/null 2>&1; }
+docker_here() { [[ $(env_get HOME_DOCKER) != 0 ]]; }
+[[ $(uname) == Linux ]] && LIST=-fa || LIST=-fl  # pgrep's "pid + command line"
+
+start_docker() {
+  docker_here || return 0
   if ! docker info >/dev/null 2>&1; then
-    echo "starting Docker…"; open -a Docker
+    echo "starting Docker…"
+    if [[ $(uname) == Darwin ]]; then open -a Docker; else sudo systemctl start docker; fi
     wait_for 120 Docker docker info
   fi
   docker compose up -d
   echo -n "waiting for Home Assistant…"
   wait_for 180 "Home Assistant" curl -sf -o /dev/null http://localhost:8123/manifest.json
   echo " up"
+}
+
+up() {
+  if systemd; then start_docker; sudo systemctl start home-stack; sleep 2; status; return; fi
+  if pid=$(supervisor_pid); then echo "already running (supervisor pid $pid)"; return; fi
+  start_docker
   stop_strays
   # Own session, so `down` can signal the supervisor and nothing else; it stops its children itself.
   nohup "$PY" -c 'import os, runpy; os.setsid(); runpy.run_module("stack", run_name="__main__")' >> home.log 2>&1 &
@@ -52,6 +67,12 @@ up() {
 }
 
 down() {
+  if systemd; then
+    echo -n "stopping services…"; sudo systemctl stop home-stack; echo " done"
+    if docker_here && docker info >/dev/null 2>&1; then docker compose stop; fi
+    echo "everything is off (it all starts again at the next boot, or with ./home up)"
+    return
+  fi
   if pid=$(supervisor_pid); then
     echo -n "stopping services…"
     kill -TERM "$pid"
@@ -61,11 +82,12 @@ down() {
   fi
   rm -f $PIDFILE
   stop_strays
-  if docker info >/dev/null 2>&1; then docker compose stop; fi
+  if docker_here && docker info >/dev/null 2>&1; then docker compose stop; fi
   echo "everything is off"
 }
 
 reload() {
+  if systemd; then sudo systemctl restart home-stack; sleep 2; status; return; fi
   if pid=$(supervisor_pid); then
     kill -TERM "$pid"
     for _ in {1..20}; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
@@ -78,9 +100,12 @@ reload() {
 }
 
 status() {
-  if pid=$(supervisor_pid); then echo "supervisor: running (pid $pid)"; else echo "supervisor: stopped"; fi
-  pgrep -fl "$SERVICES" | grep -v stack | sed -E 's/^([0-9]+) .*-m ([a-z_.]+).*/  \2: running (pid \1)/' || true
-  if docker info >/dev/null 2>&1; then
+  if systemd; then echo "supervisor: $(systemctl is-active home-stack) (systemd)"
+  elif pid=$(supervisor_pid); then echo "supervisor: running (pid $pid)"; else echo "supervisor: stopped"; fi
+  pgrep $LIST "$SERVICES" | grep -v stack | sed -E 's/^([0-9]+) .*-m ([a-z_.]+).*/  \2: running (pid \1)/' || true
+  if ! docker_here; then
+    echo "homeassistant: on the server ($(env_get HA_HTTP))"
+  elif docker info >/dev/null 2>&1; then
     echo "homeassistant: $(docker inspect -f '{{.State.Status}}' homeassistant 2>/dev/null || echo missing)"
   else
     echo "homeassistant: Docker not running"

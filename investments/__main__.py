@@ -25,6 +25,7 @@ from pathlib import Path
 import telemetry
 
 import keyring
+import keyring.backend
 
 from core import client as core
 
@@ -41,6 +42,43 @@ T212_KEYCHAIN = "home-automation.trading212"
 T212_SENSOR = "sensor.trading212"
 LOGINS = DATA / "auto_logins.json"
 MAX_AUTO_LOGINS = 8
+SECRETS = ROOT / "data" / "secrets" / "keyring.json"
+
+
+class FileKeyring(keyring.backend.KeyringBackend):
+    """The server (Linux, no desktop keychain): credentials in one JSON file only this user can read, under data/
+    (never in the repo). The Mac keeps using its Keychain."""
+    priority = 1
+
+    def _all(self) -> dict:
+        return json.loads(SECRETS.read_text()) if SECRETS.exists() else {}
+
+    def get_password(self, service, username):
+        return self._all().get(service, {}).get(username)
+
+    @staticmethod
+    def _write(values: dict):
+        SECRETS.parent.mkdir(parents=True, exist_ok=True)
+        SECRETS.parent.chmod(0o700)
+        tmp = SECRETS.with_suffix(".tmp")
+        tmp.touch(mode=0o600)
+        tmp.chmod(0o600)  # before anything is written to it
+        tmp.write_text(json.dumps(values))
+        tmp.replace(SECRETS)
+
+    def set_password(self, service, username, password):
+        values = self._all()
+        values.setdefault(service, {})[username] = password
+        self._write(values)
+
+    def delete_password(self, service, username):
+        values = self._all()
+        values.get(service, {}).pop(username, None)
+        self._write(values)
+
+
+if sys.platform != "darwin":
+    keyring.set_keyring(FileKeyring())
 
 
 def load_env():
