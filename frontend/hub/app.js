@@ -58,6 +58,7 @@ const APPS = {
   "com.google.android.youtube.tv": ["YouTube", "255,40,60"],
   "com.google.android.youtube.tvkids": ["YouTube Kids", "255,40,60"],
   "com.spotify.tv.android": ["Spotify", "30,215,96"],
+  "org.jellyfin.androidtv": ["Jellyfin", "170,92,195"],
   "com.amazon.amazonvideo.livingroom": ["Prime Video", "0,168,225"],
   "com.disney.disneyplus": ["Disney+", "60,110,255"],
   "uk.co.bbc.iplayer": ["BBC iPlayer", "255,79,163"],
@@ -866,7 +867,7 @@ section("#desk", () => [SUN, WEATHER, OUTDOOR, T_K, T_B, ADAPT, HOLD, MAXB, DESK
 const TV_APPS = [["Netflix", "com.netflix.ninja", "https://www.netflix.com/title"],
   ["YouTube", "com.google.android.youtube.tv", "https://www.youtube.com"], ["Spotify", "com.spotify.tv.android"],
   ["Prime Video", "com.amazon.amazonvideo.livingroom", "https://app.primevideo.com"], ["Disney+", "com.disney.disneyplus"],
-  ["iPlayer", "uk.co.bbc.iplayer"], ["Apple TV", "com.apple.atve.androidtv.appletv"]];
+  ["iPlayer", "uk.co.bbc.iplayer"], ["Apple TV", "com.apple.atve.androidtv.appletv"], ["Jellyfin", "org.jellyfin.androidtv"]];
 const tvKey = (key) => call("remote", "send_command", { entity_id: TV_REMOTE, command: key });
 section("#tv", () => [TV, TV_AUTO, SYNC, MODE], () => {
   const on = is(TV, "on");

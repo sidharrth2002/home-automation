@@ -86,6 +86,8 @@ else
   add CORE_BIND "0.0.0.0"               # so the Mac's services reach core (token-protected)
   add BACKLIGHT_BIND "0.0.0.0"          # so the Mac's music sync can drive the strip
   add MCP_BIND "0.0.0.0"                # the home-state MCP for Claude on the Mac and other devices (token-protected)
+  add RENDER_GID "$(getent group render | cut -d: -f3 || echo 0)"  # Jellyfin's use of the graphics (/dev/dri)
+  add PUID "$(id -u)"; add PGID "$(id -g)"  # qBittorrent writes the library as this user
   chmod 600 .env
 fi
 

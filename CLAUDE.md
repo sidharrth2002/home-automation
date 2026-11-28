@@ -79,6 +79,7 @@ home_mcp/             the same for Claude Desktop's chat: a stdlib MCP server (s
                       bin/install-mcp adds it to claude_desktop_config.json. No MCP SDK: its deps break FastAPI's pins
 investments/          Hargreaves Lansdown client (hl.py, lockout-safe), FT price history (prices.py), Trading 212 (t212.py)
 backlight/            the Bluetooth LED strip behind the cabinet (MELK/ELK-BLEDOM), as light.tv_backlight
+media/                qBittorrent + Jellyfin (compose profile media, LAN-only); `python -m media setup` configures both
 spotify_queue/        Spotify's Up next for the Hub: sensor.spotify_queue/_search; script.spotify_queue (add/skip/search)
 photos/               OneDrive photos via Microsoft Graph: picks a few good ones (faces, people, you) for the Hub
 widget/               iPhone Scriptable widget (home.js) + its feed, webhook actions and signed Shortcuts (__main__.py)
@@ -409,4 +410,21 @@ find). Testing takes over the TV screen, so ask first.
   (index+1), 0.25 s apart (Spotify has no "play this queue item"). Spotify's API can't remove or reorder the queue.
 - Hub: Up next in the music card (5, "All N"), a search box (renderAll keeps a focused search box's text and caret;
   results show while sensor.spotify_search's state matches the query sent). The TV app doesn't show the queue yet.
+
+## Media (media/, compose profile `media`)
+
+- qBittorrent (:8090) and Jellyfin (:8096) in docker-compose.yml, off unless COMPOSE_PROFILES includes `media`
+  (the Mac's .env has tunnel,media). LAN-only: never add them to the tunnel or Cloudflare. Library = MEDIA_DIR
+  (default data/media, gitignored): Movies, Shows, downloads, .incomplete; Jellyfin mounts it read-only.
+- `python -m media setup` is idempotent: qBittorrent's password replaces the per-start temporary one (from
+  `docker logs`), categories movies/shows → those folders (auto TMM), seeding stops at ratio 1 or 24 h, UPnP off;
+  Jellyfin's wizard via /Startup/* (remote access off) and libraries via /Library/VirtualFolders. Passwords in
+  data/secrets/qbittorrent.json, jellyfin.json (0600); never print them. qBittorrent 409s on editing a category to
+  the path it has, so unchanged ones are skipped.
+- Server: Jellyfin on host networking (the TV app's UDP 7359 discovery) with /dev/dri + RENDER_GID for VAAPI;
+  server/setup adds RENDER_GID, PUID, PGID. The TV signs in with Quick Connect. The TV app's Jellyfin tile shows only
+  once the app is installed (TvApp.onlyIfInstalled; the manifest's <queries> must list the package).
+- Help with legitimate use only (own media, public-domain / Creative Commons, Linux images); no piracy indexers or
+  automated grabbing (Sonarr/Radarr/Prowlarr against pirate trackers). A VPN (gluetun in front of qBittorrent) is
+  offered, not built: it needs the user's provider.
 

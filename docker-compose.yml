@@ -39,3 +39,44 @@ services:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
     depends_on: [homeassistant]
     profiles: [tunnel]
+
+  # Media: torrents into a library that streams to the TV. Off until COMPOSE_PROFILES includes media; set up with
+  # `python -m media setup` (folders, passwords, qBittorrent's settings, Jellyfin's libraries). Both are LAN-only:
+  # neither goes through the tunnel. The library is MEDIA_DIR (default data/media): Movies, Shows, downloads.
+  #
+  # qBittorrent: add a torrent or magnet link at http://<this machine>:8090 (phone or laptop); finished downloads
+  # move into Movies or Shows by category, or stay in downloads/. 6881 is the port other peers reach it on.
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:5.0.3
+    container_name: qbittorrent
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/London
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - WEBUI_PORT=8090
+      - TORRENTING_PORT=6881
+    volumes:
+      - ./data/qbittorrent:/config
+      - ${MEDIA_DIR:-./data/media}:/media
+    ports:
+      - "8090:8090"
+      - "6881:6881"
+      - "6881:6881/udp"
+    profiles: [media]
+
+  # Jellyfin: the library, streamed to the TV's Jellyfin app (and any browser: http://<this machine>:8096). It only
+  # reads the library.
+  jellyfin:
+    image: jellyfin/jellyfin:10.10.3
+    container_name: jellyfin
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - ./data/jellyfin/config:/config
+      - ./data/jellyfin/cache:/cache
+      - ${MEDIA_DIR:-./data/media}:/media:ro
+    ports:
+      - "8096:8096"
+    profiles: [media]

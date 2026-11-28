@@ -14,3 +14,14 @@ services:
     network_mode: host
     extra_hosts:
       - "homeassistant:127.0.0.1"
+
+  # Jellyfin on the host's network, so the TV's app finds it by itself (a UDP broadcast on 7359), and with the
+  # Ryzen's graphics for converting video the TV can't play as it is (VAAPI; turn it on in Jellyfin's Dashboard →
+  # Playback → Transcoding: Video Acceleration API, device /dev/dri/renderD128)
+  jellyfin:
+    network_mode: host
+    ports: !reset []
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-0}"  # the render group, which may open /dev/dri (server/setup finds its number)
