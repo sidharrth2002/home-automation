@@ -25,3 +25,17 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
       - "127.0.0.1:4318:4318"
+
+  # The way in from outside: an outbound-only Cloudflare Tunnel, so no router ports are opened and the home's IP
+  # stays private. The tunnel's public hostname (home-server.<your domain>) points at http://homeassistant:8123 in
+  # Cloudflare's dashboard, which works on both machines: here by the container's name, on the server through
+  # docker-compose.server.yml's hosts entry. TUNNEL_TOKEN in .env; off until COMPOSE_PROFILES=tunnel.
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+    depends_on: [homeassistant]
+    profiles: [tunnel]

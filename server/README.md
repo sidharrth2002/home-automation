@@ -109,15 +109,18 @@ website from elsewhere (e.g. Vercel), it keeps working as long as its records co
    came across. Records for a host like Vercel stay **DNS only** (grey cloud), as Vercel asks.
 2. **At the registrar** (e.g. GoDaddy → the domain → Nameservers → *I'll use my own*) → the two Cloudflare gives
    you. It takes minutes to a few hours; the site stays up throughout.
-3. **Cloudflare** → Zero Trust → Networks → Tunnels → Create (cloudflared) → name it `home` → copy the token.
-   Public hostname: `home.<your domain>` → Service `HTTP` → `localhost:8123`.
-4. **On the server**, in `.env`:
-   ```
-   TUNNEL_TOKEN=<the token>
-   COMPOSE_PROFILES=tunnel
-   PUBLIC_URL=https://home.<your domain>
-   ```
-   then `./home up`. `server/setup` already told Home Assistant to trust the tunnel (`http: trusted_proxies`).
+3. **Cloudflare** → Zero Trust (Free plan) → Networks → Tunnels → Create (cloudflared) → name it `home` → Docker →
+   copy the token (after `--token`). Then the tunnel → Add a route → **Published application**: subdomain (e.g.
+   `home-server`), your domain, service URL **`http://homeassistant:8123`**. That one address works on both machines:
+   on the Mac it's Home Assistant's container, on the server docker-compose.server.yml maps it to this machine.
+4. **The token goes in `.env`** (the home-automation one: never a tracked file), without it showing on screen:
+   `printf 'TUNNEL_TOKEN=%s\n' "$(pbpaste)" >> .env`, plus `COMPOSE_PROFILES=tunnel` and
+   `PUBLIC_URL=https://<subdomain>.<your domain>`, then `./home up`. Home Assistant must trust the tunnel: its web
+   settings live in `homeassistant/config/.storage/http` (a YAML `http:` section is ignored once it has migrated), and
+   `server/setup` adds `use_x_forwarded_for` and the trusted proxies there (with Home Assistant stopped). Without it,
+   every request through the tunnel gets **400**.
+   The tunnel can start on the Mac first (it did, 2026-11-28) and simply move: `server/move-from-mac` copies `.env`
+   with the token, and `server/use-server` stops it on the Mac.
 5. **Lock it down**: Home Assistant is now on the internet, behind its own login. In your HA profile turn on
    **multi-factor authentication**. Optionally put **Cloudflare Access** (Zero Trust → Access → Applications) in
    front of the Hub's pages for a second sign-in, but leave `/api/webhook/*` and `/local/widget/*` outside it so the

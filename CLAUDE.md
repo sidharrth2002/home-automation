@@ -28,6 +28,12 @@ via `keyring` (the Keychain on the Mac, `FileKeyring` in data/secrets/ on Linux)
 copied in (never .env or data/). The public hostnames (Cloudflare Tunnel) and the server's address are personal:
 never in the repo.
 
+The Cloudflare Tunnel (`cloudflared`, profile `tunnel`, TUNNEL_TOKEN in .env) went live on the Mac on 2026-11-28; its
+route points at `http://homeassistant:8123`, which docker-compose.server.yml maps to 127.0.0.1 on the server. Home
+Assistant's http settings are in `.storage/http` (`data.stable`), not configuration.yaml (ignored after
+`yaml_migration_done`); `use_x_forwarded_for` + `trusted_proxies` there, edited only with HA stopped, or every tunnel
+request is a 400 ("not set-up for reverse proxies"). Its `pending` slot is not applied at startup: write `stable`.
+
 ## The rules that matter most
 
 - **The GitHub repo is public.** Never commit `.env`, `data/`, `homeassistant/config/`, logs, APKs, `.shortcut`
