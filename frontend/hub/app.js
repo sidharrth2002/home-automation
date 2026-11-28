@@ -1445,6 +1445,67 @@ function setLive(ok) {
   if (label) label.textContent = ok ? "Live" : "Reconnecting…";
 }
 
+// ── phone: the Hub as pages you swipe between, with a tab bar (the TV app's pages, roughly) ──
+// The cards move into a horizontal scroll-snap strip, one page per screen, each scrolling on its own; on a wider
+// screen they go back into the grid. Only the browser's own scrolling moves anything: nothing animates by itself.
+const PAGES = [
+  ["home", "Home", I.home, [".top", ".stack"], ""],
+  ["music", "Music", I.music, ["#music"], "Spotify isn't playing. Start something, or a scene, and it shows up here."],
+  ["today", "Today", I.cal, ["#calendar", "#photos"], "Nothing on today."],
+  ["money", "Money", I.chart, ["#invest"], ""],
+  ["devices", "Devices", I.tv, ["#tv", "#desk", "#health", "#foot"], ""],
+];
+const PHONE = matchMedia("(max-width: 720px)");
+const hubOrder = [...$("#hub").children]; // the grid's own order, to put back
+let pager = null;
+function pageTo(i, smooth = true) {
+  pager?.querySelector(".pager").scrollTo({ left: i * pager.querySelector(".pager").clientWidth, behavior: smooth ? "smooth" : "instant" });
+}
+function markTab(i) {
+  pager?.querySelectorAll(".tabbar button").forEach((b, j) => b.setAttribute("aria-current", j === i ? "page" : "false"));
+  try { sessionStorage.hubPage = PAGES[i][0]; } catch { /* private mode */ }
+}
+function paged(on) {
+  const hub = $("#hub");
+  if (on && !pager) {
+    pager = document.createElement("div");
+    pager.className = "paged-wrap";
+    pager.innerHTML = `<div class="pager">${PAGES.map(([id, , , , empty]) =>
+      `<div class="page" data-page="${id}">${empty ? `<p class="page-empty">${esc(empty)}</p>` : ""}</div>`).join("")}</div>
+      <nav class="tabbar" aria-label="Pages">${PAGES.map(([id, label, icon], i) =>
+        `<button data-page-tab="${i}" aria-current="false">${icon}<span>${label}</span></button>`).join("")}</nav>`;
+    PAGES.forEach(([id, , , sels]) => {
+      const page = pager.querySelector(`[data-page="${id}"]`);
+      for (const sel of sels) page.insertBefore($(sel), page.querySelector(".page-empty"));
+    });
+    hub.append(pager);
+    document.documentElement.classList.add("paged");
+    const strip = pager.querySelector(".pager");
+    strip.addEventListener("scroll", () => markTab(Math.round(strip.scrollLeft / strip.clientWidth)), { passive: true });
+    let start = 0;
+    try { start = Math.max(0, PAGES.findIndex(([id]) => id === (location.hash.slice(1) || sessionStorage.hubPage))); } catch { /* */ }
+    requestAnimationFrame(() => { pageTo(start, false); markTab(start); });
+  } else if (!on && pager) {
+    for (const el of hubOrder) hub.insertBefore(el, pager);
+    pager.remove();
+    pager = null;
+    document.documentElement.classList.remove("paged");
+  }
+}
+document.addEventListener("click", (ev) => {
+  const tab = ev.target.closest?.("[data-page-tab]");
+  if (!tab) return;
+  const i = Number(tab.dataset.pageTab);
+  const page = pager?.querySelectorAll(".page")[i];
+  // the page you're on: back to its top; another: slide to it
+  if (tab.getAttribute("aria-current") === "page") page?.scrollTo({ top: 0, behavior: "smooth" });
+  else pageTo(i);
+});
+if (!TV_MODE && !AMBIENT) {
+  paged(PHONE.matches);
+  PHONE.addEventListener("change", (e) => paged(e.matches));
+}
+
 (async () => {
   tick();
   setInterval(tick, 1000);
