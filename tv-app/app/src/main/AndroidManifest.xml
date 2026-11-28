@@ -12,6 +12,7 @@
         <package android:name="com.amazon.amazonvideo.livingroom" />
         <package android:name="com.google.android.youtube.tv" />
         <package android:name="com.spotify.tv.android" />
+        <package android:name="org.jellyfin.androidtv" />
         <package android:name="com.google.android.apps.tv.launcherx" />
         <!-- and every app with a TV launch screen, for the home screen's own "All apps" -->
         <intent>
