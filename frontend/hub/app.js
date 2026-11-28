@@ -1450,14 +1450,14 @@ function setLive(ok) {
 // screen they go back into the grid. Only the browser's own scrolling moves anything: nothing animates by itself.
 const PAGES = [
   ["home", "Home", I.home, [".top", ".stack"], ""],
-  ["music", "Music", I.music, ["#music"], "Spotify isn't playing. Start something, or a scene, and it shows up here."],
+  ["music", "Music", I.music, ["#music", "#sleep"], "Spotify isn't playing. Start something, or a scene, and it shows up here."],
   ["today", "Today", I.cal, ["#calendar", "#photos"], "Nothing on today."],
   ["money", "Money", I.chart, ["#invest"], ""],
   ["devices", "Devices", I.tv, ["#tv", "#desk", "#health", "#foot"], ""],
 ];
 const PHONE = matchMedia("(max-width: 720px)");
-const hubOrder = [...$("#hub").children]; // the grid's own order, to put back
 let pager = null;
+let homes = []; // where each moved card lived in the grid: [card, parent, next sibling], to put it back
 function pageTo(i, smooth = true) {
   pager?.querySelector(".pager").scrollTo({ left: i * pager.querySelector(".pager").clientWidth, behavior: smooth ? "smooth" : "instant" });
 }
@@ -1474,11 +1474,15 @@ function paged(on) {
       `<div class="page" data-page="${id}">${empty ? `<p class="page-empty">${esc(empty)}</p>` : ""}</div>`).join("")}</div>
       <nav class="tabbar" aria-label="Pages">${PAGES.map(([id, label, icon], i) =>
         `<button data-page-tab="${i}" aria-current="false">${icon}<span>${label}</span></button>`).join("")}</nav>`;
+    hub.append(pager); // in the document first: a card inside one already moved (the sleep card in .stack) is still found
     PAGES.forEach(([id, , , sels]) => {
       const page = pager.querySelector(`[data-page="${id}"]`);
-      for (const sel of sels) page.insertBefore($(sel), page.querySelector(".page-empty"));
+      for (const sel of sels) {
+        const el = $(sel);
+        homes.push([el, el.parentNode, el.nextSibling]);
+        page.insertBefore(el, page.querySelector(".page-empty"));
+      }
     });
-    hub.append(pager);
     document.documentElement.classList.add("paged");
     const strip = pager.querySelector(".pager");
     strip.addEventListener("scroll", () => markTab(Math.round(strip.scrollLeft / strip.clientWidth)), { passive: true });
@@ -1486,7 +1490,8 @@ function paged(on) {
     try { start = Math.max(0, PAGES.findIndex(([id]) => id === (location.hash.slice(1) || sessionStorage.hubPage))); } catch { /* */ }
     requestAnimationFrame(() => { pageTo(start, false); markTab(start); });
   } else if (!on && pager) {
-    for (const el of hubOrder) hub.insertBefore(el, pager);
+    for (const [el, parent, next] of homes.reverse()) parent.insertBefore(el, next); // last moved first: siblings are back
+    homes = [];
     pager.remove();
     pager = null;
     document.documentElement.classList.remove("paged");

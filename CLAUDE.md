@@ -255,10 +255,12 @@ find). Testing takes over the TV screen, so ask first.
   rebuild the app with `tv-app/deploy` when tv-app/ changes, or `tv-app/deploy --no-open` when the TV is off or in
   use (never launch it over something playing). Check demo screenshots of each.
 - The Hub on a phone (≤720px, not TV or ambient mode) is pages you swipe between: app.js `PAGES` moves the cards into
-  a horizontal scroll-snap strip (Home: header + .stack; Music; Today: calendar + photos; Money; Devices: TV, desk,
-  health, foot) with a bottom tab bar, and back into the grid when wider. A new card must be added to a page there.
+  a horizontal scroll-snap strip (Home: header + .stack; Music: music + sleep; Today: calendar + photos; Money;
+  Devices: TV, desk, health, foot) with a bottom tab bar, and back into the grid when wider. A new card must be added to a page there.
   Opens on `#music` etc. or the last page this session. frontend/screenshot.py's captureBeyondViewport shows the strip
   half-scrolled: check phone pages with a plain 390×844 capture.
+  Phone Home is compact (`.paged` rules at the end of styles.css): one-row header, scenes as a quiet 3 × 2 of names.
+  Cards are put back where they came from (`homes`), so the sleep card returns into .stack on a wide screen.
 - Direction: everything goes through core (the FastAPI service); Home Assistant is the device layer and carries
   state to the screens. A service's sensors are reported with `core.client.report(entity, state, attrs)` (table
   `live`, `PUT /v1/live/<entity>`), never POSTed to HA's /api/states: core mirrors them, retries, and re-sends after

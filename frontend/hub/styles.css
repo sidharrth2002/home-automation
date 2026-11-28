@@ -845,3 +845,19 @@ dialog.event h3 { margin: 10px 40px 20px 0; font: 400 32px/1.08 var(--serif); le
   color: var(--ink-3); font-size: 10.5px; letter-spacing: .01em; }
 .tabbar button svg { width: 21px; height: 21px; }
 .tabbar button[aria-current="page"] { color: var(--ink); }
+/* phone Home: a compact header, and the scenes as an even 3 × 2 of small, quieter tiles */
+.paged .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px 12px; padding: 4px 2px 0; }
+.paged .eyebrow { font-size: 11px; margin-bottom: 4px; }
+.paged h1 { font-size: 32px; }
+.paged .top-right { display: contents; }
+.paged .clock { font-size: 24px; align-self: end; }
+.paged .chips { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-top: 8px; }
+.paged .scenes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.paged .scene, .paged .scene.hero { grid-column: auto; height: 78px; padding: 12px; border-radius: 18px; gap: 6px; box-shadow: none; border-color: var(--line); }
+.paged .scene::before, .paged .scene.hero::before { opacity: .14; }
+.paged .scene[aria-pressed="true"]::before { opacity: .5; }
+.paged .scene[aria-pressed="true"] { border-color: rgba(255,255,255,.3); }
+.paged .scene svg, .paged .scene.hero svg { width: 20px; height: 20px; animation: none; filter: none; color: var(--ink-2); }
+.paged .scene small { display: none; }
+.paged .scene b { font-size: 13.5px; font-weight: 500; line-height: 1.15; white-space: normal; } /* "Welcome home" on two lines */
+
