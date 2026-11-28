@@ -315,7 +315,8 @@ find). Testing takes over the TV screen, so ask first.
   on the music page (pressing a cover starts), the widget's "Sleep until HH:MM" (an end time: widgets redraw late).
   The Hub and TV app count down each second (29:41, 1:12:05). While it runs, the screensaver is `SleepNight`
   (Sleep.kt): black, only the time left and the playlist in faint grey, shifting a little each minute; HubDream also
-  sets the window brightness to 0.01 (whether the TCL backlight follows is untested).
+  sets the window brightness to 0.01 (whether the TCL backlight follows is untested). Any button on it opens Home's Music page
+  (HubDream.dispatchKeyEvent → HomeActivity `page=MUSIC`) to pause or cancel, rather than dropping back into Spotify.
 - The screensaver (`HubDream`: a DreamService hosting the native `Screensaver` composable in a ComposeView, acting
   as its own LifecycleOwner/SavedStateRegistryOwner) is set with `settings put secure screensaver_components`;
   `tv-app/screensaver on|off|test|status|delay <min>` (the idle delay is `system screen_off_timeout`; the user

@@ -1,6 +1,8 @@
 package com.sid.home
 
+import android.content.Intent
 import android.service.dreams.DreamService
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +21,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.sid.home.ha.Actions
 import com.sid.home.ui.Ctx
 import com.sid.home.ui.LiveEntities
+import com.sid.home.ui.Page
 import com.sid.home.ui.Screensaver
 import com.sid.home.ui.ambientColours
 import com.sid.home.ui.settled
@@ -30,7 +33,7 @@ import kotlinx.coroutines.flow.sample
  * lights), shared with the app's one Home Assistant connection. It used to be the Hub in a WebView, which grew the
  * app by ~400 MB over a few minutes until the TV's low-memory killer took the app and the Home button service with
  * it. Google TV hides third-party screensavers in its settings, so it's switched on over adb: see tv-app/screensaver.
- * Any button press wakes the TV as usual.
+ * Any button press wakes the TV as usual (into Home's Music page during a sleep timer).
  */
 class HubDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
     // a DreamService isn't a lifecycle owner, and a ComposeView needs one (and a saved-state registry) to run
@@ -56,8 +59,27 @@ class HubDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
         setContentView(ComposeView(this).apply { setContent { DreamRoot(actions, ::dim) } })
     }
 
+    private var asleep = false
+
+    /**
+     * During a sleep timer, any button opens Home on the Music page (its Sleep strip has +15 min and Cancel, the
+     * player has pause) instead of dropping back into Spotify. Otherwise a press ends the screensaver as usual.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!asleep) return super.dispatchKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_UP) {
+            runCatching {
+                startActivity(Intent(this, HomeActivity::class.java).putExtra("page", Page.MUSIC.name)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+            wakeUp()
+        }
+        return true // the press itself goes nowhere: it only wakes the TV into Home
+    }
+
     /** During a sleep timer: the backlight as low as the window may set it (if the TV honours it), back after. */
     private fun dim(on: Boolean) {
+        asleep = on
         val w = window ?: return
         w.attributes = w.attributes.apply {
             screenBrightness = if (on) 0.01f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
