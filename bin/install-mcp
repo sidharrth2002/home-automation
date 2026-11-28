@@ -21,13 +21,20 @@ def main():
         sys.exit(f"no token at {TOKEN}: run bin/install-skill first")
     python = ROOT / ".venv" / "bin" / "python"
     entry = {"command": str(python if python.exists() else shutil.which("python3")), "args": [str(ROOT / "home_mcp")]}
+    # with the core on the server (server/use-server set CORE_URL in .env), Desktop's copy talks to that one
+    env = ROOT / ".env"
+    core_url = next((line.split("=", 1)[1].strip().strip("'\"") for line in env.read_text().splitlines()
+                     if line.startswith("CORE_URL=")), None) if env.exists() else None
+    if core_url:
+        entry["env"] = {"CORE_URL": core_url}
     config = json.loads(CONFIG.read_text()) if CONFIG.exists() else {}
     if CONFIG.exists():
         shutil.copy2(CONFIG, CONFIG.with_suffix(".json.bak"))
     config.setdefault("mcpServers", {})["home-state"] = entry
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
     CONFIG.write_text(json.dumps(config, indent=2) + "\n")
-    print(f"added home-state to {CONFIG}\nquit Claude Desktop (Cmd-Q) and reopen it; the tools appear under the + menu")
+    print(f"added home-state to {CONFIG}" + (f" (core at {core_url})" if core_url else "")
+          + "\nquit Claude Desktop (Cmd-Q) and reopen it; the tools appear under the + menu")
 
 
 if __name__ == "__main__":

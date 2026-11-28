@@ -1,10 +1,11 @@
 #!/bin/bash
-# Turn a fresh Raspberry Pi (Raspberry Pi OS Lite 64-bit, Bookworm) into the home server. Run ON the Pi, from the
-# repo's folder, as the normal user (it asks for sudo). Safe to run again: every step checks before it changes
-# anything. The data, secrets and Home Assistant's config come from the Mac with pi/move-from-mac, not from git.
+# Turn a fresh Debian 13 install (the mini PC; also fine on any Debian-based box, e.g. a Raspberry Pi) into the home
+# server. Run ON the server, from the repo's folder, as the normal user (it asks for sudo). Safe to run again: every
+# step checks before it changes anything. The data, secrets and Home Assistant's config come from the Mac with
+# server/move-from-mac, not from git.
 #
-#   pi/setup            install everything, set up the server's .env keys, enable the services at boot
-#   pi/setup --check    only say what's missing
+#   server/setup            install everything, set up the server's .env keys, enable the services at boot
+#   server/setup --check    only say what's missing
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DIR=$(pwd)
@@ -13,12 +14,20 @@ say() { printf '\033[1m%s\033[0m\n' "$*"; }
 missing=0
 need() { echo "  missing: $*"; missing=1; }
 
-[[ $(uname) == Linux ]] || { echo "this is for the Pi (Linux); on the Mac use pi/move-from-mac" >&2; exit 1; }
+[[ $(uname) == Linux ]] || { echo "this is for the server (Linux); on the Mac use server/move-from-mac" >&2; exit 1; }
 
 # ── packages ────────────────────────────────────────────────────
 # bluez: the cabinet strip (bleak talks to BlueZ); adb + avahi-utils: the TV's Home button watchdog; rclone: photos
-# from OneDrive; libportaudio2: sounddevice (music sync, if it ever runs here with a USB mic)
-PKGS=(git curl python3-venv python3-dev build-essential bluez adb avahi-utils rclone libportaudio2 sqlite3 jq)
+# from OneDrive; libportaudio2: sounddevice (music sync, if it ever runs here with a USB mic); unattended-upgrades:
+# security fixes by themselves (the Hub is reachable from outside); lm-sensors, smartmontools, stress-ng:
+# server/check-hardware
+PKGS=(git curl python3-venv python3-dev build-essential bluez adb avahi-utils rclone libportaudio2 sqlite3 jq
+      unattended-upgrades lm-sensors smartmontools stress-ng dmidecode pciutils)
+# a PC's Wi-Fi/Bluetooth and AMD graphics need Debian's non-free-firmware (the installer enables it); whichever
+# chip the box has (Realtek, MediaTek or Intel), one of these covers it. Not on a Raspberry Pi.
+if [[ $(uname -m) == x86_64 ]]; then
+  PKGS+=(firmware-realtek firmware-misc-nonfree firmware-iwlwifi firmware-amd-graphics mesa-va-drivers vainfo)
+fi
 todo=()
 for p in "${PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || todo+=("$p"); done
 if ((${#todo[@]})); then
@@ -26,16 +35,24 @@ if ((${#todo[@]})); then
   else say "installing ${todo[*]}"; sudo apt-get update -q && sudo apt-get install -y -q "${todo[@]}"; fi
 fi
 
+# security updates every day, by themselves
+AUTO=/etc/apt/apt.conf.d/20auto-upgrades
+if [[ ! -f $AUTO ]] || ! grep -q 'Unattended-Upgrade "1"' "$AUTO"; then
+  if [[ $CHECK ]]; then need "automatic security updates ($AUTO)"
+  else printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' | sudo tee "$AUTO" >/dev/null
+       echo "  automatic security updates on"; fi
+fi
+
 if ! command -v docker >/dev/null; then
   if [[ $CHECK ]]; then need docker
   else say "installing Docker"; curl -fsSL https://get.docker.com | sudo sh; fi
 fi
-# docker-compose.pi.yml uses `!reset`, which needs Compose 2.24+ (get.docker.com installs a current one)
+# docker-compose.server.yml uses `!reset`, which needs Compose 2.24+ (get.docker.com installs a current one)
 if command -v docker >/dev/null; then
   cv=$(docker compose version --short 2>/dev/null || echo 0)
   if ! printf '2.24.0\n%s\n' "$cv" | sort -V -C; then
     if [[ $CHECK ]]; then need "Docker Compose 2.24+ (have $cv)"
-    else echo "  Docker Compose $cv is too old for docker-compose.pi.yml; update: sudo apt-get install --only-upgrade docker-compose-plugin" >&2; fi
+    else echo "  Docker Compose $cv is too old for docker-compose.server.yml; update: sudo apt-get install --only-upgrade docker-compose-plugin" >&2; fi
   fi
 fi
 for g in docker bluetooth; do
@@ -58,16 +75,17 @@ fi
 
 # ── .env: the server's own keys (only added when absent; the rest comes from the Mac) ─────────────────────
 if [[ ! -f .env ]]; then
-  need ".env (run pi/move-from-mac on the Mac first)"
+  need ".env (run server/move-from-mac on the Mac first)"
 else
   add() {  # add KEY=VALUE unless KEY is already set
     grep -q "^$1=" .env && return
     if [[ $CHECK ]]; then need ".env $1"; else echo "$1=$2" >> .env; echo "  .env: $1=$2"; fi
   }
-  add COMPOSE_FILE "docker-compose.yml:docker-compose.pi.yml"
-  add HOME_SKIP "music_sync,announce"   # they need a Mac (its audio and voices); the Mac runs them: pi/use-server
+  add COMPOSE_FILE "docker-compose.yml:docker-compose.server.yml"
+  add HOME_SKIP "music_sync,announce"   # they need a Mac (its audio and voices); the Mac runs them: server/use-server
   add CORE_BIND "0.0.0.0"               # so the Mac's services reach core (token-protected)
   add BACKLIGHT_BIND "0.0.0.0"          # so the Mac's music sync can drive the strip
+  add MCP_BIND "0.0.0.0"                # the home-state MCP for Claude on the Mac and other devices (token-protected)
   chmod 600 .env
 fi
 
@@ -82,14 +100,16 @@ if [[ -f $CONF ]] && ! grep -q "trusted_proxies" "$CONF"; then
     echo "  $CONF: trusted the local tunnel"
   fi
 elif [[ ! -f $CONF ]]; then
-  need "$CONF (run pi/move-from-mac on the Mac first)"
+  need "$CONF (run server/move-from-mac on the Mac first)"
 fi
 
 # ── systemd ─────────────────────────────────────────────────────
 UNIT=/etc/systemd/system/home-stack.service
-want=$(sed -e "s|@USER@|$USER|g" -e "s|@DIR@|$DIR|g" pi/home-stack.service)
+want=$(sed -e "s|@USER@|$USER|g" -e "s|@DIR@|$DIR|g" server/home-stack.service)
 if [[ ! -f $UNIT ]] || [[ $(cat "$UNIT") != "$want" ]]; then
   if [[ $CHECK ]]; then need "systemd unit home-stack"
+  elif [[ ! -f .env ]]; then
+    echo "  the home-stack service waits until the data is here (server/move-from-mac), so a reboot meanwhile starts nothing"
   else
     say "installing the home-stack service"
     echo "$want" | sudo tee "$UNIT" >/dev/null
@@ -102,7 +122,13 @@ if [[ $CHECK ]]; then
   ((missing)) && exit 1
   echo "all set"; exit 0
 fi
+if [[ ! -f .env ]]; then
+  say "installed. Next (server/README.md, step 3):"
+  echo "  log out and in again (new groups), then: server/check-hardware --stress 60"
+  echo "  then on the Mac: server/move-from-mac $USER@$(hostname).local, and run server/setup here again"
+  exit 0
+fi
 say "done. Next:"
 echo "  ./home up                      start it all (and at every boot from now on)"
 echo "  .venv/bin/python -m investments setup   store the HL / Trading 212 details here (the Mac's are in its Keychain)"
-echo "  pi/README.md                   the tunnel for home.<your domain>, and pointing the Mac at this server"
+echo "  server/README.md               the tunnel for home.<your domain>, and pointing the Mac at this server"

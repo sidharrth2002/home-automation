@@ -170,10 +170,10 @@ bin/ha call script.turn_on script.welcome_home
 tv-app/deploy                                    # build the TV app and install it on the TV
 ```
 
-**Always on, from anywhere.** It can also run on a Raspberry Pi as an always-on server (systemd brings it back
+**Always on, from anywhere.** It can also run on a small Linux box (a mini PC on Debian) as an always-on server (systemd brings it back
 after a reboot or a power cut), with the Mac only adding what needs a Mac (music sync, its voices), and the Hub
 reachable from outside at a subdomain of your own through a Cloudflare Tunnel, with no router ports opened.
-[pi/README.md](pi/README.md) is the step-by-step: `pi/setup` on the Pi, `pi/move-from-mac` and `pi/use-server` on
+[server/README.md](server/README.md) is the step-by-step: `server/setup` and `server/check-hardware` on the server, `server/move-from-mac` and `server/use-server` on
 the Mac.
 
 ## Deep dives
@@ -479,7 +479,8 @@ photos/             OneDrive photos: index, judge, pick, show
 investments/        Hargreaves Lansdown, Trading 212, FT prices, fund exposure, Premium Bonds
 core/               the central state: SQLite, the API, publishing to Home Assistant, the task worker
 skills/home-state/  the Claude Code skill other sessions use to read and write the state
-home_mcp/           the same for Claude Desktop's chat (a local MCP server; bin/install-mcp)
+home_mcp/           the same for Claude: stdio for Desktop (bin/install-mcp), HTTP on the server (--http, token per request)
+server/             the always-on Linux box: setup, check-hardware, move-from-mac, use-server, systemd unit
 telemetry/          OpenTelemetry setup shared by every service, and the Grafana dashboard
 widget/             the iPhone widget, its feed, webhooks and Shortcuts
 tv-app/             the Android TV app and screensaver, and the scripts that deploy them

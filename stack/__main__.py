@@ -45,7 +45,9 @@ def services():
     out = {"music_sync": [PY, "-m", "music_sync"], "widget": [PY, "-m", "widget", "--watch"],
            "announce": [PY, "-m", "announce"]}
     if os.environ.get("CORE_TOKEN"):  # the central state service (core/); the investments service writes to it
-        out = {"core": [PY, "-m", "core", "serve"], "tasks": [PY, "-m", "core.worker"], **out}
+        out = {"core": [PY, "-m", "core", "serve"], "tasks": [PY, "-m", "core.worker"], **out,
+               # the home-state MCP over HTTP, next to the core it fronts (MCP_BIND: 127.0.0.1 unless the server's .env opens it)
+               "home_mcp": [PY, "-m", "home_mcp", "--http"]}
     if os.environ.get("PRESENCE_PHONE_MAC"):
         out["presence"] = [PY, "-m", "presence"]
     from investments.__main__ import any_configured  # Keychain lookup; only run once credentials are stored

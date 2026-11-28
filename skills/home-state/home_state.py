@@ -8,7 +8,8 @@
     home_state.py delete <path>
     options: --if-match <version>
 
-Token: $HOME_CORE_TOKEN, else ~/.config/home-core/token. URL: $HOME_CORE_URL, else http://127.0.0.1:8790.
+Token: $HOME_CORE_TOKEN, else ~/.config/home-core/token. URL: $HOME_CORE_URL, else ~/.config/home-core/url (written
+by server/use-server when the core moves to the home server), else http://127.0.0.1:8790.
 """
 import json
 import os
@@ -28,8 +29,14 @@ def token() -> str:
     return path.read_text().strip()
 
 
+def base_url() -> str:
+    url_file = Path.home() / ".config" / "home-core" / "url"
+    saved = url_file.read_text().strip() if url_file.exists() else ""
+    return (os.environ.get("HOME_CORE_URL") or saved or "http://127.0.0.1:8790").rstrip("/")
+
+
 def call(method: str, path: str, body=None, if_match: str | None = None):
-    base = os.environ.get("HOME_CORE_URL", "http://127.0.0.1:8790").rstrip("/")
+    base = base_url()
     url = f"{base}/{path.lstrip('/')}" if path.startswith("openapi") else f"{base}/v1/{path.lstrip('/')}"
     headers = {"Authorization": f"Bearer {token()}", "Content-Type": "application/json"}
     if if_match:

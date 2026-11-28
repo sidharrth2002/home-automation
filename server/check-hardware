@@ -1,0 +1,116 @@
+#!/bin/bash
+# Is this box sound enough to be the home server? Run ON the server (it asks for sudo for the memory and disk
+# details). Reads only: nothing is installed or changed. Run it in the first days, while it can still be returned.
+#
+#   server/check-hardware              what's inside, and whether Bluetooth can see the cabinet strip
+#   server/check-hardware --stress 30  then load every core and the memory for 30 minutes, watching temperatures
+set -uo pipefail
+cd "$(dirname "$0")/.."
+STRESS_MIN=
+[[ ${1:-} == --stress ]] && STRESS_MIN=${2:-30}
+bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+ok() { printf '  \033[32mok\033[0m    %s\n' "$*"; }
+warn() { printf '  \033[33mcheck\033[0m %s\n' "$*"; WARNED=1; }
+WARNED=0
+have() { command -v "$1" >/dev/null; }
+
+bold "Processor"
+model=$(sed -n 's/^model name\s*: //p' /proc/cpuinfo | head -1)
+echo "  $model, $(nproc) threads"
+
+bold "Memory"
+free -h | awk 'NR==2 {print "  " $2 " total, " $7 " available"}'
+if have dmidecode; then
+  # one module = single channel (half the memory speed: local AI runs about half as fast)
+  mods=$(sudo dmidecode -t memory 2>/dev/null | awk -F': ' '/^\tSize: [0-9]/ {print $2}')
+  n=$(grep -c . <<<"$mods")
+  speed=$(sudo dmidecode -t memory 2>/dev/null | awk -F': ' '/^\tConfigured Memory Speed: [0-9]/ {print $2; exit}')
+  echo "  modules: $(paste -sd, <<<"$mods" | sed 's/,/, /g') ${speed:+(at $speed)}"
+  if ((n == 1)); then warn "one module, so single channel: a matching second one doubles memory speed"
+  elif ((n >= 2)); then ok "$n modules, dual channel"; fi
+else
+  warn "dmidecode isn't installed (sudo apt install dmidecode) to see the memory modules"
+fi
+
+bold "Storage"
+lsblk -d -o NAME,SIZE,MODEL,TRAN | sed 's/^/  /'
+if have smartctl; then
+  for d in /dev/nvme?n1 /dev/sd?; do
+    [[ -e $d ]] || continue
+    if sudo smartctl -H "$d" 2>/dev/null | grep -qiE "PASSED|OK"; then ok "$d health: passed"
+    else warn "$d health: not passed (or not readable): sudo smartctl -a $d"; fi
+  done
+fi
+
+bold "Network"
+for n in /sys/class/net/*; do
+  name=${n##*/}; [[ $name == lo || $name == docker* || $name == veth* || $name == br-* ]] && continue
+  state=$(cat "$n/operstate" 2>/dev/null)
+  if [[ -d $n/wireless ]]; then echo "  $name: Wi-Fi, $state"
+  else speed=$(cat "$n/speed" 2>/dev/null || echo "?"); echo "  $name: Ethernet, $state${speed:+, $speed Mb/s}"; fi
+done
+ls /sys/class/net | grep -q '^e' && ok "Ethernet present" || warn "no Ethernet interface found"
+ls -d /sys/class/net/*/wireless >/dev/null 2>&1 && ok "Wi-Fi present" || warn "no Wi-Fi interface (missing firmware? dmesg | grep -i firmware)"
+
+bold "Bluetooth (the cabinet strip)"
+if ! ls /sys/class/bluetooth/hci* >/dev/null 2>&1; then
+  warn "no Bluetooth adapter: missing firmware (dmesg | grep -i bluetooth), or the box has none: a USB adapter (~£10) fixes it"
+else
+  ok "adapter $(ls /sys/class/bluetooth | head -1)"
+  name=$(sed -n 's/^BACKLIGHT_NAME=//p' .env 2>/dev/null | tr -d "\"'")
+  if [[ -x .venv/bin/python ]]; then
+    # the same library the backlight service uses, so this is the real test
+    found=$(.venv/bin/python - "$name" <<'PY' 2>&1
+import asyncio, sys
+from bleak import BleakScanner
+want = sys.argv[1]
+async def main():
+    devices = await BleakScanner.discover(timeout=10)
+    names = sorted({d.name for d in devices if d.name})
+    hit = [n for n in names if want and n.startswith(want)]
+    print(f"{len(devices)} devices nearby" + (f"; the strip: {hit[0]}" if hit else ""))
+asyncio.run(main())
+PY
+)
+    echo "  $found"
+    if [[ -n $name && $found == *"the strip"* ]]; then ok "sees the strip"
+    elif [[ -n $name ]]; then warn "didn't see the strip (is it powered, and within a few metres?)"; fi
+  else
+    echo "  (scan skipped: run server/setup first for the Python environment)"
+  fi
+fi
+
+bold "Graphics and video"
+lspci 2>/dev/null | grep -iE "vga|display" | sed 's/^/  /'
+if have vainfo; then
+  profiles=$(vainfo 2>/dev/null | grep -E "VAProfile(H264|HEVC)" | grep -c .)
+  ((profiles > 0)) && ok "hardware video: $profiles H.264/HEVC profiles (media server, cameras)" \
+                   || warn "no hardware video (firmware-amd-graphics and mesa-va-drivers installed?)"
+fi
+
+bold "Temperatures"
+temps() { sensors 2>/dev/null | grep -E "^(Tctl|Tdie|temp1|Package|Composite)" | sed 's/^/  /'; }
+if have sensors; then temps; else warn "lm-sensors isn't installed"; fi
+
+if [[ -n $STRESS_MIN ]]; then
+  bold "Stress test: every core and 60% of memory for $STRESS_MIN min (Ctrl-C stops it)"
+  have stress-ng || { warn "stress-ng isn't installed"; exit 1; }
+  mkdir -p data
+  max=0
+  stress-ng --cpu 0 --vm 2 --vm-bytes 60% --verify --timeout "${STRESS_MIN}m" --metrics-brief > data/stress.log 2>&1 &
+  pid=$!
+  while kill -0 $pid 2>/dev/null; do
+    t=$(sensors 2>/dev/null | awk '/^(Tctl|Tdie|Package)/ {gsub(/[+°C]/, "", $2); print int($2); exit}')
+    [[ -n $t ]] && ((t > max)) && max=$t
+    printf '\r  %s  %s°C (max %s°C)   ' "$(date +%H:%M)" "${t:-?}" "$max"
+    sleep 30
+  done
+  wait $pid; code=$?
+  echo
+  if ((code == 0)) && ! grep -qiE "fail|error" data/stress.log; then ok "finished cleanly: no errors in the memory checks"
+  else warn "stress-ng reported problems (see data/stress.log): a sign of faulty RAM or overheating"; fi
+  ((max >= 95)) && warn "peaked at ${max}°C: it throttles there; check the fan and airflow" || ok "peaked at ${max}°C"
+fi
+
+bold "Summary"
+((WARNED)) && echo "  some things need a look (marked check above)" || echo "  everything looks right"

@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 
 PIDFILE=.home.pid
 PY=.venv/bin/python
-SERVICES='python -m (music_sync|presence|investments|widget|announce|photos|backlight|home_button|core|core.worker|stack)( |$)'
+SERVICES='python -m (music_sync|presence|investments|widget|announce|photos|backlight|home_button|home_mcp|core|core.worker|stack)( |$)'
 
 supervisor_pid() {
   [[ -f $PIDFILE ]] && kill -0 "$(cat $PIDFILE)" 2>/dev/null && cat $PIDFILE
@@ -34,7 +34,7 @@ stop_strays() {  # services started by hand, outside the supervisor
 }
 
 env_get() { sed -n "s/^$1=//p" .env 2>/dev/null | tr -d "\"'" | tail -1; }
-# The server (the Pi): systemd runs the supervisor (pi/home-stack.service), so it starts at boot and is restarted if
+# The server (Linux): systemd runs the supervisor (server/home-stack.service), so it starts at boot and is restarted if
 # it dies; this script just asks systemd. The Mac with HOME_DOCKER=0 runs only its own services (HOME_ONLY), against
 # Home Assistant on the server.
 systemd() { [[ $(uname) == Linux ]] && systemctl cat home-stack.service >/dev/null 2>&1; }
