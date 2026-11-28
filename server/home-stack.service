@@ -1,5 +1,5 @@
 # The home's services on the server, under systemd: started at boot (after Docker, so Home Assistant is coming up),
-# and started again if the supervisor ever dies. pi/setup fills in @USER@ and @DIR@ and installs it.
+# and started again if the supervisor ever dies. server/setup fills in @USER@ and @DIR@ and installs it.
 [Unit]
 Description=Home automation services (stack supervisor)
 Wants=network-online.target docker.service

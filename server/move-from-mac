@@ -1,0 +1,53 @@
+#!/bin/bash
+# Copy what git doesn't hold from this Mac to the server: .env, data/ (core's database, tasks, photos, tokens),
+# Home Assistant's config and database, the OneDrive sign-in for photos, and the adb key the TV already trusts (so
+# the server needn't be paired again). Run ON the Mac. Nothing here is deleted: the Mac keeps its copy as a fallback.
+#
+#   server/move-from-mac <user>@<server>            e.g. me@homeserver.local
+#   server/move-from-mac <user>@<server> --dry-run  list what would be copied
+#
+# Home Assistant must be stopped here first (./home down), so its database is copied whole, not mid-write.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+HOST=${1:?usage: server/move-from-mac <user>@<server> [--dry-run]}
+DRY=${2:-}
+REPO=home-automation  # the repo's folder in the server user's home
+# macOS ships openrsync (no --chmod or --info): permissions are set over ssh afterwards
+RSYNC=(rsync -az ${DRY:+--dry-run --itemize-changes})
+
+[[ $(uname) == Darwin ]] || { echo "run this on the Mac" >&2; exit 1; }
+if [[ -z $DRY ]] && docker inspect -f '{{.State.Running}}' homeassistant 2>/dev/null | grep -q true; then
+  echo "Home Assistant is running here; stop it first (./home down) so its database copies cleanly" >&2; exit 1
+fi
+
+echo "checking the server…"
+ssh "$HOST" "test -d $REPO/.git || git clone -q https://github.com/sidharrth2002/home-automation.git $REPO"
+
+echo "copying .env, data/ and Home Assistant's config…"
+"${RSYNC[@]}" .env "$HOST:$REPO/.env"
+# telemetry is only history (Grafana starts fresh); HA's deps/ are Python packages built for the Mac
+"${RSYNC[@]}" --exclude telemetry/ --exclude announce/ data/ "$HOST:$REPO/data/"
+"${RSYNC[@]}" --exclude 'deps/' --exclude '*.log*' --exclude 'home-assistant_v2.db-shm' --exclude 'home-assistant_v2.db-wal' \
+  homeassistant/config/ "$HOST:$REPO/homeassistant/config/"
+
+if [[ -f ~/.config/rclone/rclone.conf ]]; then
+  echo "copying the OneDrive sign-in (rclone)…"
+  ssh "$HOST" "mkdir -p ~/.config/rclone && chmod 700 ~/.config/rclone"
+  "${RSYNC[@]}" ~/.config/rclone/rclone.conf "$HOST:.config/rclone/rclone.conf"
+fi
+if [[ -f ~/.android/adbkey ]]; then
+  echo "copying the adb key the TV trusts…"
+  ssh "$HOST" "mkdir -p ~/.android && chmod 700 ~/.android"
+  "${RSYNC[@]}" ~/.android/adbkey ~/.android/adbkey.pub "$HOST:.android/"
+fi
+
+[[ $DRY ]] && { echo "(dry run: nothing was copied)"; exit 0; }
+# secrets readable by the server user only
+ssh "$HOST" "chmod 600 $REPO/.env ~/.config/rclone/rclone.conf ~/.android/adbkey 2>/dev/null; chmod 700 $REPO/data; true"
+cat <<EOF
+
+Copied. Next:
+  on the server: cd ~/$REPO && server/setup && ./home up
+  on the server: .venv/bin/python -m investments setup   (the HL / Trading 212 details; the Mac's stay in its Keychain)
+  on the Mac:  server/use-server ${HOST#*@}                  (the Mac then runs only music sync and announcements)
+EOF

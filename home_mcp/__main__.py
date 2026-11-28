@@ -1,7 +1,10 @@
-"""The home state for Claude Desktop: an MCP server (stdio) over the core API, the desktop-chat twin of the
-home-state skill (skills/home-state) that Claude Code sessions use.
+"""The home state for Claude: an MCP server over the core API, the chat twin of the home-state skill
+(skills/home-state) that Claude Code sessions use.
 
-    python home_mcp          (Claude Desktop starts it; bin/install-mcp adds it to claude_desktop_config.json)
+    python home_mcp          stdio: Claude Desktop starts it (bin/install-mcp adds it to claude_desktop_config.json)
+    python home_mcp --http   Streamable HTTP at http://MCP_BIND:MCP_PORT/mcp (default 127.0.0.1:8792): the server
+                             runs this as a service; each request brings its own core token (Authorization: Bearer)
+                             and the core enforces that token's scopes
 
 Standard library only (the MCP SDK's dependencies clash with the core's FastAPI pins). It speaks MCP's stdio
 transport: one JSON-RPC message per line on stdin/stdout; anything else goes to stderr. It uses the token in
@@ -10,10 +13,14 @@ live/*, media/*, task/*, schedule/*), so it can view and change anything but the
 Trading 212 are refused too (they're fetched automatically). The portfolio format and the rules for writing come
 from skills/home-state/SKILL.md, so the two stay the same.
 """
+import contextvars
+import hashlib
+import http.server
 import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 from pathlib import Path
 
@@ -48,8 +55,19 @@ def seg(s: str) -> str:
     return urllib.parse.quote(str(s), safe="")
 
 
+# over HTTP, each request's own token (the caller's), so the core enforces that token's scopes; over stdio, the file's
+CALLER = contextvars.ContextVar("caller_token", default=None)
+
+
+def token() -> str:
+    t = CALLER.get() or TOKEN_FILE.read_text().strip()
+    if not t:  # never empty: client.call would fall back to the admin token
+        raise FileNotFoundError(TOKEN_FILE)
+    return t
+
+
 def api(method: str, path: str, body=None, if_version=None):
-    return client.call(method, path, body, token=TOKEN_FILE.read_text().strip(), if_version=if_version, timeout=20)
+    return client.call(method, path, body, token=token(), if_version=if_version, timeout=20)
 
 
 def put_source(a):
@@ -198,7 +216,100 @@ def handle(msg: dict) -> dict | None:
     return {"jsonrpc": "2.0", "id": mid, "result": result}
 
 
+# ── over HTTP (MCP's Streamable HTTP transport): the server runs this as a service, for clients anywhere ──
+MAX_BODY = 1_000_000
+_valid: dict[str, float] = {}  # sha256 of a token -> until when the core last accepted it
+
+
+def authorised(tok: str) -> bool:
+    """Is this a token the core accepts? Checked with GET /v1/me, remembered for a minute. Raises OSError (not a
+    CoreError) when the core can't be reached."""
+    if not tok:
+        return False
+    h = hashlib.sha256(tok.encode()).hexdigest()
+    if _valid.get(h, 0) > time.time():
+        return True
+    try:
+        client.call("GET", "/v1/me", token=tok, timeout=5)
+    except client.CoreError as e:
+        if e.status in (401, 403):
+            return False
+        raise
+    _valid[h] = time.time() + 60
+    return True
+
+
+def trusted_origins() -> set[str]:
+    """Browsers send Origin; other clients don't. Only listed origins (MCP_ORIGINS, comma-separated) may call, so a
+    web page can't use a browser that happens to reach this (DNS rebinding)."""
+    return {o.strip().rstrip("/") for o in os.environ.get("MCP_ORIGINS", "").split(",") if o.strip()}
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    server_version = "home-mcp"
+
+    def log_message(self, fmt, *args):
+        pass
+
+    def _send(self, code: int, body=None, headers: dict | None = None):
+        data = b"" if body is None else json.dumps(body).encode()
+        self.send_response(code)
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
+        if body is not None:
+            self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_POST(self):
+        if self.path.split("?")[0] != "/mcp":
+            return self._send(404, {"error": "not found"})
+        origin = self.headers.get("Origin")
+        if origin and origin.rstrip("/") not in trusted_origins():
+            return self._send(403, {"error": "origin not allowed"})
+        auth = self.headers.get("Authorization", "")
+        tok = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+        try:
+            if not authorised(tok):
+                return self._send(401, {"error": "a home core token is needed (Authorization: Bearer ...)"},
+                                  {"WWW-Authenticate": "Bearer"})
+        except OSError as e:
+            return self._send(503, {"error": f"the home core isn't reachable ({e})"})
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_BODY:
+            return self._send(413, {"error": "too large"})
+        try:
+            msg = json.loads(self.rfile.read(length))
+        except ValueError:
+            return self._send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
+        reset = CALLER.set(tok)
+        try:
+            out = [r for r in (handle(m) for m in msg) if r] if isinstance(msg, list) else handle(msg)
+        finally:
+            CALLER.reset(reset)
+        if not out:  # notifications only
+            return self._send(202)
+        self._send(200, out)
+
+    def do_GET(self):  # no server-initiated stream: every answer comes back on its POST
+        self._send(405, {"error": "POST only"}, {"Allow": "POST"})
+
+    do_DELETE = do_GET
+
+
+def serve():
+    from music_sync.service import load_env
+    load_env()
+    bind, port = os.environ.get("MCP_BIND", "127.0.0.1"), int(os.environ.get("MCP_PORT", "8792"))
+    server = http.server.ThreadingHTTPServer((bind, port), Handler)
+    print(f"home-state MCP on http://{bind}:{port}/mcp", file=sys.stderr, flush=True)
+    server.serve_forever()
+
+
 def main():
+    if "--http" in sys.argv:
+        return serve()
     for line in sys.stdin:
         if not line.strip():
             continue

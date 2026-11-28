@@ -151,7 +151,7 @@ export function demo(now = Date.now()) {
     { id: 50, kind: "agent", title: "Compare broadband deals for the flat", status: "done", progress: 1, created_by: "claude", created_at: iso(now - 7 * 3600000), finished_at: iso(now - 7 * 3600000 + 90000) }] });
   const svc = (s) => ({ state: "running", restarts: 0, pid: 1000 + s });
   put("sensor.system_health", "ok", { updated: iso(now - 20000), supervisor_since: iso(now - 4 * DAY),
-    services: Object.fromEntries(["core", "tasks", "music_sync", "widget", "announce", "investments", "backlight", "home_button", "photos", "presence"].map((n, i) => [n, svc(i)])),
+    services: Object.fromEntries(["core", "tasks", "music_sync", "widget", "announce", "investments", "backlight", "home_button", "home_mcp", "photos", "presence"].map((n, i) => [n, svc(i)])),
     host: { disk_free_pct: 41, load1: 1.9, cores: 10, platform: "Darwin" } });
 
   // the calendar: two calendars, a few made-up plans this week

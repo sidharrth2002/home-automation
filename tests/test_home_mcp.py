@@ -70,7 +70,62 @@ def run():
     assert list(detail["paths"]) == ["/v1/tasks"] and set(detail["schemas"]) == {"NewTask", "Inner"}
     mcp.api = fake
     assert call("missing_arg", {})["isError"] and call("get_document", {})["isError"]
+    http_transport()
     print("home mcp OK")
+
+
+def http_transport():
+    """Over HTTP: a token the core accepts is needed, web pages from other origins are refused, and tool calls run
+    with the caller's own token (so the core applies that token's scopes)."""
+    import threading
+    import urllib.error
+    import urllib.request
+    import http.server
+
+    good = {"good-token"}
+
+    def fake_core(method, path, body=None, token=None, if_version=None, timeout=10):
+        assert token, "never an empty token (client.call would use the admin one)"
+        if token not in good:
+            raise client.CoreError(401, "bad token")
+        return {"name": "claude"}
+    seen = []
+    mcp.client.call, real_call = fake_core, mcp.client.call
+    mcp.api, real_api = (lambda method, path, body=None, if_version=None: seen.append(mcp.token()) or {"ok": True}), mcp.api
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), mcp.Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/mcp"
+
+    def post(msg, token="good-token", origin=None, path=url):
+        headers = {"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {}),
+                   **({"Origin": origin} if origin else {})}
+        req = urllib.request.Request(path, data=json.dumps(msg).encode(), headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                body = r.read()
+                return r.status, json.loads(body) if body else None
+        except urllib.error.HTTPError as e:
+            return e.code, None
+    try:
+        ping = {"jsonrpc": "2.0", "id": 1, "method": "ping"}
+        assert post(ping)[0] == 200 and post(ping)[1]["result"] == {}
+        assert post(ping, token=None)[0] == 401, "no token"
+        assert post(ping, token="wrong")[0] == 401, "a token the core refuses"
+        assert post(ping, origin="https://evil.example")[0] == 403, "a web page from elsewhere"
+        assert post({"jsonrpc": "2.0", "method": "notifications/initialized"})[0] == 202
+        assert post(ping, path=url.replace("/mcp", "/other"))[0] == 404
+        status, out = post({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                            "params": {"name": "get_portfolio", "arguments": {}}})
+        assert status == 200 and not out["result"]["isError"] and seen == ["good-token"], "the caller's token"
+        assert mcp.CALLER.get() is None, "and only for that request"
+        try:
+            urllib.request.urlopen(url, timeout=5)
+            raise AssertionError("GET should be refused")
+        except urllib.error.HTTPError as e:
+            assert e.code == 405
+    finally:
+        server.shutdown()
+        mcp.client.call, mcp.api = real_call, real_api
 
 
 if __name__ == "__main__":

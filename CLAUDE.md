@@ -10,15 +10,23 @@ bulbs (two by the TV, one adaptive desk lamp), a TCL Google TV, music-reactive l
 Hub), an iPhone widget, an Android TV app, investments (Hargreaves Lansdown, Trading 212) and a speaking "Welcome
 home". README.md is the human-facing overview; this file is how to work on it safely.
 
-Moving to two machines (built 2026-11-28, before the Pi arrived; pi/README.md is the runbook): a Raspberry Pi 5
-(Raspberry Pi OS Lite 64-bit, Debian Bookworm, Python 3.11) as the always-on server under systemd
-(`pi/home-stack.service`; `./home` asks systemd there), and the Mac running only `HOME_ONLY=music_sync,announce`
-against it (`HOME_DOCKER=0`, HA_URL/HA_HTTP/CORE_URL pointing at the Pi). `stack.pick` applies HOME_ONLY/HOME_SKIP.
+Moving to two machines (built 2026-11-28 before the hardware arrived; server/README.md is the runbook): a mini PC
+(wo-we P6-lite: Ryzen 5 3500U, 8 GB DDR4, 256 GB NVMe, x86_64) on Debian 13 (Python 3.13) as the always-on server
+under systemd (`server/home-stack.service`, installed once .env exists; `./home` asks systemd there), and the Mac
+running only `HOME_ONLY=music_sync,announce` against it (`HOME_DOCKER=0`, HA_URL/HA_HTTP/CORE_URL pointing at the
+server). `stack.pick` applies HOME_ONLY/HOME_SKIP. A Raspberry Pi was ordered first and cancelled; the scripts still
+work on one. `server/check-hardware [--stress N]` (memory modules, SMART, network, Bluetooth via bleak, VA-API,
+temperatures) runs before anything is moved. The home-state MCP also runs there over HTTP (`home_mcp --http`, port
+8792): each request's Bearer token is checked with the core (GET /v1/me) and used for the calls, so the core enforces
+its scopes; never let an empty token reach `client.call` (it falls back to the admin token). Claude on the Mac
+follows the core via `~/.config/home-core/url` (skill) and `bin/install-mcp` (Desktop's CORE_URL env), both set by
+`server/use-server`.
 Keep new code portable: no macOS-only command without a `shutil.which` guard (scutil, ioreg, say, pbcopy,
-osascript); `ping -W` on Linux vs `-t` on macOS; adb from the SDK on the Mac, `/usr/bin/adb` on the Pi; secrets
+osascript); `ping -W` on Linux vs `-t` on macOS; adb from the SDK on the Mac, `/usr/bin/adb` on Linux; secrets
 via `keyring` (the Keychain on the Mac, `FileKeyring` in data/secrets/ on Linux). Test Linux changes in
-`docker run --platform linux/arm64 debian:bookworm` with only `git ls-files -co --exclude-standard` copied in
-(never .env or data/). The public hostname (Cloudflare Tunnel) and the Pi's address are personal: never in the repo.
+`docker run --platform linux/amd64 debian:trixie` (the server) with only `git ls-files -co --exclude-standard`
+copied in (never .env or data/). The public hostnames (Cloudflare Tunnel) and the server's address are personal:
+never in the repo.
 
 ## The rules that matter most
 

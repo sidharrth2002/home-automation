@@ -1,5 +1,5 @@
-# The server (Raspberry Pi) on top of docker-compose.yml. Its .env sets
-#   COMPOSE_FILE=docker-compose.yml:docker-compose.pi.yml
+# The server (the always-on Linux box) on top of docker-compose.yml. Its .env sets
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.server.yml
 # so plain `docker compose` (and ./home) picks this up there; the Mac never reads it.
 services:
   homeassistant:
@@ -10,7 +10,7 @@ services:
 
   # The way in from outside: an outbound-only Cloudflare Tunnel, so no router ports are opened and the home's IP
   # stays private. The public hostname (home.<your domain> -> http://localhost:8123) is set on the
-  # tunnel in Cloudflare's dashboard; TUNNEL_TOKEN in .env. Off until COMPOSE_PROFILES=tunnel is set (pi/README.md).
+  # tunnel in Cloudflare's dashboard; TUNNEL_TOKEN in .env. Off until COMPOSE_PROFILES=tunnel is set (server/README.md).
   cloudflared:
     image: cloudflare/cloudflared:2024.12.2
     container_name: cloudflared
