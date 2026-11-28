@@ -79,6 +79,7 @@ home_mcp/             the same for Claude Desktop's chat: a stdlib MCP server (s
                       bin/install-mcp adds it to claude_desktop_config.json. No MCP SDK: its deps break FastAPI's pins
 investments/          Hargreaves Lansdown client (hl.py, lockout-safe), FT price history (prices.py), Trading 212 (t212.py)
 backlight/            the Bluetooth LED strip behind the cabinet (MELK/ELK-BLEDOM), as light.tv_backlight
+spotify_queue/        Spotify's Up next for the Hub: sensor.spotify_queue/_search; script.spotify_queue (add/skip/search)
 photos/               OneDrive photos via Microsoft Graph: picks a few good ones (faces, people, you) for the Hub
 widget/               iPhone Scriptable widget (home.js) + its feed, webhook actions and signed Shortcuts (__main__.py)
 presence/             phone-on-Wi-Fi home/away (needs PRESENCE_PHONE_MAC; not currently running)
@@ -315,7 +316,8 @@ find). Testing takes over the TV screen, so ask first.
   on the music page (pressing a cover starts), the widget's "Sleep until HH:MM" (an end time: widgets redraw late).
   The Hub and TV app count down each second (29:41, 1:12:05). While it runs, the screensaver is `SleepNight`
   (Sleep.kt): black, only the time left and the playlist in faint grey, shifting a little each minute; HubDream also
-  sets the window brightness to 0.01 (whether the TCL backlight follows is untested). Any button on it opens Home's Music page
+  sets the window brightness to 0.01 (whether the TCL backlight follows is untested). Home's top row has a
+  Sleep timer tile (the time left while one runs) that opens the Music page focused on the strip. Any button on it opens Home's Music page
   (HubDream.dispatchKeyEvent → HomeActivity `page=MUSIC`) to pause or cancel, rather than dropping back into Spotify.
 - The screensaver (`HubDream`: a DreamService hosting the native `Screensaver` composable in a ComposeView, acting
   as its own LifecycleOwner/SavedStateRegistryOwner) is set with `settings put secure screensaver_components`;
@@ -390,3 +392,14 @@ find). Testing takes over the TV screen, so ask first.
 - `tv-app/app/src/debug/res/` is a git-ignored overlay for personal resources (the launcher banner with the user's
   photo). The committed banner in `src/main` must stay generic. Personal photos (`*.heic`) are git-ignored and blocked
   by the commit guard.
+
+## Spotify queue (spotify_queue/)
+
+- Reuses the sleep timer's Spotify sign-in (sleep/spotify.py: queue, add_to_queue, next_track, search). Reports
+  sensor.spotify_queue (state: count; now, queue ≤20 of {name, artist, image, uri}) every 20 s while playing (2 min
+  idle) and ~1 s after a track change (subscribe_trigger on sensor.music_sync_now_playing); unchanged ones aren't resent.
+- `home_spotify` event via script.spotify_queue {action: add uri | skip index | search q | clear}. Skip = next ×
+  (index+1), 0.25 s apart (Spotify has no "play this queue item"). Spotify's API can't remove or reorder the queue.
+- Hub: Up next in the music card (5, "All N"), a search box (renderAll keeps a focused search box's text and caret;
+  results show while sensor.spotify_search's state matches the query sent). The TV app doesn't show the queue yet.
+

@@ -1,0 +1,59 @@
+{
+  "alias": "Spotify queue",
+  "icon": "mdi:playlist-music",
+  "description": "Spotify's Up next: add a track to the queue, jump to one in it, or search for songs (the spotify_queue service; results in sensor.spotify_search).",
+  "mode": "queued",
+  "fields": {
+    "action": {
+      "name": "Action",
+      "description": "add, skip, search or clear",
+      "required": true,
+      "selector": {
+        "select": {
+          "options": [
+            "add",
+            "skip",
+            "search",
+            "clear"
+          ]
+        }
+      }
+    },
+    "uri": {
+      "name": "Track",
+      "description": "add: a Spotify URI (spotify:track:...)",
+      "selector": {
+        "text": {}
+      }
+    },
+    "index": {
+      "name": "Position",
+      "description": "skip: which one in Up next (0 is the next track)",
+      "selector": {
+        "number": {
+          "min": 0,
+          "max": 19,
+          "step": 1
+        }
+      }
+    },
+    "q": {
+      "name": "Search",
+      "description": "search: what to look for",
+      "selector": {
+        "text": {}
+      }
+    }
+  },
+  "sequence": [
+    {
+      "event": "home_spotify",
+      "event_data": {
+        "action": "{{ action }}",
+        "uri": "{{ uri | default('') }}",
+        "index": "{{ index | default(0) | int }}",
+        "q": "{{ q | default('') }}"
+      }
+    }
+  ]
+}

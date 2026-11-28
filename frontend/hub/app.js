@@ -172,7 +172,14 @@ function renderAll(force = false) {
     const sig = JSON.stringify(deps().map((id) => (S[id] ? [S[id].state, S[id].attributes] : null)));
     if (!force && sig === lastSig[sel]) continue;
     lastSig[sel] = sig;
+    const typing = document.activeElement?.matches?.("input[type=search]") && $(sel).contains(document.activeElement)
+      ? { name: document.activeElement.name, at: document.activeElement.selectionStart } : null;
     $(sel).innerHTML = render();
+    if (typing) { // a live update mid-typing: same box, same place
+      const box = $(sel).querySelector(`input[name="${typing.name}"]`);
+      box?.focus({ preventScroll: true });
+      box?.setSelectionRange(typing.at, typing.at);
+    }
     if (sel === "#invest") renderHolding(); // keep an open holding in step with fresh data
   }
   if (keep && (!document.activeElement || document.activeElement === document.body)) {
@@ -260,7 +267,39 @@ section("#scenes", () => [SYNC, MODE, SLEEP, ...LIGHTS.map((l) => l.id)], () => 
 let tuneOpen = false;
 // TEMPO isn't a dependency: it updates every couple of seconds during sync, and rebuilding the card that often
 // restarted the progress bar. ambient() keeps the BPM readout current in place instead.
-section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
+// Spotify's queue (the spotify_queue service): Up next, press one to jump to it; search to add a song
+const QUEUE = "sensor.spotify_queue";
+const SEARCH = "sensor.spotify_search";
+const QUEUE_SHOWN = 5;
+let queueAll = false;
+let queueQuery = ""; // what's typed in the search box
+let queueSearched = ""; // the last search sent (its results show while they match)
+const qRow = (t, act, v, label) => `
+  <li><button class="q-row" data-act="${act}" data-v="${esc(v)}" title="${esc(label)}">
+    <span class="q-art" ${t.image ? `style="background-image:url('${esc(t.image)}')"` : ""}></span>
+    <span class="q-txt"><b>${esc(t.name)}</b><small>${esc(t.artist ?? "")}</small></span>
+    <span class="q-go">${act === "q-add" ? I.plus : ""}</span></button></li>`;
+function queueCard(nothing) {
+  const up = at(QUEUE, "queue") ?? [];
+  if (nothing || !S[QUEUE]) return "";
+  const results = queueSearched && st(SEARCH) === queueSearched ? at(SEARCH, "results") ?? [] : null;
+  const list = up.slice(0, queueAll ? up.length : QUEUE_SHOWN);
+  return `
+    <div class="queue">
+      <div class="row"><span class="kicker">Up next</span>
+        ${up.length > QUEUE_SHOWN ? `<button class="q-more" data-act="q-more">${queueAll ? "Fewer" : `All ${up.length}`}</button>` : ""}</div>
+      ${list.length ? `<ol class="q-list">${list.map((t, i) => qRow(t, "q-skip", i, `Play ${t.name} now`)).join("")}</ol>`
+        : `<p class="q-note">Nothing queued</p>`}
+      <form class="q-search" data-form="q-search" role="search">
+        <input type="search" name="q" placeholder="Add a song to the queue…" value="${esc(queueQuery)}" enterkeyhint="search" autocomplete="off" aria-label="Search Spotify">
+      </form>
+      ${results ? `<div class="row"><span class="kicker">Results</span><button class="q-more" data-act="q-clear">Close</button></div>
+        ${results.length ? `<ol class="q-list">${results.map((t) => qRow(t, "q-add", t.uri, `Add ${t.name} to the queue`)).join("")}</ol>`
+          : `<p class="q-note">No songs found</p>`}` : queueSearched ? `<p class="q-note">Searching…</p>` : ""}
+    </div>`;
+}
+
+section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV, QUEUE, SEARCH], () => {
   const sync = is(SYNC, "on");
   const mode = st(MODE);
   const [title, artist] = String(st(NOW) ?? "").split(" — ");
@@ -304,7 +343,7 @@ section("#music", () => [SYNC, MODE, COLOURS, SENS, LAT, NOW, TV], () => {
       <div class="art ${art ? "" : "empty"}" ${art ? `style="background-image:url('${esc(art)}')"` : ""}>${art ? "" : I.music}</div></div>
     <div class="track"><h2>${esc(nothing ? "Nothing playing" : title)}</h2><p>${sub}</p>
       <div class="swatches">${palette.map((h) => `<i style="background:${esc(h)};color:${esc(h)}" title="${esc(h)}"></i>`).join("")}</div></div>
-    ${progress}${transport}
+    ${progress}${transport}${queueCard(nothing)}
     <div class="row"><span class="kicker">Mode</span>
       <span class="bpm" id="music-bpm"></span></div>
     <div class="seg">${modes.map((m) => `<button data-act="select" data-id="${MODE}" data-v="${esc(m)}" aria-pressed="${m === mode}">${m === "tv" ? "TV" : esc(m)}</button>`).join("")}</div>
@@ -1178,6 +1217,21 @@ document.addEventListener("click", (ev) => {
     sleepPick = null;
     return call("script", "sleep_timer_start", { playlist: p.uri, name: p.name, minutes: sleepMins });
   }
+  if (act === "q-more") { queueAll = !queueAll; lastSig["#music"] = null; return renderAll(); }
+  if (act === "q-skip") {
+    const t = (at(QUEUE, "queue") ?? [])[Number(v)];
+    toast(`Playing ${t?.name ?? "it"}…`);
+    return call("script", "spotify_queue", { action: "skip", index: Number(v) });
+  }
+  if (act === "q-add") {
+    const t = (at(SEARCH, "results") ?? []).find((x) => x.uri === v);
+    toast(`Added ${t?.name ?? "it"} to the queue`);
+    return call("script", "spotify_queue", { action: "add", uri: v });
+  }
+  if (act === "q-clear") {
+    queueQuery = queueSearched = ""; lastSig["#music"] = null; renderAll();
+    return call("script", "spotify_queue", { action: "clear" });
+  }
   if (act === "sleep-extend") return call("script", "sleep_timer_extend", { minutes: 15 });
   if (act === "sleep-cancel") return call("script", "sleep_timer_cancel", {});
   if (act === "strip-hs") return call("light", "turn_on", { entity_id: STRIP, hs_color: v.split(",").map(Number) });
@@ -1212,6 +1266,21 @@ document.addEventListener("click", (ev) => {
     call("script", "turn_on", { entity_id: id });
   }
   else if (act === "select") call(domain, "select_option", { entity_id: id, option: v });
+});
+document.addEventListener("input", (ev) => {
+  if (ev.target.matches?.(".q-search input")) queueQuery = ev.target.value;
+});
+document.addEventListener("submit", (ev) => {
+  const form = ev.target.closest?.("[data-form=q-search]");
+  if (!form) return;
+  ev.preventDefault();
+  const q = queueQuery.trim();
+  if (!q) return;
+  queueSearched = q;
+  form.querySelector("input")?.blur(); // the phone's keyboard down, so the results are in view
+  lastSig["#music"] = null;
+  renderAll();
+  call("script", "spotify_queue", { action: "search", q });
 });
 document.addEventListener("toggle", (ev) => {
   if (ev.target.matches?.("details.tune")) tuneOpen = ev.target.open;

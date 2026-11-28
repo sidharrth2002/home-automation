@@ -114,6 +114,12 @@ export function demo(now = Date.now()) {
   put("sensor.spotify_playlists", 6, { friendly_name: "Spotify playlists", playlists: ["Wind down", "Rain on the window",
     "Slow piano", "Lo-fi nights", "Ambient drift", "Sunday morning"].map((name, i) => ({ name, uri: `spotify:playlist:demo${i}`, image: null })) });
   put("sensor.sleep_timer", "off", { friendly_name: "Sleep timer" });
+  // Up next: made-up songs by made-up artists, no covers
+  put("sensor.spotify_queue", 8, { friendly_name: "Spotify queue", now: { name: "Neon Tide", artist: "The Midnight Arcs", image: null, uri: "spotify:track:demo" },
+    queue: [["Glass Harbour", "Low Tide Club"], ["Paper Satellites", "The Midnight Arcs"], ["Slow Motion Summer", "Velvet Atlas"],
+      ["Ferris Wheel", "June Parade"], ["Afterglow Avenue", "Low Tide Club"], ["Static Hearts", "Velvet Atlas"],
+      ["Night Bus", "June Parade"], ["Cold Coffee", "The Midnight Arcs"]].map(([name, artist], i) => ({ name, artist, image: null, uri: `spotify:track:demo${i}` })) });
+  put("sensor.spotify_search", "", { friendly_name: "Spotify search", results: [] });
   put("input_number.music_sync_sensitivity", 1.4, { min: 0.5, max: 3, step: 0.1 });
   put("input_number.music_sync_latency", 60, { min: -300, max: 300, step: 10, unit_of_measurement: "ms" });
   put("sensor.music_sync_tempo", 124, { locked: true, confidence: 0.86, unit_of_measurement: "BPM" });

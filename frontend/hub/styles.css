@@ -322,6 +322,26 @@ h1 em { font-style: italic; color: rgb(var(--a1)); transition: color 2s var(--ea
 .swatches i { width: 22px; height: 22px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,.15), 0 6px 16px -4px currentColor; }
 .bpm { font: 500 12px/1 var(--mono); color: var(--ink-2); }
 .bpm b { font-size: 22px; color: var(--ink); letter-spacing: -.03em; }
+/* Up next: Spotify's queue; press a row to jump to it, search to add */
+.queue { display: flex; flex-direction: column; gap: 8px; }
+.q-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.q-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 20px; gap: 10px; align-items: center; width: 100%; padding: 5px 6px;
+  border: 0; border-radius: 10px; background: none; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.q-row:hover, .q-row:focus-visible { background: rgba(255,255,255,.06); }
+.q-art { width: 36px; height: 36px; border-radius: 6px; background: rgba(255,255,255,.06) center / cover; }
+.q-txt { min-width: 0; }
+.q-txt b, .q-txt small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.q-txt b { font-weight: 500; font-size: 13px; }
+.q-txt small { color: var(--ink-3); font-size: 12px; }
+.q-go { color: var(--ink-3); display: grid; place-items: center; }
+.q-go svg { width: 16px; height: 16px; }
+.q-more { border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 12px; cursor: pointer; padding: 2px 4px; }
+.q-more:hover { color: var(--ink); }
+.q-note { margin: 0; font-size: 12px; color: var(--ink-3); }
+.q-search input { width: 100%; height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: rgba(255,255,255,.04); color: var(--ink); font: inherit; font-size: 14px; }
+.q-search input::placeholder { color: var(--ink-3); }
+.q-search input:focus { outline: none; border-color: rgba(255,255,255,.3); }
 details.tune summary { list-style: none; cursor: pointer; color: var(--ink-3); font-size: 13px; display: flex; align-items: center; gap: 6px; }
 details.tune summary::-webkit-details-marker { display: none; }
 details.tune summary::before { content: "＋"; font-size: 11px; transition: transform .3s; }

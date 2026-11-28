@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -53,7 +54,7 @@ private data class Playlist(val name: String, val uri: String, val image: String
  * +15 min and Cancel. Calm: no countdown animation, just the minutes.
  */
 @Composable
-fun SleepStrip(ctx: Ctx, modifier: Modifier = Modifier) {
+fun SleepStrip(ctx: Ctx, modifier: Modifier = Modifier, focus: androidx.compose.ui.focus.FocusRequester? = null) {
     val timer = ctx.s[SLEEP_TIMER]
     val lists = ctx.s[PLAYLISTS]?.arr("playlists")?.mapNotNull { e ->
         val o = e.jsonObject
@@ -63,12 +64,12 @@ fun SleepStrip(ctx: Ctx, modifier: Modifier = Modifier) {
     val running = timer?.state == "on"
     if (!running && lists.isEmpty()) return
     HubCard(modifier, padding = 16.dp) {
-        if (running) Running(ctx) else Choose(ctx, lists, timer?.str("error"))
+        if (running) Running(ctx, focus) else Choose(ctx, lists, timer?.str("error"), focus)
     }
 }
 
 @Composable
-private fun Choose(ctx: Ctx, lists: List<Playlist>, error: String?) {
+private fun Choose(ctx: Ctx, lists: List<Playlist>, error: String?, focus: androidx.compose.ui.focus.FocusRequester?) {
     var minutes by rememberSaveable { mutableIntStateOf(45) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         HubIcon(HubIcons.moon, Hub.ink2, 15.dp); Spacer(Modifier.width(8.dp))
@@ -82,8 +83,8 @@ private fun Choose(ctx: Ctx, lists: List<Playlist>, error: String?) {
     Spacer(Modifier.height(10.dp))
     val context = LocalContext.current
     LazyRow(Modifier.fillMaxWidth().oneStepAtATime(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(lists, key = { it.uri }) { p ->
-            Pressable(onClick = {
+        itemsIndexed(lists, key = { _, p -> p.uri }) { i, p ->
+            Pressable(modifier = if (i == 0 && focus != null) Modifier.focusRequester(focus) else Modifier, onClick = {
                 ctx.toast("Starting ${p.name} on the TV…")
                 ctx.act.callService("script", "sleep_timer_start", data("playlist" to p.uri, "name" to p.name, "minutes" to minutes))
             }, shape = RoundedCornerShape(12.dp), scale = 1.05f) {
@@ -98,7 +99,7 @@ private fun Choose(ctx: Ctx, lists: List<Playlist>, error: String?) {
 }
 
 @Composable
-private fun Running(ctx: Ctx) {
+private fun Running(ctx: Ctx, focus: androidx.compose.ui.focus.FocusRequester?) {
     val timer = ctx.s[SLEEP_TIMER]
     val left = rememberSleepLeft(timer?.str("ends_at"))
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,7 +111,8 @@ private fun Running(ctx: Ctx) {
             Text("${timer?.str("playlist") ?: "Spotify"} on the TV · fades out at the end", style = Hub.text(11.sp, Hub.ink2),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Pressable(onClick = { ctx.act.callService("script", "sleep_timer_extend", data("minutes" to 15)) }, shape = RoundedCornerShape(10.dp)) {
+        Pressable(onClick = { ctx.act.callService("script", "sleep_timer_extend", data("minutes" to 15)) }, shape = RoundedCornerShape(10.dp),
+            modifier = if (focus != null) Modifier.focusRequester(focus) else Modifier) {
             Text("+15 min", style = Hub.text(12.sp, weight = 500), modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp))
         }
         Spacer(Modifier.width(8.dp))

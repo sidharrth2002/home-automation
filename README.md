@@ -464,7 +464,7 @@ I edit these rather than using the UI so the repo stays the source of truth.
 | --- | --- |
 | `helpers.json` | toggles, timers, sliders |
 | `templates/` | daylight and desk lamp target sensors |
-| `scripts/` | Welcome home, Party, Chill, Movie, Sleep (and its `sleep_lights`), All off, `music_command`, the sleep timer's start / cancel / extend |
+| `scripts/` | Welcome home, Party, Chill, Movie, Sleep (and its `sleep_lights`), All off, `music_command`, the sleep timer's start / cancel / extend, `spotify_queue` (Up next: add, jump, search) |
 | `automations/` | TV lighting, desk lamp, manual hold, away |
 | `dashboards/home.json` | the standard Home Assistant dashboard (`/home-hub`) |
 | `voice.json` | what Claude can see and control |

@@ -197,3 +197,38 @@ def pause(device_id: str):
 
 def volume(device_id: str, percent: int):
     call("PUT", "/me/player/volume", query={"volume_percent": max(0, min(100, int(percent))), "device_id": device_id})
+
+
+# ── the queue (the Hub's Up next; spotify_queue/__main__.py) ──
+def thumb(images: list) -> str | None:
+    """The smallest picture: for a list row (Spotify lists them largest first)."""
+    sized = [i for i in images or [] if i.get("url")]
+    return sized[-1]["url"] if sized else None
+
+
+def track(t: dict | None) -> dict | None:
+    """A track or podcast episode, cut down to what a row shows."""
+    if not t or not t.get("uri"):
+        return None
+    who = ", ".join(a.get("name", "") for a in t.get("artists") or []) or (t.get("show") or {}).get("name", "")
+    images = (t.get("album") or {}).get("images") or t.get("images") or (t.get("show") or {}).get("images")
+    return {"name": t.get("name") or "Untitled", "artist": who, "image": thumb(images), "uri": t["uri"]}
+
+
+def queue() -> tuple[dict | None, list[dict]]:
+    """What's playing now and what's up next (Spotify's own queue, then the playlist or album it's playing from)."""
+    q = call("GET", "/me/player/queue") or {}
+    return track(q.get("currently_playing")), [x for x in map(track, q.get("queue") or []) if x]
+
+
+def add_to_queue(uri: str):
+    call("POST", "/me/player/queue", query={"uri": uri})
+
+
+def next_track():
+    call("POST", "/me/player/next")
+
+
+def search(q: str, limit: int = 10) -> list[dict]:
+    found = call("GET", "/search", query={"q": q, "type": "track", "limit": limit}) or {}
+    return [x for x in map(track, (found.get("tracks") or {}).get("items") or []) if x]

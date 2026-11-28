@@ -117,6 +117,9 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
     // opened from Home's music card: focus moves to the Music page's controls (not when browsing the rail, which keeps it)
     var focusMusic by remember { mutableStateOf(false) }
     val musicFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    // opened from Home's Sleep timer tile: focus goes to the Music page's Sleep strip
+    var focusSleep by remember { mutableStateOf(false) }
+    val sleepFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     var page by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(start) }
     val first = remember { androidx.compose.ui.focus.FocusRequester() }
     val railItems = remember { Page.entries.map { androidx.compose.ui.focus.FocusRequester() } }
@@ -146,7 +149,8 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
                         transitionSpec = { (androidx.compose.animation.fadeIn(tween(220)) togetherWith androidx.compose.animation.fadeOut(tween(160))).using(null) }) { p ->
                         when (p) {
                             Page.ROOM -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                AppsRow(ctx, first = first, onAllApps = { allApps = true }, onScreensaver = { saver = true })
+                                AppsRow(ctx, first = first, onAllApps = { allApps = true }, onScreensaver = { saver = true },
+                                    onSleep = { focusSleep = true; page = Page.MUSIC })
                                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                     NowPanel(ctx, events, Modifier.weight(1.75f).fillMaxHeight(), connected)
                                     if (musicShown(ctx)) MusicCard(ctx, Modifier.weight(1f), compact = true,
@@ -155,11 +159,11 @@ fun HomeScreen(ctx: Ctx, connected: Boolean, events: List<kotlinx.serialization.
                                 ScenesRow(ctx)
                             }
                             Page.MUSIC -> {
-                                MusicPage(ctx, palette, musicFocus)
-                                if (focusMusic) LaunchedEffect(Unit) {
+                                MusicPage(ctx, palette, musicFocus, sleepFocus)
+                                if (focusMusic || focusSleep) LaunchedEffect(Unit) {
                                     kotlinx.coroutines.delay(250) // after the cross-fade has put it on screen
-                                    runCatching { musicFocus.requestFocus() }
-                                    focusMusic = false
+                                    runCatching { (if (focusSleep) sleepFocus else musicFocus).requestFocus() }
+                                    focusMusic = false; focusSleep = false
                                 }
                             }
                             Page.LIGHTS -> RoomCard(ctx)
