@@ -100,7 +100,7 @@ a Claude session looking after my finances can update the portfolio the Hub show
   </tr>
   <tr>
     <td valign="top"><img src="docs/icons/sleep.svg" width="40"><br><b>Falling asleep to music</b><br><sub>Pick a playlist and a length on the Hub, the TV or the phone: it plays on the TV through Spotify, the room winds down to a warm glow and then dark, the music fades out over the last ten minutes, and the TV switches itself off.</sub></td>
-    <td valign="top"></td>
+    <td valign="top"><img src="docs/icons/media.svg" width="40"><br><b>Films and shows on the TV</b><br><sub>Torrents download into a library that the TV's Jellyfin app streams, sorted into films and series with their posters. All of it stays on the home network.</sub></td>
   </tr>
   <tr>
     <td valign="top"><img src="docs/icons/telemetry.svg" width="40"><br><b>Logs, metrics and traces</b><br><sub>Every service reports over OpenTelemetry to a local Grafana: health, errors, API latency and every log line, searchable.</sub></td>
@@ -480,6 +480,9 @@ music_sync/         audio capture, analysis, light show, now playing
 announce/           the voice: speaks home_say events on the Mac or the TV
 backlight/          the Bluetooth LED strip behind the cabinet
 photos/             OneDrive photos: index, judge, pick, show
+sleep/              the music sleep timer (Spotify on the TV, the room winding down, the TV's own timer)
+spotify_queue/      Spotify's Up next for the Hub: the queue, jump to a track, search and add
+media/              torrents (qBittorrent) into a library Jellyfin streams to the TV: python -m media setup
 investments/        Hargreaves Lansdown, Trading 212, FT prices, fund exposure, Premium Bonds
 core/               the central state: SQLite, the API, publishing to Home Assistant, the task worker
 skills/home-state/  the Claude Code skill other sessions use to read and write the state

@@ -278,13 +278,18 @@ private fun fmt(s: Double) = "${(s / 60).toInt()}:${(s % 60).toInt().toString().
 
 
 // ── Apps: the TV's own apps, opened directly (instant, unlike asking Home Assistant to do it) ──
-data class TvApp(val name: String, val pkg: String, val brand: Color)
+data class TvApp(val name: String, val pkg: String, val brand: Color, val onlyIfInstalled: Boolean = false)
+
+/** Whether an app is on this TV (the package manager can see every app it may launch: see the manifest's queries). */
+fun installed(context: android.content.Context, pkg: String) =
+    runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess
 
 val TV_APPS = listOf(
     TvApp("Netflix", "com.netflix.ninja", Color(229, 9, 20)),
     TvApp("Prime Video", "com.amazon.amazonvideo.livingroom", Color(0, 168, 225)),
     TvApp("YouTube", "com.google.android.youtube.tv", Color(255, 40, 60)),
     TvApp("Spotify", "com.spotify.tv.android", Color(30, 215, 96)),
+    TvApp("Jellyfin", "org.jellyfin.androidtv", Color(170, 92, 195), onlyIfInstalled = true),  // the home's own films (media/)
 )
 
 /** Open an app on this TV: its TV launch screen, or its ordinary one. */
@@ -338,7 +343,8 @@ fun AppsRow(ctx: Ctx, modifier: Modifier = Modifier, first: androidx.compose.ui.
     // the sleep timer's way in from Home (its strip is on the Music page); the time left while one runs
     val sleepLabel = if (sleeping(ctx)) "Sleep · ${rememberSleepLeft(ctx.s["sensor.sleep_timer"]?.str("ends_at"))}" else "Sleep timer"
     Row(modifier.fillMaxWidth().oneStepAtATime(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        for ((i, app) in TV_APPS.withIndex()) {
+        val apps = remember { TV_APPS.filter { !it.onlyIfInstalled || installed(context, it.pkg) } }
+        for ((i, app) in apps.withIndex()) {
             val banner = rememberBanner(app.pkg)
             var focused by remember { androidx.compose.runtime.mutableStateOf(false) }
             // calm: the brand colours rest dimmed and only come up when the tile is focused

@@ -146,6 +146,28 @@ token made with `python -m core token add <name> <scopes>` limits what that clie
 - claude.ai's custom connectors (and so the phone app) need OAuth sign-in, which this doesn't do yet: it's the next
   step if the phone should reach the home state.
 
+## 7. Films and shows: torrents to the TV
+
+qBittorrent downloads into a library that Jellyfin streams to the TV (docker-compose.yml, profile `media`). Both stay
+on the home network: neither goes through the tunnel.
+
+```sh
+# .env: COMPOSE_PROFILES=tunnel,media   (and MEDIA_DIR=/srv/media for a bigger disk; default data/media)
+./home up
+.venv/bin/python -m media setup      # folders, passwords (data/secrets/), categories, Jellyfin's libraries
+```
+
+- Add a torrent or magnet link at `http://<server>:8090` (user `admin`, password in data/secrets/qbittorrent.json).
+  Category `movies` lands in Movies, `shows` in Shows, none in downloads/. Seeding stops at a ratio of 1 or a day.
+- On the TV: install **Jellyfin for Android TV** from Google Play; it finds the server by itself. Sign in with
+  **Quick Connect** (approve the code at `http://<server>:8096`, signed in as the user in data/secrets/jellyfin.json).
+  Its tile then shows on the TV app's Home.
+- Video the TV can't play as it is gets converted on the Ryzen's graphics: Jellyfin → Dashboard → Playback →
+  Transcoding → Video Acceleration API (VAAPI), device `/dev/dri/renderD128`.
+- 256 GB fills quickly: a USB disk mounted at e.g. /srv/media, as MEDIA_DIR, before the first download.
+- Torrenting shows this home's IP address to everyone in the swarm. A VPN for qBittorrent alone (e.g. a gluetun
+  container in front of it) hides it; ask for one once you've picked a provider.
+
 ## Day to day
 
 | | |
