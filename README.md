@@ -38,6 +38,7 @@
   <tr><td align="right" valign="top" nowrap><b>19:15</b></td><td>I put Spotify on. The two TV lamps and the strip behind the cabinet land on the beat, in colours that follow the music's key (or the album cover, if I ask).</td></tr>
   <tr><td align="right" valign="top" nowrap><b>20:30</b></td><td>I switch to Netflix. They drop to a dim warm glow that barely moves, so I stop noticing them.</td></tr>
   <tr><td align="right" valign="top" nowrap><b>22:30</b></td><td>The desk lamp has been following the sky all day. By now it's down to candle colour.</td></tr>
+  <tr><td align="right" valign="top" nowrap><b>23:30</b></td><td>In bed, I pick a playlist and 45 minutes on my phone. It plays on the TV, the room glows warm and then goes dark, the screen turns almost black with just the minutes left, and the music fades out until the TV switches itself off.</td></tr>
   <tr><td align="right" valign="top" nowrap><b>any time</b></td><td>Leave the TV alone for a minute and it becomes a photo frame with a clock, what's playing and which lamps are on.</td></tr>
 </table>
 
@@ -48,7 +49,8 @@
 The dashboard is plain HTML and JavaScript on Home Assistant's websocket API, with no build step. The orbs are the
 lamps in whatever colour they are right now, and the whole page takes its light from them. Below
 the fold: the photo frame, every account in one place, the desk lamp's view of the sky, a remote for the TV and a
-health card that says what's running and how fresh everything is.
+health card that says what's running and how fresh everything is. The music card shows Spotify's **Up next**: press
+a song to jump to it, or search and add one.
 
 <table>
   <tr>
@@ -65,10 +67,12 @@ health card that says what's running and how fresh everything is.
 
 **On the TV** the Hub is a native Android TV app (Kotlin and Compose for TV) with its own tile in the launcher: the
 same cards as pages that each fit the screen, a rail on the left to move between them, big tiles for Netflix, Prime
-Video, YouTube and Spotify, and the remote's focus moving with Google TV's own animations. The same app is the TV's **screensaver**, at the top of this page.
+Video, YouTube and Spotify (and Jellyfin, for the home's own films, once it's installed), a Sleep timer tile, and
+the remote's focus moving with Google TV's own animations. The same app is the TV's **screensaver**, at the top of this page.
 
-**On the phone** it's a home-screen web app, with an iPhone widget in the same style and a set of Shortcuts, so I can
-flip a lamp without opening anything. Neither holds a Home Assistant password: they read a small feed and call
+**On the phone** it's a home-screen web app in five pages you swipe between (Home, Music, Today, Money, Devices),
+with a tab bar at the bottom, and an iPhone widget in the same style and a set of Shortcuts, so I can flip a lamp
+without opening anything. Neither holds a Home Assistant password: they read a small feed and call
 single-purpose webhooks that only work on my home network.
 
 **And I can just ask Claude.** Home Assistant's MCP server gives it the lights, the TV, the scenes and the calendar,
@@ -121,13 +125,14 @@ flowchart LR
     end
     subgraph mac["Mac, supervised by ./home"]
         direction TB
-        services["Services<br/>music sync · photos · investments<br/>backlight · voice · widget feed"]
+        services["Services<br/>music sync · photos · investments<br/>backlight · voice · widget feed<br/>sleep timer · Spotify queue"]
         core[("core<br/>state database + API")]
         worker["Task worker<br/>(background jobs)"]
         services -->|"state"| core
         worker <-->|"tasks"| core
     end
     ha["Home Assistant<br/>(Docker)"]
+    media["qBittorrent + Jellyfin<br/>(Docker, optional)"]
     subgraph out["Out"]
         direction TB
         lights(("Bulbs + LED strip"))
@@ -142,6 +147,7 @@ flowchart LR
     services -->|"light shows<br/>(direct, low latency)"| lights
     ha --> lights
     ha <--> screens
+    media -->|"films and shows"| screens
 ```
 
 Home Assistant runs in Docker. The audio side can't, because it needs Core Audio and the mic, and neither can the
@@ -172,6 +178,8 @@ communication* in the WiZ app first. The first run asks for system audio, microp
 bin/ha states light                              # quick look at anything in Home Assistant
 bin/ha call script.turn_on script.welcome_home
 tv-app/deploy                                    # build the TV app and install it on the TV
+.venv/bin/python -m sleep login                  # once: the sleep timer's and Up next's own Spotify sign-in
+.venv/bin/python -m media setup                  # once, with COMPOSE_PROFILES=media: torrents and Jellyfin
 ```
 
 **Always on, from anywhere.** It can also run on a small Linux box (a mini PC on Debian) as an always-on server (systemd brings it back
@@ -299,6 +307,41 @@ The TV needs Developer options with **Wireless debugging** on. Pair once with th
 time, so redeploy if the Mac's address changes. Building needs JDK 17 and the Android SDK
 (`brew install openjdk@17` and `brew install --cask android-commandlinetools`, then the platform and build tools
 through `sdkmanager`).
+
+</details>
+
+<details>
+<summary><b>The sleep timer and Spotify's Up next</b></summary>
+<br>
+
+`python -m sleep` runs the timer, started from the Hub, the TV app or the phone (`script.sleep_timer_start`, with a
+playlist and a length). It wakes the TV if it's off, plays the playlist on it through Spotify Connect, and starts
+`script.sleep_lights`: music sync off, then a warm glow stepping down to dark. Over the last ten minutes the volume
+fades in a straight line; at the end the music pauses, the volume goes back to where it was, and the TV and lights
+go off. The TV's own sleep timer is set over adb two minutes later, as a backup (the TCL setting
+`tcl_app_power_off_time_delay` is in milliseconds). A running timer survives a restart. While it runs, the Hub and
+the TV count down, the TV's screensaver becomes a near-black night screen with only the time left, and any button on
+it opens the Music page to pause or cancel. +15 min and Cancel are on every screen.
+
+`python -m spotify_queue` reports Spotify's queue to the Hub and handles `script.spotify_queue`: jump to a song in
+it, search, add. Spotify's API can't remove or reorder queued songs. Both use their own Spotify sign-in
+(`python -m sleep login`, after adding SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET from a Spotify developer app with
+the redirect `http://127.0.0.1:8798/callback`), or Home Assistant's Spotify token until then. Playback control needs
+Spotify Premium.
+
+</details>
+
+<details>
+<summary><b>Films and shows: torrents to the TV</b></summary>
+<br>
+
+qBittorrent and Jellyfin, in `docker-compose.yml` under the `media` profile, both on the home network only. Torrents
+added at `:8090` land in a library (MEDIA_DIR): the category `movies` in Movies, `shows` in Shows, anything else in
+downloads, with unfinished files kept apart so a half-downloaded film never shows. Jellyfin (`:8096`) streams the
+library to its Android TV app, which signs in with Quick Connect. `python -m media setup` does the rest once: the
+folders, a real qBittorrent password (in data/secrets/), seeding limits, UPnP off, and Jellyfin's first-run wizard
+and libraries. On the Linux server Jellyfin uses the graphics for any video the TV can't play as it is
+([server/README.md](server/README.md), section 7).
 
 </details>
 
